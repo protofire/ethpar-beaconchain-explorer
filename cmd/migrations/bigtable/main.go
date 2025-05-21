@@ -6,12 +6,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/exporter"
-	"github.com/gobitfly/eth2-beaconchain-explorer/rpc"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
-	"github.com/gobitfly/eth2-beaconchain-explorer/version"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/exporter"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/version"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"

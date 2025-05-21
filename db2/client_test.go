@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db2/store"
-	"github.com/gobitfly/eth2-beaconchain-explorer/db2/storetest"
+	"github.com/protofire/ethpar-beaconchain-explorer/db2/store"
+	"github.com/protofire/ethpar-beaconchain-explorer/db2/storetest"
 )
 
 const (

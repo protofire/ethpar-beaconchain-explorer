@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/templates"
+	"github.com/protofire/ethpar-beaconchain-explorer/templates"
 )
 
 type customFileServer struct {

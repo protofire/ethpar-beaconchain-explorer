@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/templates"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/templates"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 )
 
 // Will return the confirmation page

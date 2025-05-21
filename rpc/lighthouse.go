@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/donovanhide/eventsource"
 	"github.com/ethereum/go-ethereum/common/hexutil"

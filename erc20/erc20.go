@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/shopspring/decimal"

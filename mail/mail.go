@@ -7,10 +7,10 @@ import (
 	"net/smtp"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/templates"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/templates"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/mailgun/mailgun-go/v4"
 	"github.com/sirupsen/logrus"

@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/cache"
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/metrics"
-	"github.com/gobitfly/eth2-beaconchain-explorer/services"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
-	"github.com/gobitfly/eth2-beaconchain-explorer/version"
+	"github.com/protofire/ethpar-beaconchain-explorer/cache"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/services"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/version"
 
 	"github.com/sirupsen/logrus"
 

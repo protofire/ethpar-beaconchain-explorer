@@ -3,10 +3,10 @@ package exporter
 import (
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/rpc"
-	"github.com/gobitfly/eth2-beaconchain-explorer/services"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/services"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/sirupsen/logrus"
 )

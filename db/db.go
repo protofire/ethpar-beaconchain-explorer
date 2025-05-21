@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/metrics"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -30,7 +30,7 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

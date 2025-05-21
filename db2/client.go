@@ -13,7 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db2/store"
+	"github.com/protofire/ethpar-beaconchain-explorer/db2/store"
 )
 
 var ErrNotFoundInCache = fmt.Errorf("cannot find hash in cache")

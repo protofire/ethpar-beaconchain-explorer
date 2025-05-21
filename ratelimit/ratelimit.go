@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/metrics"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"

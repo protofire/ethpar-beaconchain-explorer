@@ -4,11 +4,11 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/exporter"
-	"github.com/gobitfly/eth2-beaconchain-explorer/metrics"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
-	"github.com/gobitfly/eth2-beaconchain-explorer/version"
+	"github.com/protofire/ethpar-beaconchain-explorer/exporter"
+	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/version"
 
 	"github.com/sirupsen/logrus"
 )

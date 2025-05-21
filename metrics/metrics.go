@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
-	"github.com/gobitfly/eth2-beaconchain-explorer/version"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/version"
 
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"

@@ -7,10 +7,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db2"
-	"github.com/gobitfly/eth2-beaconchain-explorer/db2/store"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/db2"
+	"github.com/protofire/ethpar-beaconchain-explorer/db2/store"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 )
 
 func main() {

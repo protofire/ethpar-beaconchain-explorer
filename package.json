@@ -20,15 +20,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gobitfly/eth2-beaconchain-explorer.git"
+    "url": "git+https://github.com/protofire/ethpar-beaconchain-explorer.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/gobitfly/eth2-beaconchain-explorer/issues"
+    "url": "https://github.com/protofire/ethpar-beaconchain-explorer/issues"
   },
-  "homepage": "https://github.com/gobitfly/eth2-beaconchain-explorer#readme",
+  "homepage": "https://github.com/protofire/ethpar-beaconchain-explorer#readme",
   "dependencies": {
     "eslint": "^8.18.0",
     "eslint-plugin-html": "^6.2.0",

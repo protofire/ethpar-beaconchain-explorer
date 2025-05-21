@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/sirupsen/logrus"
 )
