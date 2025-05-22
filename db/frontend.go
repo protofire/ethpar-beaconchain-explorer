@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/cache"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/cache"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"

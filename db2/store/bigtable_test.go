@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db2/storetest"
+	"github.com/protofire/ethpar-beaconchain-explorer/db2/storetest"
 )
 
 func TestBigTableStore(t *testing.T) {

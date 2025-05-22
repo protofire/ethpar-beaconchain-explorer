@@ -5,10 +5,10 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/mail"
-	"github.com/gobitfly/eth2-beaconchain-explorer/templates"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/mail"
+	"github.com/protofire/ethpar-beaconchain-explorer/templates"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 )
 
 func AdvertiseWithUs(w http.ResponseWriter, r *http.Request) {

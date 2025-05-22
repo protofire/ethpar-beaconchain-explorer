@@ -6,15 +6,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/rpc"
-	"github.com/gobitfly/eth2-beaconchain-explorer/services"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/services"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 )
 
+// syncCommitteesExporter periodically fetches sync committee assignments from
+// the Beacon node and stores them in the sync_committees database table.
+//
+// It checks for unprocessed sync committee periods since the Altair fork,
+// retrieves the validator indices and committee positions for each period,
+// and inserts them with deduplication support.
+//
+// This information is used for building sync committee participation data
+// and visualizations in the explorer.
 func syncCommitteesExporter(rpcClient rpc.Client) {
 	for {
 		t0 := time.Now()
@@ -22,7 +31,7 @@ func syncCommitteesExporter(rpcClient rpc.Client) {
 		if err != nil {
 			logrus.WithFields(logrus.Fields{"error": err, "duration": time.Since(t0)}).Errorf("error exporting sync_committees")
 		}
-		time.Sleep(time.Second * 12)
+		time.Sleep(time.Second * 12) // seconds per slot
 	}
 }
 

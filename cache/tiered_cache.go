@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/coocood/freecache"
 	"github.com/sirupsen/logrus"

@@ -1,0 +1,60 @@
+name: EthPar Beaconchain Explorer MVP
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: indexer-postgres
+    environment:
+      POSTGRES_USER: indexer
+      POSTGRES_PASSWORD: indexerpass
+      POSTGRES_DB: indexerdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indexer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  redis:
+    image: redis:7
+    container_name: indexer-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  bigtable-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+    container_name: indexer-bigtable-emulator
+    command: gcloud beta emulators bigtable start --host-port=0.0.0.0:8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  
+  indexer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.indexer
+    container_name: indexer-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bigtable-emulator:
+        condition: service_healthy
+    command: ["./explorer", "--config", "/app/config/config.yaml"]
+    volumes:
+      - ./indexer-mvp-config.yaml:/app/config/config.yaml:ro
+
+volumes:
+  pgdata:

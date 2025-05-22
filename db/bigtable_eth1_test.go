@@ -3,7 +3,7 @@ package db
 import (
 	"testing"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
 )
 
 func TestName(t *testing.T) {

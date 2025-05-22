@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/price"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/price"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
 
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/shopspring/decimal"

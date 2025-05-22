@@ -47,7 +47,7 @@ Before continuing, restarting your computer now might save you from unexplained 
 # Clone the explorer repository
 ```
 cd ~
-git clone https://github.com/gobitfly/eth2-beaconchain-explorer.git
+git clone https://github.com/protofire/ethpar-beaconchain-explorer.git
 cd eth2-beaconchain-explorer
 ```
 

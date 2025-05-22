@@ -5,7 +5,6 @@ cmd/explorer/explorer
 cmd/explorer/__debug_bin
 modd.conf
 bin/
-docker/
 templates/imprint.html
 config.yml
 frontend.yml

@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/price"
-	"github.com/gobitfly/eth2-beaconchain-explorer/services"
-	"github.com/gobitfly/eth2-beaconchain-explorer/templates"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/price"
+	"github.com/protofire/ethpar-beaconchain-explorer/services"
+	"github.com/protofire/ethpar-beaconchain-explorer/templates"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 )
 
 func Burn(w http.ResponseWriter, r *http.Request) {

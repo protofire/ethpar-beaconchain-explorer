@@ -8,12 +8,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
 
 	itypes "github.com/gobitfly/eth-rewards/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
-	"github.com/gobitfly/eth2-beaconchain-explorer/version"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/version"
 	"github.com/sirupsen/logrus"
 )
 

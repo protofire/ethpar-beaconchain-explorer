@@ -32,9 +32,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/config"
-	"github.com/gobitfly/eth2-beaconchain-explorer/price"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/config"
+	"github.com/protofire/ethpar-beaconchain-explorer/price"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"

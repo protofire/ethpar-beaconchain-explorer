@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 )
 
 // StripeRemoveCustomer removes the stripe customer and sets all subscriptions to inactive

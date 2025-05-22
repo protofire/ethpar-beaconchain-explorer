@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/templates"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/templates"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
 
 	"github.com/gorilla/mux"
 )

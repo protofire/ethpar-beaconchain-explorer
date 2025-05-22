@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db"
-	"github.com/gobitfly/eth2-beaconchain-explorer/types"
-	"github.com/gobitfly/eth2-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -34,10 +34,15 @@ var eth1RPCClient *gethRPC.Client
 var infuraToMuchResultsErrorRE = regexp.MustCompile("query returned more than [0-9]+ results")
 var gethRequestEntityTooLargeRE = regexp.MustCompile("413 Request Entity Too Large")
 
-// eth1DepositsExporter regularly fetches the depositcontract-logs of the
-// last 100 blocks and exports the deposits into the database.
-// If a reorg of the eth1-chain happened within these 100 blocks it will delete
-// removed deposits.
+// eth1DepositsExporter continuously fetches and verifies DepositEvent logs
+// from the configured Ethereum 1.0 deposit contract.
+//
+// It connects to an ETH1 RPC endpoint, retrieves logs in a bounded block range,
+// unpacks and verifies deposit signatures using Prysm tooling,
+// and persists the results into the Postgres eth1_deposits table.
+//
+// This exporter plays a critical role in reconstructing the genesis validator set
+// and tracking new validator entries from the ETH1 chain.
 func eth1DepositsExporter() {
 	eth1DepositContractAddress = common.HexToAddress(utils.Config.Chain.ClConfig.DepositContractAddress)
 	eth1DepositContractFirstBlock = utils.Config.Indexer.Eth1DepositContractFirstBlock

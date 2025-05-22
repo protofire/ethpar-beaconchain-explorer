@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/gobitfly/eth2-beaconchain-explorer/db2/store"
+	"github.com/protofire/ethpar-beaconchain-explorer/db2/store"
 )
 
 type compressor interface {
