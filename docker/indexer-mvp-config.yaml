@@ -1,0 +1,248 @@
+readerDatabase:
+  user: indexer
+  password: indexerpass
+  name: indexerdb
+  host: postgres
+  port: "5432"
+  maxOpenConns: 10
+  maxIdleConns: 5
+  ssl: false
+
+writerDatabase:
+  user: indexer
+  password: indexerpass
+  name: indexerdb
+  host: postgres
+  port: "5432"
+  maxOpenConns: 10
+  maxIdleConns: 5
+  ssl: false
+
+bigtable:
+  project: emulated
+  instance: emulated-instance
+  emulator: true
+  emulatorPort: 8080
+  emulatorHost: bigtable-emulator
+  v2SchemaCutOffEpoch: 0
+
+rawBigtable:
+  bigtable:
+    project: emulated
+    instance: emulated-instance
+    emulator: true
+    emulatorPort: 8080
+    emulatorHost: bigtable-emulator
+    v2SchemaCutOffEpoch: 0
+  remote: some-remote-endpoint
+
+blobIndexer:
+  s3:
+    endpoint: your-s3-endpoint
+    bucket: your-s3-bucket
+    accessKeyId: your-access-key-id
+    accessKeySecret: your-secret-access-key
+
+eth1ErigonEndpoint: http://localhost:8545
+eth1GethEndpoint: http://localhost:8545
+etherscanApiKey: your-etherscan-api-key
+etherscanApiBaseUrl: https://api.etherscan.io
+redisCacheEndpoint: redis:6379
+redisSessionStoreEndpoint: redis:6379
+tieredCacheProvider: redis
+reportServiceStatus: false
+
+clickhouse:
+  readerDatabase:
+    user: clickhouse_user
+    password: clickhouse_password
+    name: clickhouse_db
+    host: clickhouse-host
+    port: "9000"
+    maxOpenConns: 10
+    maxIdleConns: 5
+
+clickHouseEnabled: false
+clickhouseDelay: 10s
+
+indexer:
+  enabled: true
+  node:
+    port: "5052"
+    host: localhost
+    type: lighthouse
+    pageSize: 100
+  eth1DepositContractFirstBlock: 0
+  historicPriceService:
+    enabled: false
+  pubkeyTagsExporter:
+    enabled: false
+  ensTransformer:
+    validRegistrarContracts: []
+
+frontend:
+  debug: false
+  beaconchainETHPoolBridgeSecret: your-secret
+  kong: http://localhost:8000
+  onlyAPI: true
+  csrfAuthKey: your-csrf-key
+  csrfInsecure: true
+  disableCharts: false
+  recaptchaSiteKey: your-recaptcha-site-key
+  recaptchaSecretKey: your-recaptcha-secret-key
+  enabled: false
+  blobProviderUrl: https://blobs.example.com
+  siteBrand: YourBrand
+  keywords: validator,ethereum,explorer
+  imprint: imprint.html
+  legal:
+    termsOfServiceUrl: /legal/terms
+    privacyPolicyUrl: /legal/privacy
+    imprintTemplate: /legal/imprint.html
+  siteDomain: yoursite.com
+  siteName: YourSite
+  siteTitle: "Welcome to YourSite"
+  siteSubtitle: "Decentralized Infra Monitoring"
+  server:
+    port: "8080"
+    host: 0.0.0.0
+  readerDatabase:
+    user: frontend_reader
+    password: password
+    name: frontend_read
+    host: localhost
+    port: "5432"
+    maxOpenConns: 10
+    maxIdleConns: 5
+    ssl: false
+  writerDatabase:
+    user: frontend_writer
+    password: password
+    name: frontend_write
+    host: localhost
+    port: "5432"
+    maxOpenConns: 10
+    maxIdleConns: 5
+    ssl: false
+  oldProductsDeadline: 1700000000
+  stripe:
+    webhook: /stripe/webhook
+    secretKey: your-stripe-secret
+    publicKey: your-stripe-pubkey
+    sapphire: plan_sapphire
+    emerald: plan_emerald
+    diamond: plan_diamond
+    whale: plan_whale
+    goldfish: plan_goldfish
+    plankton: plan_plankton
+    iron: plan_iron
+    ironYearly: plan_iron_yearly
+    silver: plan_silver
+    silverYearly: plan_silver_yearly
+    gold: plan_gold
+    goldYearly: plan_gold_yearly
+    guppy: plan_guppy
+    guppyYearly: plan_guppy_yearly
+    dolphin: plan_dolphin
+    dolphinYearly: plan_dolphin_yearly
+    orca: plan_orca
+    orcaYearly: plan_orca_yearly
+    vdbAddon1k: plan_vdb1k
+    vdbAddon1kYearly: plan_vdb1k_yearly
+    vdbAddon10k: plan_vdb10k
+    vdbAddon10kYearly: plan_vdb10k_yearly
+  ratelimitUpdateInterval: 1m
+  sessionSameSiteNone: true
+  sessionSecret: your-session-secret
+  sessionCookieDomain: .yoursite.com
+  sessionCookieDeriveDomainFromRequest: false
+  jwtSigningSecret: your-jwt-secret
+  jwtIssuer: yoursite.com
+  jwtValidityInMinutes: 1440
+  maxMailsPerEmailPerDay: 5
+  mail:
+    smtp:
+      server: smtp.example.com
+      host: smtp-host
+      user: smtp-user
+      password: smtp-password
+    mailgun:
+      domain: mailgun.example.com
+      privateKey: your-mailgun-key
+      sender: "noreply@yoursite.com"
+    contact:
+      supportEmail: support@yoursite.com
+      inquiryEmail: inquiry@yoursite.com
+  gatag: GA-XXXXXXX
+  verifyAppSubscriptions: false
+  apple:
+    appSubsAppleSecret: your-apple-subscription-secret
+    keyID: your-key-id
+    issueID: your-issuer-id
+    certificate: your-cert
+  appSubsGoogleJsonPath: /path/to/google-app-sub.json
+  disableStatsInserts: false
+  showDonors:
+    enabled: false
+    gitcoinURL: https://gitcoin.co/
+  countdown:
+    enabled: false
+    title: "<b>Network Launch</b>"
+    timestamp: 1710000000
+    info: "Mainnet Countdown"
+  httpReadTimeout: 5s
+  httpWriteTimeout: 10s
+  httpIdleTimeout: 120s
+  clCurrency: Gwei
+  clCurrencyDivisor: 1000000000
+  clCurrencyDecimals: 9
+  elCurrency: ETH
+  elCurrencyDivisor: 1000000000000000000
+  elCurrencyDecimals: 18
+  mainCurrency: ETH
+
+metrics:
+  enabled: false
+  address: ":9090"
+  pprof: true
+
+notifications:
+  userDbNotifications: false
+  firebaseCredentialsPath: /path/to/firebase.json
+  validatorBalanceDecreasedNotificationsEnabled: false
+  pubkeyCachePath: /path/to/cache
+  onlineDetectionLimit: 3
+  offlineDetectionLimit: 3
+  machineEventThreshold: 10
+  machineEventFirstRatioThreshold: 0.4
+  machineEventSecondRatioThreshold: 0.2
+
+ratelimitUpdater:
+  enabled: false
+  updateInterval: 5m
+
+SSVExporter:
+  enabled: false
+  address: "localhost:7070"
+
+rocketpoolExporter:
+  enabled: false
+
+mevBoostRelayExporter:
+  enabled: false
+
+pprof:
+  enabled: false
+  port: "6060"
+
+nodeJobsProcessor:
+  elEndpoint: http://localhost:8545
+  clEndpoint: http://localhost:5052
+
+monitoring:
+  apiKey: your-monitoring-api-key
+  serviceMonitoringConfigurations:
+    - name: default
+      duration: 10m
+
+githubApiHost: https://api.github.com

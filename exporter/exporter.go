@@ -71,6 +71,15 @@ func Start(client rpc.Client) {
 	}
 }
 
+// networkLivenessUpdater periodically polls the beacon node's chain head and stores
+// liveness-related metadata (head epoch, finalized epoch, justified epoch, and previous
+// justified epoch) into the PostgreSQL database.
+//
+// It runs in a loop synchronized to the beacon chain slot duration and ensures that:
+//   - The beacon node is synced before recording data.
+//   - Duplicate entries for the same epoch are avoided.
+//
+// This function is intended to track network progress and consensus stability over time.
 func networkLivenessUpdater(client rpc.Client) {
 	var prevHeadEpoch uint64
 	err := db.WriterDb.Get(&prevHeadEpoch, "SELECT COALESCE(MAX(headepoch), 0) FROM network_liveness")
@@ -115,6 +124,16 @@ func networkLivenessUpdater(client rpc.Client) {
 	}
 }
 
+// genesisDepositsExporter exports the initial deposit records for genesis validators
+// into the blocks_deposits table. This is a one-time operation that executes
+// after the chain has started (epoch > 0) and no genesis deposits have yet been stored.
+//
+// It retrieves all validators active at slot 0 via the Beacon node RPC,
+// inserts them into the database, and attempts to associate each validator
+// with a corresponding ETH1 deposit signature if available.
+//
+// Genesis deposits are used to establish the initial validator set and provide
+// context for historical and auditing views in the explorer.
 func genesisDepositsExporter(client rpc.Client) {
 	for {
 		// check if the beaconchain has started

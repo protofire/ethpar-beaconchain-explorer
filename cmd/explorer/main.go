@@ -255,10 +255,13 @@ func main() {
 				utils.LogFatal(err, "new explorer lighthouse client error", 0)
 			}
 		} else {
-			logrus.Fatalf("invalid note type %v specified. supported node types are prysm and lighthouse", utils.Config.Indexer.Node.Type)
+			logrus.Fatalf("invalid node type %v specified. supported node types are prysm and lighthouse", utils.Config.Indexer.Node.Type)
 		}
 
-		go services.StartHistoricPriceService()
+		if utils.Config.Indexer.HistoricPriceService.Enabled {
+			go services.StartHistoricPriceService()
+		}
+		
 		go exporter.Start(rpcClient)
 	}
 

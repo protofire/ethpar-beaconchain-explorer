@@ -15,6 +15,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// syncCommitteesExporter periodically fetches sync committee assignments from
+// the Beacon node and stores them in the sync_committees database table.
+//
+// It checks for unprocessed sync committee periods since the Altair fork,
+// retrieves the validator indices and committee positions for each period,
+// and inserts them with deduplication support.
+//
+// This information is used for building sync committee participation data
+// and visualizations in the explorer.
 func syncCommitteesExporter(rpcClient rpc.Client) {
 	for {
 		t0 := time.Now()
@@ -22,7 +31,7 @@ func syncCommitteesExporter(rpcClient rpc.Client) {
 		if err != nil {
 			logrus.WithFields(logrus.Fields{"error": err, "duration": time.Since(t0)}).Errorf("error exporting sync_committees")
 		}
-		time.Sleep(time.Second * 12)
+		time.Sleep(time.Second * 12) // seconds per slot
 	}
 }
 

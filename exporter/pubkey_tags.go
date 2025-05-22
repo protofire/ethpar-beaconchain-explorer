@@ -7,6 +7,18 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
 )
 
+// UpdatePubkeyTag periodically updates the validator_tags table by associating
+// validator public keys with known stake pools.
+//
+// It scans the eth1_deposits table and joins it with the stake_pools_stats table
+// using the depositor address. For each match (excluding Rocket Pool entries),
+// it inserts a tag in the format "pool:<pool_name>" for the corresponding public key.
+//
+// The function runs in an infinite loop with a 10-minute interval between updates.
+// It also logs execution duration to a Prometheus metrics histogram under the
+// "validator_pubkey_tag_updater" label.
+//
+// This is useful for tagging validators associated with centralized or known staking pools.
 func UpdatePubkeyTag() {
 	logger.Infoln("Started Pubkey Tags Updater")
 	for {

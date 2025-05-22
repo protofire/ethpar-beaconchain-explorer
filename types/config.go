@@ -64,22 +64,7 @@ type Config struct {
 	} `yaml:"clickhouse"`
 	ClickHouseEnabled bool          `yaml:"clickHouseEnabled" envconfig:"CLICKHOUSE_ENABLED"`
 	ClickhouseDelay   time.Duration `yaml:"clickhouseDelay" envconfig:"CLICKHOUSE_DELAY"`
-	Indexer           struct {
-		Enabled bool `yaml:"enabled" envconfig:"INDEXER_ENABLED"`
-		Node    struct {
-			Port     string `yaml:"port" envconfig:"INDEXER_NODE_PORT"`
-			Host     string `yaml:"host" envconfig:"INDEXER_NODE_HOST"`
-			Type     string `yaml:"type" envconfig:"INDEXER_NODE_TYPE"`
-			PageSize int32  `yaml:"pageSize" envconfig:"INDEXER_NODE_PAGE_SIZE"`
-		} `yaml:"node"`
-		Eth1DepositContractFirstBlock uint64 `yaml:"eth1DepositContractFirstBlock" envconfig:"INDEXER_ETH1_DEPOSIT_CONTRACT_FIRST_BLOCK"`
-		PubKeyTagsExporter            struct {
-			Enabled bool `yaml:"enabled" envconfig:"PUBKEY_TAGS_EXPORTER_ENABLED"`
-		} `yaml:"pubkeyTagsExporter"`
-		EnsTransformer struct {
-			ValidRegistrarContracts []string `yaml:"validRegistrarContracts" envconfig:"ENS_VALID_REGISTRAR_CONTRACTS"`
-		} `yaml:"ensTransformer"`
-	} `yaml:"indexer"`
+	Indexer IndexerConfig `yaml:"indexer"`
 	Frontend `yaml:"frontend"`
 	Metrics  struct {
 		Enabled bool   `yaml:"enabled" envconfig:"METRICS_ENABLED"`
@@ -303,6 +288,28 @@ type DatabaseConfig struct {
 type ServiceMonitoringConfiguration struct {
 	Name     string        `yaml:"name" envconfig:"NAME"`
 	Duration time.Duration `yaml:"duration" envconfig:"DURATION"`
+}
+
+type IndexerConfig struct {
+	Enabled bool `yaml:"enabled" envconfig:"INDEXER_ENABLED"`
+	Node BeaconNodeConfig `yaml:"node"`
+	Eth1DepositContractFirstBlock uint64 `yaml:"eth1DepositContractFirstBlock" envconfig:"INDEXER_ETH1_DEPOSIT_CONTRACT_FIRST_BLOCK"`
+	HistoricPriceService	struct {
+		Enabled	bool `yaml:"enabled" envconfig:"HISTORIC_PROCE_SERVICE_ENABLED"`
+	}
+	PubKeyTagsExporter	struct {
+		Enabled bool `yaml:"enabled" envconfig:"PUBKEY_TAGS_EXPORTER_ENABLED"`
+	} `yaml:"pubkeyTagsExporter"`
+	EnsTransformer 		struct {
+		ValidRegistrarContracts []string `yaml:"validRegistrarContracts" envconfig:"ENS_VALID_REGISTRAR_CONTRACTS"`
+	} `yaml:"ensTransformer"`
+}
+
+type BeaconNodeConfig struct {
+	Port     string `yaml:"port" envconfig:"INDEXER_NODE_PORT"`
+	Host     string `yaml:"host" envconfig:"INDEXER_NODE_HOST"`
+	Type     string `yaml:"type" envconfig:"INDEXER_NODE_TYPE"`
+	PageSize int32  `yaml:"pageSize" envconfig:"INDEXER_NODE_PAGE_SIZE"`
 }
 
 type ConfigJsonResponse struct {

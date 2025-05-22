@@ -10,6 +10,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// syncCommitteesCountExporter periodically computes and stores the normalized
+// count of sync committee participation per validator.
+//
+// It iterates over each sync committee period from the Altair fork onward,
+// calculates the fractional participation rate (syncCommitteeSize / totalValidators),
+// and stores the cumulative count in the sync_committees_count_per_validator table.
+//
+// This data supports long-term participation metrics for validators in sync committees.
 func syncCommitteesCountExporter() {
 	for {
 		err := exportSyncCommitteesCount()
