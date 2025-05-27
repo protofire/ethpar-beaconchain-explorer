@@ -23,7 +23,9 @@ func Start(client rpc.Client) {
 	go checkSubscriptions()
 	go syncCommitteesExporter(client)
 	go syncCommitteesCountExporter()
-	go NewPendingQueueIndexer(client).Start()
+	if utils.Config.Indexer.PendingQueueIndexer.Enabled {
+		go NewPendingQueueIndexer(client).Start()
+	}
 	if utils.Config.SSVExporter.Enabled {
 		go ssvExporter()
 	}

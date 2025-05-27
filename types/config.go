@@ -306,6 +306,9 @@ type IndexerConfig struct {
 	SyncCommitteesCountExporter  struct {
 		Enabled bool `yaml:"enabled"`
 	} `yaml:"syncCommitteesCountExporter"`
+	PendingQueueIndexer struct {
+		Enabled bool `yaml:"enabled"`
+	} `yaml:"pendingQueueIndexer"`
 	EnsTransformer 		struct {
 		ValidRegistrarContracts []string `yaml:"validRegistrarContracts" envconfig:"ENS_VALID_REGISTRAR_CONTRACTS"`
 	} `yaml:"ensTransformer"`
