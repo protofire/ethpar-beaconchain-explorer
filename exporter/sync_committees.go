@@ -25,6 +25,10 @@ import (
 // This information is used for building sync committee participation data
 // and visualizations in the explorer.
 func syncCommitteesExporter(rpcClient rpc.Client) {
+	// skip if not enabled
+	if !utils.Config.Indexer.SyncCommitteesExporter.Enabled {
+		return
+	}
 	for {
 		t0 := time.Now()
 		err := exportSyncCommittees(rpcClient)

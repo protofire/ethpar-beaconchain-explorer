@@ -19,6 +19,10 @@ import (
 //
 // This data supports long-term participation metrics for validators in sync committees.
 func syncCommitteesCountExporter() {
+	// skip if not enabled
+	if !utils.Config.Indexer.SyncCommitteesCountExporter.Enabled {
+		return
+	}
 	for {
 		err := exportSyncCommitteesCount()
 		if err != nil {

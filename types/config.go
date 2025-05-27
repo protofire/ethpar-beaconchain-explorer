@@ -300,6 +300,12 @@ type IndexerConfig struct {
 	PubKeyTagsExporter	struct {
 		Enabled bool `yaml:"enabled" envconfig:"PUBKEY_TAGS_EXPORTER_ENABLED"`
 	} `yaml:"pubkeyTagsExporter"`
+	SyncCommitteesExporter  struct {
+		Enabled bool `yaml:"enabled"`
+	} `yaml:"syncCommitteesExporter"`
+	SyncCommitteesCountExporter  struct {
+		Enabled bool `yaml:"enabled"`
+	} `yaml:"syncCommitteesCountExporter"`
 	EnsTransformer 		struct {
 		ValidRegistrarContracts []string `yaml:"validRegistrarContracts" envconfig:"ENS_VALID_REGISTRAR_CONTRACTS"`
 	} `yaml:"ensTransformer"`

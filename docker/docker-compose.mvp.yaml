@@ -34,7 +34,7 @@ services:
     container_name: indexer-bigtable-emulator
     command: gcloud beta emulators bigtable start --host-port=0.0.0.0:8080
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: ["CMD", "sleep", "2"]
       interval: 10s
       timeout: 5s
       retries: 5

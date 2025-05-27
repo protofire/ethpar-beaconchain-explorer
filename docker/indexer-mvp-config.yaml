@@ -43,8 +43,13 @@ blobIndexer:
     accessKeyId: your-access-key-id
     accessKeySecret: your-secret-access-key
 
-eth1ErigonEndpoint: http://localhost:8545
-eth1GethEndpoint: http://localhost:8545
+chain:
+  name: holesky
+  configPath: ./config/holesky.chain.yml
+  id: 17000
+
+eth1ErigonEndpoint: http://192.168.0.124:8545
+eth1GethEndpoint: http://192.168.0.124:8545
 etherscanApiKey: your-etherscan-api-key
 etherscanApiBaseUrl: https://api.etherscan.io
 redisCacheEndpoint: redis:6379
@@ -69,7 +74,7 @@ indexer:
   enabled: true
   node:
     port: "5052"
-    host: localhost
+    host: 192.168.0.124
     type: lighthouse
     pageSize: 100
   eth1DepositContractFirstBlock: 0
@@ -107,19 +112,19 @@ frontend:
     port: "8080"
     host: 0.0.0.0
   readerDatabase:
-    user: frontend_reader
-    password: password
-    name: frontend_read
-    host: localhost
+    user: indexer
+    password: indexerpass
+    name: indexerdb
+    host: postgres
     port: "5432"
     maxOpenConns: 10
     maxIdleConns: 5
     ssl: false
   writerDatabase:
-    user: frontend_writer
-    password: password
-    name: frontend_write
-    host: localhost
+    user: indexer
+    password: indexerpass
+    name: indexerdb
+    host: postgres
     port: "5432"
     maxOpenConns: 10
     maxIdleConns: 5
