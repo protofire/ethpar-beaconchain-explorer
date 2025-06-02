@@ -1333,7 +1333,7 @@ func updateAggreationBits(rpcClient *rpc.LighthouseClient, startEpoch uint64, en
 				}
 				importWholeBlock := false
 
-				if status != block.Status {
+				if status != uint64(block.Status) {
 					logrus.Infof("Slot[%v] has the wrong status [%v], but should be [%v]", block.Slot, status, block.Status)
 					if block.Status == 1 {
 						importWholeBlock = true
