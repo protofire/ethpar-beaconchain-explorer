@@ -224,14 +224,14 @@ func ExportSlot(client rpc.Client, slot uint64, isHeadEpoch bool, tx *sqlx.Tx) e
 	}
 	start := time.Now()
 
-	// retrieve the data for the slot from the node
 	// the first slot of an epoch will also contain all validator duties for the whole epoch
 	block, err := client.GetBlockBySlot(slot)
 	if err != nil {
+		// retrieve the data for the slot from the node
 		return fmt.Errorf("error retrieving data for slot %v: %w", slot, err)
 	}
 
-	if block.EpochAssignments != nil { // export the epoch assignments as they are included in the first slot of an epoch
+	if block.EpochAssignments != nil && !utils.Config.Indexer.IsBeaconNodePruned { // export the epoch assignments as they are included in the first slot of an epoch
 		logger.Infof("exporting duties & balances for epoch %v", utils.EpochOfSlot(slot))
 
 		// prepare the duties for export to bigtable

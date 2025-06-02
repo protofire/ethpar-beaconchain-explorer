@@ -312,6 +312,7 @@ type IndexerConfig struct {
 	EnsTransformer 		struct {
 		ValidRegistrarContracts []string `yaml:"validRegistrarContracts" envconfig:"ENS_VALID_REGISTRAR_CONTRACTS"`
 	} `yaml:"ensTransformer"`
+	IsBeaconNodePruned bool `yaml:"isBeaconNodePruned"`
 }
 
 type BeaconNodeConfig struct {
