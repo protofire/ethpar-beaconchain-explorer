@@ -318,6 +318,7 @@ type BeaconNodeConfig struct {
 	Port     string `yaml:"port" envconfig:"INDEXER_NODE_PORT"`
 	Host     string `yaml:"host" envconfig:"INDEXER_NODE_HOST"`
 	Type     string `yaml:"type" envconfig:"INDEXER_NODE_TYPE"`
+	Mode     string `yaml:"mode" envconfig:"INDEXER_NODE_MODE"`
 	PageSize int32  `yaml:"pageSize" envconfig:"INDEXER_NODE_PAGE_SIZE"`
 }
 

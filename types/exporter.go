@@ -61,6 +61,7 @@ type EpochData struct {
 	AttestationDuties       map[Slot]map[ValidatorIndex][]Slot
 	SyncDuties              map[Slot]map[ValidatorIndex]bool
 	Finalized               bool
+	PrunedPartial		bool
 }
 
 // ValidatorParticipation is a struct to hold validator participation data
@@ -106,9 +107,18 @@ type SyncAggregate struct {
 	SyncAggregateParticipation float64
 }
 
+// BlockStatus defines the state of a block in the epoch
+type BlockStatus int
+
+const (
+	BlockStatusScheduled BlockStatus = 0
+	BlockStatusProposed  BlockStatus = 1
+	BlockStatusMissed    BlockStatus = 2
+)
+
 // Block is a struct to hold block data
 type Block struct {
-	Status                     uint64
+	Status                     BlockStatus
 	Proposer                   uint64
 	BlockRoot                  []byte
 	Slot                       uint64
