@@ -755,9 +755,12 @@ func (lc *LighthouseClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 			}
 
 			proposer := uint64(math.MaxUint64)
-			for _, pa := range proposerAssignments.Data {
-				if uint64(pa.Slot) == slot {
-					proposer = uint64(pa.ValidatorIndex)
+			// proposerAssignments may be nil if node is pruned
+			if proposerAssignments != nil {
+				for _, pa := range proposerAssignments.Data {
+					if uint64(pa.Slot) == slot {
+						proposer = uint64(pa.ValidatorIndex)
+					}
 				}
 			}
 
@@ -972,28 +975,31 @@ func (lc *LighthouseClient) blockFromResponse(parsedHeaders *StandardBeaconHeade
 		return nil, err
 	}
 
-	if agg := parsedBlock.Message.Body.SyncAggregate; agg != nil {
-		bits := utils.MustParseHex(agg.SyncCommitteeBits)
+	// epochAssignments may be nil if node is pruned
+	if epochAssignments != nil {
+		if agg := parsedBlock.Message.Body.SyncAggregate; agg != nil {
+			bits := utils.MustParseHex(agg.SyncCommitteeBits)
 
-		if utils.Config.Chain.ClConfig.SyncCommitteeSize != uint64(len(bits)*8) {
-			return nil, fmt.Errorf("sync-aggregate-bits-size does not match sync-committee-size: %v != %v", len(bits)*8, utils.Config.Chain.ClConfig.SyncCommitteeSize)
-		}
+			if utils.Config.Chain.ClConfig.SyncCommitteeSize != uint64(len(bits)*8) {
+				return nil, fmt.Errorf("sync-aggregate-bits-size does not match sync-committee-size: %v != %v", len(bits)*8, utils.Config.Chain.ClConfig.SyncCommitteeSize)
+			}
 
-		block.SyncAggregate = &types.SyncAggregate{
-			SyncCommitteeValidators:    epochAssignments.SyncAssignments,
-			SyncCommitteeBits:          bits,
-			SyncAggregateParticipation: syncCommitteeParticipation(bits),
-			SyncCommitteeSignature:     utils.MustParseHex(agg.SyncCommitteeSignature),
-		}
+			block.SyncAggregate = &types.SyncAggregate{
+				SyncCommitteeValidators:    epochAssignments.SyncAssignments,
+				SyncCommitteeBits:          bits,
+				SyncAggregateParticipation: syncCommitteeParticipation(bits),
+				SyncCommitteeSignature:     utils.MustParseHex(agg.SyncCommitteeSignature),
+			}
 
-		// fill out performed sync duties
-		bitLen := len(block.SyncAggregate.SyncCommitteeBits) * 8
-		valLen := len(block.SyncAggregate.SyncCommitteeValidators)
-		if bitLen < valLen {
-			return nil, fmt.Errorf("error getting sync_committee participants: bitLen != valLen: %v != %v", bitLen, valLen)
-		}
-		for i, valIndex := range block.SyncAggregate.SyncCommitteeValidators {
-			block.SyncDuties[types.ValidatorIndex(valIndex)] = utils.BitAtVector(block.SyncAggregate.SyncCommitteeBits, i)
+			// fill out performed sync duties
+			bitLen := len(block.SyncAggregate.SyncCommitteeBits) * 8
+			valLen := len(block.SyncAggregate.SyncCommitteeValidators)
+			if bitLen < valLen {
+				return nil, fmt.Errorf("error getting sync_committee participants: bitLen != valLen: %v != %v", bitLen, valLen)
+			}
+			for i, valIndex := range block.SyncAggregate.SyncCommitteeValidators {
+				block.SyncDuties[types.ValidatorIndex(valIndex)] = utils.BitAtVector(block.SyncAggregate.SyncCommitteeBits, i)
+			}
 		}
 	}
 
@@ -1156,23 +1162,25 @@ func (lc *LighthouseClient) blockFromResponse(parsedHeaders *StandardBeaconHeade
 			return nil, fmt.Errorf("error receiving epoch assignment for epoch %v: %w", a.Data.Slot/utils.Config.Chain.ClConfig.SlotsPerEpoch, err)
 		}
 
-		for i := uint64(0); i < aggregationBits.Len(); i++ {
-			if aggregationBits.BitAt(i) {
-				validator, found := assignments.AttestorAssignments[utils.FormatAttestorAssignmentKey(a.Data.Slot, a.Data.CommitteeIndex, i)]
-				if !found { // This should never happen!
-					validator = 0
-					logger.Errorf("error retrieving assigned validator for attestation %v of block %v for slot %v committee index %v member index %v", i, block.Slot, a.Data.Slot, a.Data.CommitteeIndex, i)
-				}
-				a.Attesters = append(a.Attesters, validator)
+		// assignments may be nill if beacon node is pruned
+		if assignments != nil {
+			for i := uint64(0); i < aggregationBits.Len(); i++ {
+				if aggregationBits.BitAt(i) {
+					validator, found := assignments.AttestorAssignments[utils.FormatAttestorAssignmentKey(a.Data.Slot, a.Data.CommitteeIndex, i)]
+					if !found { // This should never happen!
+						validator = 0
+						logger.Errorf("error retrieving assigned validator for attestation %v of block %v for slot %v committee index %v member index %v", i, block.Slot, a.Data.Slot, a.Data.CommitteeIndex, i)
+					}
+					a.Attesters = append(a.Attesters, validator)
 
-				if block.AttestationDuties[types.ValidatorIndex(validator)] == nil {
-					block.AttestationDuties[types.ValidatorIndex(validator)] = []types.Slot{types.Slot(a.Data.Slot)}
-				} else {
-					block.AttestationDuties[types.ValidatorIndex(validator)] = append(block.AttestationDuties[types.ValidatorIndex(validator)], types.Slot(a.Data.Slot))
+					if block.AttestationDuties[types.ValidatorIndex(validator)] == nil {
+						block.AttestationDuties[types.ValidatorIndex(validator)] = []types.Slot{types.Slot(a.Data.Slot)}
+					} else {
+						block.AttestationDuties[types.ValidatorIndex(validator)] = append(block.AttestationDuties[types.ValidatorIndex(validator)], types.Slot(a.Data.Slot))
+					}
 				}
 			}
 		}
-
 		block.Attestations[i] = a
 	}
 

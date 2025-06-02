@@ -347,6 +347,11 @@ func ExportSlot(client rpc.Client, slot uint64, isHeadEpoch bool, tx *sqlx.Tx) e
 		for validator, duty := range block.SyncDuties {
 			syncDuties[types.Slot(block.Slot)][types.ValidatorIndex(validator)] = duty
 		}
+		// save sync committee duties to bigtable
+		err = db.BigtableClient.SaveSyncComitteeDuties(syncDuties)
+		if err != nil {
+			return fmt.Errorf("error exporting sync committee duties to bigtable for slot %v: %w", block.Slot, err)
+		}
 	} else {
 		logger.Debugf("skipping Sync Duties for slot %v. Reason: beacon node is pruned", slot)
 	}
@@ -366,18 +371,13 @@ func ExportSlot(client rpc.Client, slot uint64, isHeadEpoch bool, tx *sqlx.Tx) e
 				attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)] = append(attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)], types.Slot(block.Slot))
 			}
 		}
+		// save attestation duties to bigtable
+		err = db.BigtableClient.SaveAttestationDuties(attDuties)
+		if err != nil {
+			return fmt.Errorf("error exporting attestations to bigtable for slot %v: %w", block.Slot, err)
+		}
 	} else {
 		logger.Debugf("skipping Attestation Duties for slot %v. Reason: beacon node is pruned", slot)
-	}
-
-	// save sync & attestation duties to bigtable
-	err = db.BigtableClient.SaveAttestationDuties(attDuties)
-	if err != nil {
-		return fmt.Errorf("error exporting attestations to bigtable for slot %v: %w", block.Slot, err)
-	}
-	err = db.BigtableClient.SaveSyncComitteeDuties(syncDuties)
-	if err != nil {
-		return fmt.Errorf("error exporting sync committee duties to bigtable for slot %v: %w", block.Slot, err)
 	}
 
 	// save the block data to the db
