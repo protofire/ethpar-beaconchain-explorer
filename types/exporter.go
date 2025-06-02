@@ -119,7 +119,7 @@ const (
 // Block is a struct to hold block data
 type Block struct {
 	Status                     BlockStatus
-	Proposer                   uint64
+	Proposer                   int64
 	BlockRoot                  []byte
 	Slot                       uint64
 	ParentRoot                 []byte

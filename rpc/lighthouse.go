@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -566,7 +565,7 @@ func (lc *LighthouseClient) GetEpochData(epoch uint64, skipHistoricBalances bool
 				data.Blocks[slot] = map[string]*types.Block{
 					"0x0": {
 						Status:    status,
-						Proposer:  proposer,
+						Proposer:  int64(proposer),
 						BlockRoot: blockRoot,
 						Slot:      slot,
 					},
@@ -727,7 +726,7 @@ func (lc *LighthouseClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 	} else if err != nil {
 		// If header not found, build dummy block (possibly missed slot)
 		if err == errNotFound {
-			proposer := uint64(math.MaxUint64)
+			proposer := int64(-1)
 			proposerAssignments, err := lc.GetEpochProposerAssignments(epoch)
 			if err != nil {
 				return nil, fmt.Errorf("error retrieving proposer assignments for slot %d: %w", slot, err)
@@ -735,7 +734,7 @@ func (lc *LighthouseClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 			if proposerAssignments != nil {
 				for _, pa := range proposerAssignments.Data {
 					if uint64(pa.Slot) == slot {
-						proposer = uint64(pa.ValidatorIndex)
+						proposer = int64(pa.ValidatorIndex)
 						break
 					}
 				}
@@ -745,7 +744,7 @@ func (lc *LighthouseClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 
 			block := &types.Block{
 				Status:            0,
-				Proposer:          proposer,
+				Proposer:          int64(proposer),
 				BlockRoot:         []byte{0x0},
 				Slot:              slot,
 				ParentRoot:        []byte{},
@@ -887,7 +886,7 @@ func (lc *LighthouseClient) blockFromResponse(parsedHeaders *StandardBeaconHeade
 	block := &types.Block{
 		Status:       1,
 		Finalized:    parsedHeaders.Finalized,
-		Proposer:     uint64(parsedBlock.Message.ProposerIndex),
+		Proposer:     int64(parsedBlock.Message.ProposerIndex),
 		BlockRoot:    utils.MustParseHex(parsedHeaders.Data.Root),
 		Slot:         slot,
 		ParentRoot:   utils.MustParseHex(parsedBlock.Message.ParentRoot),
