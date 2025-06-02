@@ -343,22 +343,31 @@ func ExportSlot(client rpc.Client, slot uint64, isHeadEpoch bool, tx *sqlx.Tx) e
 	syncDuties := make(map[types.Slot]map[types.ValidatorIndex]bool)
 	syncDuties[types.Slot(block.Slot)] = make(map[types.ValidatorIndex]bool)
 
-	for validator, duty := range block.SyncDuties {
-		syncDuties[types.Slot(block.Slot)][types.ValidatorIndex(validator)] = duty
+	if block.SyncDuties != nil {
+		for validator, duty := range block.SyncDuties {
+			syncDuties[types.Slot(block.Slot)][types.ValidatorIndex(validator)] = duty
+		}
+	} else {
+		logger.Debugf("skipping Sync Duties for slot %v. Reason: beacon node is pruned", slot)
 	}
 
 	attDuties := make(map[types.Slot]map[types.ValidatorIndex][]types.Slot)
-	for validator, attestedSlots := range block.AttestationDuties {
+	
+	if block.AttestationDuties != nil {
+		for validator, attestedSlots := range block.AttestationDuties {
 
-		for _, attestedSlot := range attestedSlots {
-			if attDuties[types.Slot(attestedSlot)] == nil {
-				attDuties[types.Slot(attestedSlot)] = make(map[types.ValidatorIndex][]types.Slot)
+			for _, attestedSlot := range attestedSlots {
+				if attDuties[types.Slot(attestedSlot)] == nil {
+					attDuties[types.Slot(attestedSlot)] = make(map[types.ValidatorIndex][]types.Slot)
+				}
+				if attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)] == nil {
+					attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)] = make([]types.Slot, 0, 10)
+				}
+				attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)] = append(attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)], types.Slot(block.Slot))
 			}
-			if attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)] == nil {
-				attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)] = make([]types.Slot, 0, 10)
-			}
-			attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)] = append(attDuties[types.Slot(attestedSlot)][types.ValidatorIndex(validator)], types.Slot(block.Slot))
 		}
+	} else {
+		logger.Debugf("skipping Attestation Duties for slot %v. Reason: beacon node is pruned", slot)
 	}
 
 	// save sync & attestation duties to bigtable
