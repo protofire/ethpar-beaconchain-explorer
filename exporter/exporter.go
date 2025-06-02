@@ -19,7 +19,9 @@ var Client *rpc.Client
 func Start(client rpc.Client) {
 	go networkLivenessUpdater(client)
 	go eth1DepositsExporter()
-	go genesisDepositsExporter(client)
+	if !utils.Config.Indexer.IsBeaconNodePruned {
+		go genesisDepositsExporter(client)
+	}
 	go checkSubscriptions()
 	go syncCommitteesExporter(client)
 	go syncCommitteesCountExporter()
