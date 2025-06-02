@@ -203,6 +203,10 @@ func (lc *LighthouseClient) GetValidatorQueue() (*types.ValidatorQueue, error) {
 // GetEpochAssignments will get the epoch assignments from Lighthouse RPC api
 func (lc *LighthouseClient) GetEpochAssignments(epoch uint64) (*types.EpochAssignments, error) {
 
+	// return nill if historic data is not available on the beacon node
+	if utils.Config.Indexer.IsBeaconNodePruned {
+		return nil, nil
+	}
 	var err error
 
 	lc.assignmentsCacheMux.Lock()
@@ -300,6 +304,11 @@ func (lc *LighthouseClient) GetEpochAssignments(epoch uint64) (*types.EpochAssig
 
 // GetEpochProposerAssignments will get the epoch proposer assignments from Lighthouse RPC api
 func (lc *LighthouseClient) GetEpochProposerAssignments(epoch uint64) (*StandardProposerDutiesResponse, error) {
+	// return nil if historic data is not available on the beacon node
+	if utils.Config.Indexer.IsBeaconNodePruned {
+		return nil, nil
+	}
+	
 	var err error
 
 	proposerResp, err := lc.get(fmt.Sprintf("%s/eth/v1/validator/duties/proposer/%d", lc.endpoint, epoch))
