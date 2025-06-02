@@ -1558,7 +1558,7 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 				len(b.VoluntaryExits),
 				syncAggParticipation,
 				b.Proposer,
-				strconv.FormatUint(b.Status, 10),
+				strconv.FormatUint(uint64(b.Status), 10),
 				execData.ParentHash,
 				execData.FeeRecipient,
 				execData.StateRoot,

@@ -108,7 +108,7 @@ type SyncAggregate struct {
 }
 
 // BlockStatus defines the state of a block in the epoch
-type BlockStatus int
+type BlockStatus uint64
 
 const (
 	BlockStatusScheduled BlockStatus = 0
