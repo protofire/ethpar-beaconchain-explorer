@@ -1535,7 +1535,7 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 					return fmt.Errorf("error executing stmtExecutionPayload for block %v: %w", b.Slot, err)
 				}
 			}
-			_, err = stmtBlock.Exec(
+			res, err = stmtBlock.Exec(
 				b.Slot/utils.Config.Chain.ClConfig.SlotsPerEpoch,
 				b.Slot,
 				b.BlockRoot,
@@ -1580,6 +1580,12 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 			if err != nil {
 				return fmt.Errorf("error executing stmtBlocks for block %v: %w", b.Slot, err)
 			}
+			rows, _ := res.RowsAffected()
+			logger.WithFields(logrus.Fields{
+				"slot":        b.Slot,
+				"blockRoot":   fmt.Sprintf("%x", b.BlockRoot),
+				"rowsInserted": rows,
+			}).Info("stmtBlock insert")
 			blockLog.WithField("duration", time.Since(t)).Tracef("stmtBlock")
 			logger.Tracef("done, took %v", time.Since(t))
 
