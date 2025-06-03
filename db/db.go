@@ -120,6 +120,15 @@ func mustInitDB(writer *types.DatabaseConfig, reader *types.DatabaseConfig, driv
 		}
 
 		logger.Infof("connecting to %s database %s:%s/%s as writer with %d/%d max open/idle connections", databaseBrand, writer.Host, writer.Port, writer.Name, writer.MaxOpenConns, writer.MaxIdleConns)
+		dsn := fmt.Sprintf("%s://%s:%s@%s/%s?%s",
+			databaseBrand,
+			writer.Username,
+			writer.Password,
+			net.JoinHostPort(writer.Host, writer.Port),
+			writer.Name,
+			sslParam,
+		)
+		logger.Infof("Writer DSN: %s", dsn)
 		dbConnWriter, err = sqlx.Open(driverName, fmt.Sprintf("%s://%s:%s@%s/%s?%s", databaseBrand, writer.Username, writer.Password, net.JoinHostPort(writer.Host, writer.Port), writer.Name, sslParam))
 		if err != nil {
 			logger.Fatal(err, "error getting Connection Writer database", 0)
