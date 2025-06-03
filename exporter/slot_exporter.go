@@ -32,6 +32,14 @@ func RunSlotExporter(client rpc.Client, firstRun bool) error {
 	}
 	defer tx.Rollback()
 
+	var dbInfo struct {
+		DbName  string `db:"current_database"`
+		Schema  string `db:"current_schema"`
+		Usr     string `db:"current_user"`
+	}
+	_ = tx.Get(&dbInfo, `SELECT current_database(), current_schema(), current_user`)
+	logger.Infof("Connected to DB: %s, schema: %s, user: %s", dbInfo.DbName, dbInfo.Schema, dbInfo.Usr)
+
 	if firstRun {
 		// get all slots we currently have in the database
 		dbSlots, err := db.GetAllSlots(tx)

@@ -789,7 +789,7 @@ func SaveBlock(block *types.Block, forceSlotUpdate bool, tx *sqlx.Tx) error {
 
 	err := saveBlocks(blocksMap, tx, forceSlotUpdate)
 	if err != nil {
-		logger.Fatalf("error saving blocks to db: %v", err)
+		logger.Errorf("error saving blocks to db: %v", err)
 		return fmt.Errorf("error saving blocks to db: %w", err)
 	}
 
