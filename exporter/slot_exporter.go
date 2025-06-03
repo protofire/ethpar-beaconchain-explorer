@@ -30,7 +30,14 @@ func RunSlotExporter(client rpc.Client, firstRun bool) error {
 	if err != nil {
 		return fmt.Errorf("error starting tx: %w", err)
 	}
-	defer tx.Rollback()
+	committed := false
+	defer func() {
+		if !committed {
+			if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+				logger.Errorf("Rollback failed: %v", err)
+			}
+		}
+	}()
 
 	var dbInfo struct {
 		DbName  string `db:"current_database"`
@@ -215,6 +222,7 @@ func RunSlotExporter(client rpc.Client, firstRun bool) error {
 	if err != nil {
 		return fmt.Errorf("error committing tx: %w", err)
 	}
+	committed = true
 
 	return nil
 
