@@ -221,6 +221,8 @@ func RunSlotExporter(client rpc.Client, firstRun bool) error {
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("error committing tx: %w", err)
+	} else {
+		logger.Infof("Commit successful")
 	}
 	committed = true
 
