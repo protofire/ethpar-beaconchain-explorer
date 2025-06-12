@@ -338,7 +338,7 @@ func buildAttestations(
 			key := utils.FormatAttestorAssignmentKey(a.Data.Slot, a.Data.CommitteeIndex, j)
 			valIdx, found := assignments.AttestorAssignments[key]
 			if !found {
-				logger.Errorf("unknown attestor: slot %d, committee %d, index %d", a.Data.Slot, a.Data.CommitteeIndex, j)
+				logger.Debugf("unknown attestor: slot %d, committee %d, index %d", a.Data.Slot, a.Data.CommitteeIndex, j)
 				valIdx = 0
 			}
 			a.Attesters = append(a.Attesters, valIdx)
