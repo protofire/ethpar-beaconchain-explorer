@@ -321,6 +321,15 @@ type EpochAssignments struct {
 	SyncAssignments     []uint64
 }
 
+func (ea *EpochAssignments) IsEmpty() bool {
+	if ea == nil {
+		return true
+	}
+	return len(ea.ProposerAssignments) == 0 &&
+		len(ea.AttestorAssignments) == 0 &&
+		len(ea.SyncAssignments) == 0
+}
+
 // Eth1Deposit is a struct to hold eth1-deposit data
 type Eth1Deposit struct {
 	TxHash                []byte `db:"tx_hash"`
