@@ -24,6 +24,9 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/exporter"
 	"github.com/protofire/ethpar-beaconchain-explorer/notify"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/lighthouse"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/teku"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -68,8 +71,8 @@ var opts = struct {
 
 var bt *db.Bigtable
 var erigonClient *rpc.ErigonClient
-var lighthouseClient *rpc.LighthouseClient
-var rpcClient *rpc.LighthouseClient
+
+var consClient consensus.ConsensusClient
 
 func main() {
 	statsPartitionCommand := commands.StatsMigratorCommand{}
@@ -120,7 +123,6 @@ func main() {
 	utils.Config = cfg
 
 	chainIdString := strconv.FormatUint(utils.Config.Chain.ClConfig.DepositChainID, 10)
-	chainIDBig := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(5)
@@ -145,11 +147,21 @@ func main() {
 	go func() {
 		defer wg.Done()
 		var err error
-		rpcClient, err = rpc.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainIDBig)
-		if err != nil {
-			utils.LogFatal(err, "lighthouse client error", 0)
+
+		chainID := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
+		if utils.Config.Indexer.Node.Type == "lighthouse" {
+			consClient, err = lighthouse.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+			if err != nil {
+				utils.LogFatal(err, "new explorer lighthouse client error", 0)
+			}
+		} else if utils.Config.Indexer.Node.Type == "teku" {
+			consClient, err = teku.NewTekuClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+			if err != nil {
+				utils.LogFatal(err, "new explorer lighthouse client error", 0)
+			}
+		} else {
+			logrus.Fatalf("invalid node type %v specified. supported node types are teku and lighthouse", utils.Config.Indexer.Node.Type)
 		}
-		lighthouseClient = rpcClient
 	}()
 
 	go func() {
@@ -248,7 +260,7 @@ func main() {
 				logrus.Fatalf("error starting tx: %v", err)
 			}
 			for slot := epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch; slot < (epoch+1)*utils.Config.Chain.ClConfig.SlotsPerEpoch; slot++ {
-				err = exporter.ExportSlot(rpcClient, slot, false, tx)
+				err = exporter.ExportSlot(consClient, slot, false, tx)
 
 				if err != nil {
 					tx.Rollback()
@@ -297,7 +309,7 @@ func main() {
 				logrus.Fatalf("error starting tx: %v", err)
 			}
 			for slot := epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch; slot < (epoch+1)*utils.Config.Chain.ClConfig.SlotsPerEpoch; slot++ {
-				err = exporter.ExportSlot(rpcClient, slot, false, tx)
+				err = exporter.ExportSlot(consClient, slot, false, tx)
 
 				if err != nil {
 					tx.Rollback()
@@ -319,7 +331,7 @@ func main() {
 	case "index-old-eth1-blocks":
 		indexOldEth1Blocks(opts.StartBlock, opts.EndBlock, opts.BatchSize, opts.DataConcurrency, opts.Transformers, bt, erigonClient)
 	case "update-aggregation-bits":
-		updateAggreationBits(rpcClient, opts.StartEpoch, opts.EndEpoch, opts.DataConcurrency)
+		updateAggreationBits(consClient, opts.StartEpoch, opts.EndEpoch, opts.DataConcurrency)
 	case "update-block-finalization-sequentially":
 		err = updateBlockFinalizationSequentially()
 	case "historic-prices-export":
@@ -334,7 +346,7 @@ func main() {
 		err = migrateAppPurchases(opts.Key)
 	case "export-genesis-validators":
 		logrus.Infof("retrieving genesis validator state")
-		validators, err := rpcClient.GetValidatorState(0)
+		validators, err := consClient.GetValidatorState(0)
 		if err != nil {
 			logrus.Fatalf("error retrieving genesis validator state")
 		}
@@ -390,7 +402,7 @@ func main() {
 
 			logrus.Infof("saving validators %v-%v", data.Validators[0].Index, data.Validators[len(data.Validators)-1].Index)
 
-			err = db.SaveValidators(0, data.Validators, rpcClient, len(data.Validators), tx)
+			err = db.SaveValidators(0, data.Validators, consClient, len(data.Validators), tx)
 			if err != nil {
 				logrus.Fatal(err)
 			}
@@ -432,9 +444,9 @@ func main() {
 	case "export-stats-totals":
 		exportStatsTotals(opts.Columns, opts.StartDay, opts.EndDay, opts.DataConcurrency)
 	case "export-sync-committee-periods":
-		exportSyncCommitteePeriods(rpcClient, opts.StartDay, opts.EndDay, opts.DryRun)
+		exportSyncCommitteePeriods(consClient, opts.StartDay, opts.EndDay, opts.DryRun)
 	case "export-sync-committee-validator-stats":
-		exportSyncCommitteeValidatorStats(rpcClient, opts.StartDay, opts.EndDay, opts.DryRun, true)
+		exportSyncCommitteeValidatorStats(consClient, opts.StartDay, opts.EndDay, opts.DryRun, true)
 	case "fix-exec-transactions-count":
 		err = fixExecTransactionsCount()
 	case "partition-validator-stats":
@@ -480,7 +492,7 @@ func fixEpoch(e uint64) error {
 		return fmt.Errorf("error starting tx: %w", err)
 	}
 	defer tx.Rollback()
-	s, err := lighthouseClient.GetValidatorParticipation(e)
+	s, err := consClient.GetValidatorParticipation(e)
 	if err != nil {
 		return err
 	}
@@ -1126,11 +1138,6 @@ func debugBlocks() error {
 		return err
 	}
 
-	clClient, err := rpc.NewLighthouseClient(fmt.Sprintf("http://%v:%v", utils.Config.Indexer.Node.Host, utils.Config.Indexer.Node.Port), new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID))
-	if err != nil {
-		return err
-	}
-
 	for i := opts.StartBlock; i <= opts.EndBlock; i++ {
 		btBlock, err := db.BigtableClient.GetBlockFromBlocksTable(i)
 		if err != nil {
@@ -1144,7 +1151,7 @@ func debugBlocks() error {
 		}
 
 		slot := utils.TimeToSlot(uint64(elBlock.Time.Seconds))
-		clBlock, err := clClient.GetBlockBySlot(slot)
+		clBlock, err := consClient.GetBlockBySlot(slot)
 		if err != nil {
 			return err
 		}
@@ -1267,11 +1274,11 @@ func migrateLastAttestationSlotToBigtable() {
 	}
 }
 
-func updateAggreationBits(rpcClient *rpc.LighthouseClient, startEpoch uint64, endEpoch uint64, concurency uint64) {
+func updateAggreationBits(consClient consensus.ConsensusClient, startEpoch uint64, endEpoch uint64, concurency uint64) {
 	logrus.Infof("update-aggregation-bits epochs %v - %v", startEpoch, endEpoch)
 	for epoch := startEpoch; epoch <= endEpoch; epoch++ {
 		logrus.Infof("Getting data from the node for epoch %v", epoch)
-		data, err := rpcClient.GetEpochData(epoch, false)
+		data, err := consClient.GetEpochData(epoch, false)
 		if err != nil {
 			utils.LogError(err, fmt.Sprintf("Error getting epoch[%v] data from the client", epoch), 0)
 			return
@@ -2018,7 +2025,7 @@ OUTER:
 Instead of deleting entries from the sync_committee table in a prod environment and wait for the exporter to sync back all entries,
 this method will replace each sync committee period one by one with the new one. Which is much nicer for a prod environment.
 */
-func exportSyncCommitteePeriods(rpcClient rpc.Client, startDay, endDay uint64, dryRun bool) {
+func exportSyncCommitteePeriods(consClient consensus.ConsensusClient, startDay, endDay uint64, dryRun bool) {
 	var lastEpoch = uint64(0)
 
 	firstPeriod := utils.SyncPeriodOfEpoch(utils.Config.Chain.ClConfig.AltairForkEpoch)
@@ -2047,7 +2054,7 @@ func exportSyncCommitteePeriods(rpcClient rpc.Client, startDay, endDay uint64, d
 	for p := firstPeriod; p <= lastPeriod; p++ {
 		t0 := time.Now()
 
-		err := reExportSyncCommittee(rpcClient, p, dryRun)
+		err := reExportSyncCommittee(consClient, p, dryRun)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found 404") {
 				logrus.WithField("period", p).Infof("reached max period, stopping")
@@ -2070,7 +2077,7 @@ func exportSyncCommitteePeriods(rpcClient rpc.Client, startDay, endDay uint64, d
 	logrus.Infof("finished all exporting sync_committee for periods %v - %v, took %v", firstPeriod, lastPeriod, time.Since(start))
 }
 
-func exportSyncCommitteeValidatorStats(rpcClient rpc.Client, startDay, endDay uint64, dryRun, skipPhase1 bool) {
+func exportSyncCommitteeValidatorStats(consClient consensus.ConsensusClient, startDay, endDay uint64, dryRun, skipPhase1 bool) {
 	if endDay <= 0 {
 		lastEpoch, err := db.GetLatestFinalizedEpoch()
 		if err != nil {
@@ -2096,7 +2103,7 @@ func exportSyncCommitteeValidatorStats(rpcClient rpc.Client, startDay, endDay ui
 
 	for day := startDay; day <= endDay; day++ {
 		startDay := time.Now()
-		err := UpdateValidatorStatisticsSyncData(day, rpcClient, dryRun)
+		err := UpdateValidatorStatisticsSyncData(day, consClient, dryRun)
 		if err != nil {
 			utils.LogError(err, fmt.Errorf("error exporting stats for day %v", day), 0)
 			break
@@ -2109,7 +2116,7 @@ func exportSyncCommitteeValidatorStats(rpcClient rpc.Client, startDay, endDay ui
 	logrus.Infof("REMEMBER: To execute export-stats-totals now to update the totals")
 }
 
-func UpdateValidatorStatisticsSyncData(day uint64, client rpc.Client, dryRun bool) error {
+func UpdateValidatorStatisticsSyncData(day uint64, client consensus.ConsensusClient, dryRun bool) error {
 	exportStart := time.Now()
 	firstEpoch, lastEpoch := utils.GetFirstAndLastEpochForDay(day)
 
@@ -2225,7 +2232,7 @@ func UpdateValidatorStatisticsSyncData(day uint64, client rpc.Client, dryRun boo
 	return nil
 }
 
-func reExportSyncCommittee(rpcClient rpc.Client, p uint64, dryRun bool) error {
+func reExportSyncCommittee(consClient consensus.ConsensusClient, p uint64, dryRun bool) error {
 	if dryRun {
 		var currentData []struct {
 			ValidatorIndex uint64 `db:"validatorindex"`
@@ -2237,7 +2244,7 @@ func reExportSyncCommittee(rpcClient rpc.Client, p uint64, dryRun bool) error {
 			return errors.Wrap(err, "select old entries")
 		}
 
-		newData, err := exporter.GetSyncCommitteAtPeriod(rpcClient, p)
+		newData, err := exporter.GetSyncCommitteAtPeriod(consClient, p)
 		if err != nil {
 			return errors.Wrap(err, "export")
 		}
@@ -2263,7 +2270,7 @@ func reExportSyncCommittee(rpcClient rpc.Client, p uint64, dryRun bool) error {
 			return errors.Wrap(err, "delete old entries")
 		}
 
-		err = exporter.ExportSyncCommitteeAtPeriod(rpcClient, p, tx)
+		err = exporter.ExportSyncCommitteeAtPeriod(consClient, p, tx)
 		if err != nil {
 			return errors.Wrap(err, "export")
 		}

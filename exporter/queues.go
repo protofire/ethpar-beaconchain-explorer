@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 	"github.com/protofire/ethpar-beaconchain-explorer/version"
-	"github.com/jmoiron/sqlx"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -37,14 +37,14 @@ import (
 type PendingQueueIndexer struct {
 	running   bool
 	runningMu *sync.Mutex
-	lc        rpc.Client
+	cc        consensus.ConsensusClient
 	db        *sqlx.DB
 }
 
-func NewPendingQueueIndexer(client rpc.Client) *PendingQueueIndexer {
+func NewPendingQueueIndexer(client consensus.ConsensusClient) *PendingQueueIndexer {
 	indexer := &PendingQueueIndexer{
 		running:   false,
-		lc:        client,
+		cc:        client,
 		db:        db.WriterDb,
 		runningMu: &sync.Mutex{},
 	}
@@ -74,18 +74,18 @@ func (qi *PendingQueueIndexer) Start() {
 }
 
 func (qi *PendingQueueIndexer) Index() error {
-	head, err := qi.lc.GetChainHead()
+	head, err := qi.cc.GetChainHead()
 	if err != nil {
 		return errors.Wrap(err, "failed to get chain head")
 	}
 	epoch := head.HeadEpoch
 
-	deposits, err := qi.lc.GetPendingDeposits()
+	deposits, err := qi.cc.GetPendingDeposits()
 	if err != nil {
 		return errors.Wrap(err, "failed to get pending deposits")
 	}
 
-	validators, err := qi.lc.GetValidatorState(epoch)
+	validators, err := qi.cc.GetValidatorState(epoch)
 	if err != nil {
 		return errors.Wrap(err, "failed to get validator state")
 	}
@@ -126,45 +126,45 @@ func (qi *PendingQueueIndexer) Index() error {
 	depositsList := make([]types.PendingDeposit, 0)
 
 	// spec vars (in snake_case)
-	next_deposit_index := uint64(0)
-	max_pending_deposits_per_epoch := utils.Config.ClConfig.MaxPendingDepositsPerEpoch
-	if max_pending_deposits_per_epoch == 0 { // eth mainnet spec default
-		max_pending_deposits_per_epoch = uint64(16)
+	nextDepositIndex := uint64(0)
+	maxPendingDepositsPerEpoch := utils.Config.ClConfig.MaxPendingDepositsPerEpoch
+	if maxPendingDepositsPerEpoch == 0 { // eth mainnet spec default
+		maxPendingDepositsPerEpoch = uint64(16)
 	}
-	processed_amount := uint64(0)
-	state_deposit_balance_to_consume := uint64(0)
+	processedAmount := uint64(0)
+	stateDepositBalanceToConsume := uint64(0)
 
-	pending_deposits := deposits.Data
+	pendingDeposits := deposits.Data
 	depositsToPostpone := []types.PendingDeposit{} // est differently than the spec as we just set these to the same clearEpoch as the "normal" last entry. Not snake case to highlight the different handling to spec
 
 	// emulate spec based on current view in time (approx estimation)
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/beacon-chain.md#new-process_pending_deposits
+	// https://github.com/ethereum/consensus-specs/blob/dev/specs/electra/beacon-chain.md#new-process_pendingDeposits
 	for {
-		next_epoch := clearEpoch + 1
-		available_for_processing := state_deposit_balance_to_consume + etherChurnByEpoch
-		processed_amount = 0
-		next_deposit_index = 0
+		nextEpoch := clearEpoch + 1
+		availableForProcessing := stateDepositBalanceToConsume + etherChurnByEpoch
+		processedAmount = 0
+		nextDepositIndex = 0
 
-		is_churn_limit_reached := false
-		finalized_slot := next_epoch * utils.Config.ClConfig.SlotsPerEpoch // first slot of next epoch is finalized
+		isChurnLimitReached := false
+		finalizedSlot := nextEpoch * utils.Config.ClConfig.SlotsPerEpoch // first slot of next epoch is finalized
 		// potential improvement: utils.GetActivationExitChurnLimit(totalActiveEffectiveBalance + balanceAhead - withdrawalsAhead)
 
-		for _, deposit := range pending_deposits {
-			if deposit.Slot > finalized_slot {
+		for _, deposit := range pendingDeposits {
+			if deposit.Slot > finalizedSlot {
 				break
 			}
 
-			if next_deposit_index >= max_pending_deposits_per_epoch {
+			if nextDepositIndex >= maxPendingDepositsPerEpoch {
 				break
 			}
 
-			miniState, found := pubkeyToIndexMap[deposit.Pubkey.String()]
-			var is_validator_exited bool
-			var is_validator_withdrawn bool
+			miniState, found := pubkeyToIndexMap[string(deposit.Pubkey)]
+			var isValidatorExited bool
+			var isValidatorWithdrawn bool
 
 			if found {
-				is_validator_exited = miniState.ExitEpoch < 100_000_000_000
-				is_validator_withdrawn = miniState.WithdrawableEpoch < next_epoch
+				isValidatorExited = miniState.ExitEpoch < 100_000_000_000
+				isValidatorWithdrawn = miniState.WithdrawableEpoch < nextEpoch
 			}
 
 			getPendingDeposit := func() types.PendingDeposit {
@@ -189,36 +189,36 @@ func (qi *PendingQueueIndexer) Index() error {
 				return pendingDeposit
 			}
 
-			if is_validator_withdrawn { // do not consume churn
+			if isValidatorWithdrawn { // do not consume churn
 				depositsList = append(depositsList, getPendingDeposit())
-			} else if is_validator_exited { // do not consume churn
+			} else if isValidatorExited { // do not consume churn
 				depositsToPostpone = append(depositsToPostpone, getPendingDeposit())
 			} else {
-				is_churn_limit_reached = processed_amount+deposit.Amount > available_for_processing
-				if is_churn_limit_reached {
+				isChurnLimitReached = processedAmount+deposit.Amount > availableForProcessing
+				if isChurnLimitReached {
 					break
 				}
-				processed_amount += deposit.Amount
+				processedAmount += deposit.Amount
 				depositsList = append(depositsList, getPendingDeposit())
 			}
 
-			next_deposit_index++
+			nextDepositIndex++
 
 			// out of spec
 			balanceAhead += deposit.Amount
 			count++
 		}
 
-		pending_deposits = pending_deposits[next_deposit_index:]
+		pendingDeposits = pendingDeposits[nextDepositIndex:]
 
-		if len(pending_deposits) == 0 {
+		if len(pendingDeposits) == 0 {
 			break
 		}
 
-		if is_churn_limit_reached {
-			state_deposit_balance_to_consume = available_for_processing - processed_amount
+		if isChurnLimitReached {
+			stateDepositBalanceToConsume = availableForProcessing - processedAmount
 		} else {
-			state_deposit_balance_to_consume = 0
+			stateDepositBalanceToConsume = 0
 		}
 
 		clearEpoch++
@@ -246,7 +246,7 @@ func (*PendingQueueIndexer) matchDepositRequests(tx *sql.Tx) error {
 		SELECT *, ROW_NUMBER() OVER (
 			PARTITION BY pubkey, amount, slot ORDER BY id
 		) AS rn
-		FROM pending_deposits_queue
+		FROM pendingDeposits_queue
 	),
 	bdr_ranked AS (
 		SELECT *, ROW_NUMBER() OVER (
@@ -266,10 +266,10 @@ func (*PendingQueueIndexer) matchDepositRequests(tx *sql.Tx) error {
 				(pdq.slot = 0 AND bdr.index_queued < 0)
 			)
 	)
-	UPDATE pending_deposits_queue
+	UPDATE pendingDeposits_queue
 	SET request_id = matches.bdr_id
 	FROM matches
-	WHERE pending_deposits_queue.id = matches.pdq_id;`
+	WHERE pendingDeposits_queue.id = matches.pdq_id;`
 
 	_, err := tx.Exec(query)
 	if err != nil && err != sql.ErrNoRows {
@@ -292,9 +292,9 @@ func (qi *PendingQueueIndexer) save(pendingDeposits []types.PendingDeposit) erro
 		dat[i] = []interface{}{r.ID, r.ValidatorIndex, encodeToHex(r.Pubkey), encodeToHex(r.WithdrawalCredentials), r.Amount, encodeToHex(r.Signature), r.Slot, r.QueuedBalanceAhead, r.EstClearEpoch}
 	}
 
-	err = db.ClearAndCopyToTable(qi.db, "pending_deposits_queue", []string{"id", "validator_index", "pubkey", "withdrawal_credentials", "amount", "signature", "slot", "queued_balance_ahead", "est_clear_epoch"}, dat)
+	err = db.ClearAndCopyToTable(qi.db, "pendingDeposits_queue", []string{"id", "validator_index", "pubkey", "withdrawal_credentials", "amount", "signature", "slot", "queued_balance_ahead", "est_clear_epoch"}, dat)
 	if err != nil {
-		return fmt.Errorf("error copying data to pending_deposits_queue table: %w", err)
+		return fmt.Errorf("error copying data to pendingDeposits_queue table: %w", err)
 	}
 
 	err = qi.matchDepositRequests(tx)

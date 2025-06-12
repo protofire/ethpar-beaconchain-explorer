@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func RunSlotExporter(client rpc.Client, firstRun bool) error {
+func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 	// get the current chain head
 	head, err := client.GetChainHead()
 
@@ -230,7 +230,7 @@ func RunSlotExporter(client rpc.Client, firstRun bool) error {
 
 }
 
-func ExportSlot(client rpc.Client, slot uint64, isHeadEpoch bool, tx *sqlx.Tx) error {
+func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool, tx *sqlx.Tx) error {
 
 	isFirstSlotOfEpoch := slot%utils.Config.Chain.ClConfig.SlotsPerEpoch == 0
 	epoch := slot / utils.Config.Chain.ClConfig.SlotsPerEpoch

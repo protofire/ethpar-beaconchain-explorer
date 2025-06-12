@@ -8,7 +8,9 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/exporter"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/lighthouse"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/teku"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 	"github.com/protofire/ethpar-beaconchain-explorer/version"
@@ -93,11 +95,21 @@ func main() {
 	defer db.FrontendReaderDB.Close()
 	defer db.FrontendWriterDB.Close()
 
-	chainIDBig := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
+	var consClient consensus.ConsensusClient
 
-	rpcClient, err := rpc.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainIDBig)
-	if err != nil {
-		utils.LogFatal(err, "new bigtable lighthouse client error", 0)
+	chainID := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
+	if utils.Config.Indexer.Node.Type == "lighthouse" {
+		consClient, err = lighthouse.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		if err != nil {
+			utils.LogFatal(err, "new explorer lighthouse client error", 0)
+		}
+	} else if utils.Config.Indexer.Node.Type == "teku" {
+		consClient, err = teku.NewTekuClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		if err != nil {
+			utils.LogFatal(err, "new explorer lighthouse client error", 0)
+		}
+	} else {
+		logrus.Fatalf("invalid node type %v specified. supported node types are teku and lighthouse", utils.Config.Indexer.Node.Type)
 	}
 
 	gOuter := errgroup.Group{}
@@ -111,7 +123,7 @@ func main() {
 			startGetEpochData := time.Now()
 			logrus.Printf("retrieving data for epoch %v", epoch)
 
-			data, err := rpcClient.GetEpochData(epoch, false)
+			data, err := consClient.GetEpochData(epoch, false)
 			if err != nil {
 				logrus.Fatalf("error retrieving epoch data: %v", err)
 			}
@@ -184,17 +196,27 @@ func monitor(configPath string) {
 	}
 	defer bt.Close()
 
-	chainIDBig := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
+	var consClient consensus.ConsensusClient
 
-	var rpcClient rpc.Client
-	rpcClient, err = rpc.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainIDBig)
-	if err != nil {
-		utils.LogFatal(err, "new bigtable lighthouse client in monitor error", 0)
+	chainID := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
+	if utils.Config.Indexer.Node.Type == "lighthouse" {
+		consClient, err = lighthouse.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		if err != nil {
+			utils.LogFatal(err, "new explorer lighthouse client error", 0)
+		}
+	} else if utils.Config.Indexer.Node.Type == "teku" {
+		consClient, err = teku.NewTekuClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		if err != nil {
+			utils.LogFatal(err, "new explorer lighthouse client error", 0)
+		}
+	} else {
+		logrus.Fatalf("invalid node type %v specified. supported node types are teku and lighthouse", utils.Config.Indexer.Node.Type)
 	}
+
 	current := uint64(0)
 
 	for ; ; time.Sleep(time.Second * 12) {
-		head, err := rpcClient.GetChainHead()
+		head, err := consClient.GetChainHead()
 		if err != nil {
 			utils.LogFatal(err, "getting chain head from lighthouse in monitor error", 0)
 		}
@@ -214,7 +236,7 @@ func monitor(configPath string) {
 		for i := head.FinalizedEpoch; i <= head.HeadEpoch; i++ {
 			logrus.Infof("exporting epoch %v", i)
 			for slot := i * cfg.Chain.ClConfig.SlotsPerEpoch; i <= (i+1)*cfg.Chain.ClConfig.SlotsPerEpoch-1; i++ {
-				err := exporter.ExportSlot(rpcClient, slot, false, tx)
+				err := exporter.ExportSlot(consClient, slot, false, tx)
 				if err != nil {
 					logrus.Errorf("error exporting slot: %v", err)
 					tx.Rollback()

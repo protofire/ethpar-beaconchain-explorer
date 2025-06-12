@@ -22,20 +22,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-func queueEstimateUpdater(wg *sync.WaitGroup) {
+func queueEstimateUpdater(wg *sync.WaitGroup, client consensus.ConsensusClient) {
 	firstRun := true
 
 	for {
-		data, err := getQueuesEstimate()
+		data, err := getQueuesEstimate(client)
 		if err != nil {
 			logger.Warnf("error retrieving queue data: %v", err)
 			time.Sleep(time.Minute)
@@ -72,8 +72,8 @@ func getQueueCacheKey() string {
 	return fmt.Sprintf("%d:frontend:queues", utils.Config.Chain.ClConfig.DepositChainID)
 }
 
-func getQueuesEstimate() (*types.QueuesEstimate, error) {
-	queue, err := rpc.CurrentClient.GetValidatorQueue()
+func getQueuesEstimate(client consensus.ConsensusClient) (*types.QueuesEstimate, error) {
+	queue, err := client.GetValidatorQueue()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get validator state")
 	}

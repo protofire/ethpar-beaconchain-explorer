@@ -306,7 +306,15 @@ type CanonBlock struct {
 	Canonical bool   `db:"-"`
 }
 
-// EpochAssignments is a struct to hold epoch assignment data
+// EpochAssignments contains validator role assignments for a given Beacon Chain epoch.
+// It is used to track which validators are responsible for proposing blocks,
+// attesting to committees, or participating in the sync committee.
+//
+// Fields:
+//   - ProposerAssignments: maps slot numbers to validator indices responsible for proposing blocks.
+//   - AttestorAssignments: maps a composite attestation key (e.g., "slot_committee_index_position")
+//     to the validator index assigned to that committee position.
+//   - SyncAssignments: a list of validator indices participating in the sync committee for the epoch.
 type EpochAssignments struct {
 	ProposerAssignments map[uint64]uint64
 	AttestorAssignments map[string]uint64

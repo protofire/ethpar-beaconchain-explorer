@@ -9,7 +9,9 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/lighthouse"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/teku"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -96,15 +98,25 @@ func main() {
 	logrus.Infof("initializing prices")
 	price.Init(utils.Config.Chain.ClConfig.DepositChainID, utils.Config.Eth1ErigonEndpoint, utils.Config.Frontend.ClCurrency, utils.Config.Frontend.ElCurrency)
 
+	var consClient consensus.ConsensusClient
+
 	chainID := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
-	rpcClient, err := rpc.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
-	if err != nil {
-		utils.LogFatal(err, "new explorer lighthouse client error", 0)
+	if utils.Config.Indexer.Node.Type == "lighthouse" {
+		consClient, err = lighthouse.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		if err != nil {
+			utils.LogFatal(err, "new explorer lighthouse client error", 0)
+		}
+	} else if utils.Config.Indexer.Node.Type == "teku" {
+		consClient, err = teku.NewTekuClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		if err != nil {
+			utils.LogFatal(err, "new explorer lighthouse client error", 0)
+		}
+	} else {
+		logrus.Fatalf("invalid node type %v specified. supported node types are teku and lighthouse", utils.Config.Indexer.Node.Type)
 	}
-	rpc.CurrentClient = rpcClient
 
 	logrus.Infof("initializing frontend services")
-	services.Init() // Init frontend services
+	services.Init(consClient) // Init frontend services
 	logrus.Infof("frontend services initiated")
 
 	utils.WaitForCtrlC()

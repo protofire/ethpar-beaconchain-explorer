@@ -23,6 +23,9 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/ratelimit"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/lighthouse"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/teku"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/static"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
@@ -246,23 +249,28 @@ func main() {
 	logrus.Infof("database connection established")
 
 	if utils.Config.Indexer.Enabled {
-		var rpcClient rpc.Client
+		var consClient consensus.ConsensusClient
 
 		chainID := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
 		if utils.Config.Indexer.Node.Type == "lighthouse" {
-			rpcClient, err = rpc.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+			consClient, err = lighthouse.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+			if err != nil {
+				utils.LogFatal(err, "new explorer lighthouse client error", 0)
+			}
+		} else if utils.Config.Indexer.Node.Type == "teku" {
+			consClient, err = teku.NewTekuClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
 			if err != nil {
 				utils.LogFatal(err, "new explorer lighthouse client error", 0)
 			}
 		} else {
-			logrus.Fatalf("invalid node type %v specified. supported node types are prysm and lighthouse", utils.Config.Indexer.Node.Type)
+			logrus.Fatalf("invalid node type %v specified. supported node types are teku and lighthouse", utils.Config.Indexer.Node.Type)
 		}
 
 		if utils.Config.Indexer.HistoricPriceService.Enabled {
 			go services.StartHistoricPriceService()
 		}
 		
-		go exporter.Start(rpcClient)
+		go exporter.Start(consClient)
 	}
 
 	if cfg.Frontend.Enabled {

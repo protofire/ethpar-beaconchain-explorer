@@ -12,7 +12,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -27,7 +27,7 @@ import (
 	pgxdecimal "github.com/jackc/pgx-shopspring-decimal"
 )
 
-func WriteValidatorStatisticsForDay(day uint64, client rpc.Client) error {
+func WriteValidatorStatisticsForDay(day uint64, client consensus.ConsensusClient) error {
 	exportStart := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_update_validator_stats").Observe(time.Since(exportStart).Seconds())
@@ -777,7 +777,7 @@ func gatherValidatorElIcome(day uint64, data []*types.ValidatorStatsTableDbRow, 
 	return nil
 }
 
-func gatherValidatorBalances(client rpc.Client, day uint64, data []*types.ValidatorStatsTableDbRow, mux *sync.Mutex) error {
+func gatherValidatorBalances(client consensus.ConsensusClient, day uint64, data []*types.ValidatorStatsTableDbRow, mux *sync.Mutex) error {
 	exportStart := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_update_validator_balances_stats").Observe(time.Since(exportStart).Seconds())

@@ -13,7 +13,9 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/lighthouse"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/teku"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -141,16 +143,21 @@ func main() {
 		cache.MustInitTieredCache(utils.Config.RedisCacheEndpoint)
 	}
 
-	var rpcClient rpc.Client
+	var consClient consensus.ConsensusClient
 
 	chainID := new(big.Int).SetUint64(utils.Config.Chain.ClConfig.DepositChainID)
 	if utils.Config.Indexer.Node.Type == "lighthouse" {
-		rpcClient, err = rpc.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		consClient, err = lighthouse.NewLighthouseClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
+		if err != nil {
+			utils.LogFatal(err, "new explorer lighthouse client error", 0)
+		}
+	} else if utils.Config.Indexer.Node.Type == "teku" {
+		consClient, err = teku.NewTekuClient("http://"+cfg.Indexer.Node.Host+":"+cfg.Indexer.Node.Port, chainID)
 		if err != nil {
 			utils.LogFatal(err, "new explorer lighthouse client error", 0)
 		}
 	} else {
-		logrus.Fatalf("invalid note type %v specified. supported node types are prysm and lighthouse", utils.Config.Indexer.Node.Type)
+		logrus.Fatalf("invalid node type %v specified. supported node types are teku and lighthouse", utils.Config.Indexer.Node.Type)
 	}
 
 	if opt.statisticsDaysToExport != "" {
@@ -175,7 +182,7 @@ func main() {
 					clearStatsStatusTable(d)
 				}
 
-				err = db.WriteValidatorStatisticsForDay(uint64(d), rpcClient)
+				err = db.WriteValidatorStatisticsForDay(uint64(d), consClient)
 				if err != nil {
 					utils.LogError(err, fmt.Errorf("error exporting stats for day %v", d), 0)
 					break
@@ -217,7 +224,7 @@ func main() {
 				clearStatsStatusTable(uint64(opt.statisticsDayToExport))
 			}
 
-			err = db.WriteValidatorStatisticsForDay(uint64(opt.statisticsDayToExport), rpcClient)
+			err = db.WriteValidatorStatisticsForDay(uint64(opt.statisticsDayToExport), consClient)
 			if err != nil {
 				utils.LogError(err, fmt.Errorf("error exporting stats for day %v", opt.statisticsDayToExport), 0)
 			}
@@ -244,7 +251,7 @@ func main() {
 		return
 	}
 
-	go statisticsLoop(rpcClient)
+	go statisticsLoop(consClient)
 
 	if opt.statisticsDepositsToggle {
 		go depositsLoop()
@@ -255,7 +262,7 @@ func main() {
 	logrus.Println("exiting...")
 }
 
-func statisticsLoop(client rpc.Client) {
+func statisticsLoop(client consensus.ConsensusClient) {
 	for {
 
 		var loopError error

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -29,9 +30,6 @@ import (
 	prysm_deposit "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
-
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
-
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -806,7 +804,7 @@ func SaveBlock(block *types.Block, forceSlotUpdate bool, tx *sqlx.Tx) error {
 }
 
 // SaveEpoch will save the epoch data into the database
-func SaveEpoch(epoch uint64, validators []*types.Validator, client rpc.Client, tx *sqlx.Tx) error {
+func SaveEpoch(epoch uint64, validators []*types.Validator, client consensus.ConsensusClient, tx *sqlx.Tx) error {
 	start := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_save_epoch").Observe(time.Since(start).Seconds())
@@ -982,7 +980,7 @@ func saveGraffitiwall(block *types.Block, tx *sqlx.Tx) error {
 	return nil
 }
 
-func SaveValidators(epoch uint64, validators []*types.Validator, client rpc.Client, activationBalanceBatchSize int, tx *sqlx.Tx) error {
+func SaveValidators(epoch uint64, validators []*types.Validator, client consensus.ConsensusClient, activationBalanceBatchSize int, tx *sqlx.Tx) error {
 	start := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_save_validators").Observe(time.Since(start).Seconds())

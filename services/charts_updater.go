@@ -12,7 +12,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -21,44 +21,50 @@ import (
 
 type chartHandler struct {
 	Order    int
-	DataFunc func() (*types.GenericChartData, error)
+	DataFunc func(cc consensus.ConsensusClient) (*types.GenericChartData, error)
+}
+
+func wrapNoArgDataFunc(f func() (*types.GenericChartData, error)) func(consensus.ConsensusClient) (*types.GenericChartData, error) {
+	return func(_ consensus.ConsensusClient) (*types.GenericChartData, error) {
+		return f()
+	}
 }
 
 var ChartHandlers = map[string]chartHandler{
-	"blocks":             {1, blocksChartData},
-	"validators":         {2, activeValidatorsChartData},
-	"staked_ether":       {3, stakedEtherChartData},
-	"average_balance":    {4, averageBalanceChartData},
-	"network_liveness":   {5, networkLivenessChartData},
-	"participation_rate": {6, participationRateChartData},
+	"blocks":             {1, wrapNoArgDataFunc(blocksChartData)},
+	"validators":         {2, wrapNoArgDataFunc(activeValidatorsChartData)},
+	"staked_ether":       {3, wrapNoArgDataFunc(stakedEtherChartData)},
+	"average_balance":    {4, wrapNoArgDataFunc(averageBalanceChartData)},
+	"network_liveness":   {5, wrapNoArgDataFunc(networkLivenessChartData)},
+	"participation_rate": {6, wrapNoArgDataFunc(participationRateChartData)},
 
 	// "inclusion_distance":             {7, inclusionDistanceChartData},
 	// "incorrect_attestations":         {6, incorrectAttestationsChartData},
 	// "validator_income":               {7, averageDailyValidatorIncomeChartData},
 	// "staking_rewards":                {8, stakingRewardsChartData},
 
-	"stake_effectiveness":            {9, stakeEffectivenessChartData},
+	"stake_effectiveness":            {9, wrapNoArgDataFunc(stakeEffectivenessChartData)},
 	"balance_distribution":           {10, balanceDistributionChartData},
 	"effective_balance_distribution": {11, effectiveBalanceDistributionChartData},
-	"performance_distribution_365d":  {12, performanceDistribution365dChartData},
-	"deposits":                       {13, depositsChartData},
-	"withdrawals":                    {17, withdrawalsChartData},
-	"graffiti_wordcloud":             {14, graffitiCloudChartData},
-	"pools_distribution":             {15, poolsDistributionChartData},
-	"historic_pool_performance":      {16, historicPoolPerformanceData},
+	"performance_distribution_365d":  {12, wrapNoArgDataFunc(performanceDistribution365dChartData)},
+	"deposits":                       {13, wrapNoArgDataFunc(depositsChartData)},
+	"withdrawals":                    {17, wrapNoArgDataFunc(withdrawalsChartData)},
+	"graffiti_wordcloud":             {14, wrapNoArgDataFunc(graffitiCloudChartData)},
+	"pools_distribution":             {15, wrapNoArgDataFunc(poolsDistributionChartData)},
+	"historic_pool_performance":      {16, wrapNoArgDataFunc(historicPoolPerformanceData)},
 
 	// execution charts start with 20+
 
-	"avg_gas_used_chart_data": {22, AvgGasUsedChartData},
-	"execution_burned_fees":   {23, BurnedFeesChartData},
-	"block_gas_used":          {25, TotalGasUsedChartData},
+	"avg_gas_used_chart_data": {22, wrapNoArgDataFunc(AvgGasUsedChartData)},
+	"execution_burned_fees":   {23, wrapNoArgDataFunc(BurnedFeesChartData)},
+	"block_gas_used":          {25, wrapNoArgDataFunc(TotalGasUsedChartData)},
 	// "non_failed_tx_gas_usage_chart_data": {21, NonFailedTxGasUsageChartData},
-	"block_count_chart_data":    {26, BlockCountChartData},
-	"block_time_avg_chart_data": {27, BlockTimeAvgChartData},
+	"block_count_chart_data":    {26, wrapNoArgDataFunc(BlockCountChartData)},
+	"block_time_avg_chart_data": {27, wrapNoArgDataFunc(BlockTimeAvgChartData)},
 	// "avg_gas_price":                      {25, AvgGasPrice},
-	"avg_gas_limit_chart_data":  {28, AvgGasLimitChartData},
-	"avg_block_util_chart_data": {29, AvgBlockUtilChartData},
-	"tx_count_chart_data":       {31, TxCountChartData},
+	"avg_gas_limit_chart_data":  {28, wrapNoArgDataFunc(AvgGasLimitChartData)},
+	"avg_block_util_chart_data": {29, wrapNoArgDataFunc(AvgBlockUtilChartData)},
+	"tx_count_chart_data":       {31, wrapNoArgDataFunc(TxCountChartData)},
 	// "avg_block_size_chart_data":          {32, AvgBlockSizeChartData},
 }
 
@@ -76,7 +82,7 @@ func LatestChartsPageData() []*types.ChartsPageDataChart {
 	return nil
 }
 
-func chartsPageDataUpdater(wg *sync.WaitGroup) {
+func chartsPageDataUpdater(wg *sync.WaitGroup, client consensus.ConsensusClient) {
 	sleepDuration := time.Hour // only update charts once per hour
 	var prevEpoch uint64
 
@@ -95,7 +101,7 @@ func chartsPageDataUpdater(wg *sync.WaitGroup) {
 		// 	continue
 		// }
 
-		data, err := getChartsPageData()
+		data, err := getChartsPageData(client)
 		if err != nil {
 			logger.WithField("epoch", latestEpoch).Errorf("error updating chartPageData: %v", err)
 			time.Sleep(sleepDuration)
@@ -120,7 +126,7 @@ func chartsPageDataUpdater(wg *sync.WaitGroup) {
 	}
 }
 
-func getChartsPageData() ([]*types.ChartsPageDataChart, error) {
+func getChartsPageData(client consensus.ConsensusClient) ([]*types.ChartsPageDataChart, error) {
 	type chartHandlerRes struct {
 		Order int
 		Path  string
@@ -130,8 +136,8 @@ func getChartsPageData() ([]*types.ChartsPageDataChart, error) {
 
 	// add charts if it is mainnet
 	if utils.Config.Chain.ClConfig.DepositChainID == 1 {
-		ChartHandlers["total_supply"] = chartHandler{20, TotalEmissionChartData}
-		ChartHandlers["market_cap_chart_data"] = chartHandler{21, MarketCapChartData}
+		ChartHandlers["total_supply"] = chartHandler{20, wrapNoArgDataFunc(TotalEmissionChartData)}
+		ChartHandlers["market_cap_chart_data"] = chartHandler{21, wrapNoArgDataFunc(MarketCapChartData)}
 	}
 
 	wg := sync.WaitGroup{}
@@ -143,7 +149,7 @@ func getChartsPageData() ([]*types.ChartsPageDataChart, error) {
 		go func(i string, ch chartHandler) {
 			defer wg.Done()
 			start := time.Now()
-			data, err := ch.DataFunc()
+			data, err := ch.DataFunc(client)
 			logger.WithField("chart", i).WithField("duration", time.Since(start)).WithField("error", err).Debug("generated chart")
 			chartHandlerResChan <- &chartHandlerRes{ch.Order, i, data, err}
 		}(i, ch)
@@ -596,13 +602,13 @@ func stakeEffectivenessChartData() (*types.GenericChartData, error) {
 	return chartData, nil
 }
 
-func balanceDistributionChartData() (*types.GenericChartData, error) {
+func balanceDistributionChartData(client consensus.ConsensusClient) (*types.GenericChartData, error) {
 	epoch := LatestEpoch()
 	if epoch == 0 {
 		return nil, fmt.Errorf("chart-data not available pre-genesis")
 	}
 
-	validators, err := rpc.CurrentClient.GetValidatorState(epoch)
+	validators, err := client.GetValidatorState(epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -646,13 +652,13 @@ func balanceDistributionChartData() (*types.GenericChartData, error) {
 	return chartData, nil
 }
 
-func effectiveBalanceDistributionChartData() (*types.GenericChartData, error) {
+func effectiveBalanceDistributionChartData(client consensus.ConsensusClient) (*types.GenericChartData, error) {
 	epoch := LatestEpoch()
 	if epoch == 0 {
 		return nil, fmt.Errorf("chart-data not available pre-genesis")
 	}
 
-	validators, err := rpc.CurrentClient.GetValidatorState(epoch)
+	validators, err := client.GetValidatorState(epoch)
 	if err != nil {
 		return nil, err
 	}

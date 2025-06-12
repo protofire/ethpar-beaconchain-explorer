@@ -13,14 +13,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/montanaflynn/stats"
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	ethclients "github.com/protofire/ethpar-beaconchain-explorer/ethClients"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/ratelimit"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
-	"github.com/montanaflynn/stats"
 
 	itypes "github.com/gobitfly/eth-rewards/types"
 	"github.com/shopspring/decimal"
@@ -35,7 +36,7 @@ import (
 var logger = logrus.New().WithField("module", "services")
 
 // Init will initialize the services
-func Init() {
+func Init(client consensus.ConsensusClient) {
 	ready := &sync.WaitGroup{}
 	ready.Add(1)
 	go epochUpdater(ready)
@@ -65,7 +66,7 @@ func Init() {
 	go relaysUpdater(ready)
 
 	ready.Add(1)
-	go chartsPageDataUpdater(ready)
+	go chartsPageDataUpdater(ready, client)
 
 	ready.Add(1)
 	go statsUpdater(ready)
@@ -89,7 +90,7 @@ func Init() {
 	go latestExportedStatisticDayUpdater(ready)
 
 	ready.Add(1)
-	go queueEstimateUpdater(ready)
+	go queueEstimateUpdater(ready, client)
 
 	if utils.Config.RatelimitUpdater.Enabled {
 		go ratelimit.DBUpdater()

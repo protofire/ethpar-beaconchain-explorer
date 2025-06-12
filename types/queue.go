@@ -20,16 +20,16 @@ package types
 import (
 	"database/sql"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/protofire/ethpar-beaconchain-explorer/codec"
 )
 
 type PendingDeposit struct {
 	ID                    int           `db:"id"`
 	ValidatorIndex        sql.NullInt64 `db:"validator_index"`
-	Pubkey                hexutil.Bytes `db:"pubkey"`
-	WithdrawalCredentials hexutil.Bytes `db:"withdrawal_credentials"`
+	Pubkey                codec.BytesHexStr `db:"pubkey"`
+	WithdrawalCredentials codec.BytesHexStr `db:"withdrawal_credentials"`
 	Amount                uint64        `db:"amount"`
-	Signature             hexutil.Bytes `db:"signature"`
+	Signature             codec.BytesHexStr `db:"signature"`
 	Slot                  uint64        `db:"slot"`
 	QueuedBalanceAhead    uint64        `db:"queued_balance_ahead"`
 	EstClearEpoch         uint64        `db:"est_clear_epoch"` // approx epoch where validator deposit will be credited on beaconchain and validator getting assigned an index (happens in transition from est_clear_epoch-1 to est_clear_epoch)

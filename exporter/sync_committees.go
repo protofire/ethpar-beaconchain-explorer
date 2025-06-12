@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -24,7 +24,7 @@ import (
 //
 // This information is used for building sync committee participation data
 // and visualizations in the explorer.
-func syncCommitteesExporter(rpcClient rpc.Client) {
+func syncCommitteesExporter(rpcClient consensus.ConsensusClient) {
 	// skip if not enabled
 	if !utils.Config.Indexer.SyncCommitteesExporter.Enabled {
 		return
@@ -39,7 +39,7 @@ func syncCommitteesExporter(rpcClient rpc.Client) {
 	}
 }
 
-func exportSyncCommittees(rpcClient rpc.Client) error {
+func exportSyncCommittees(rpcClient consensus.ConsensusClient) error {
 	var dbPeriods []uint64
 	err := db.WriterDb.Select(&dbPeriods, `SELECT period FROM sync_committees GROUP BY period`)
 	if err != nil {
@@ -73,7 +73,7 @@ func exportSyncCommittees(rpcClient rpc.Client) error {
 	return nil
 }
 
-func ExportSyncCommitteeAtPeriod(rpcClient rpc.Client, p uint64, providedTx *sqlx.Tx) error {
+func ExportSyncCommitteeAtPeriod(rpcClient consensus.ConsensusClient, p uint64, providedTx *sqlx.Tx) error {
 
 	data, err := GetSyncCommitteAtPeriod(rpcClient, p)
 	if err != nil {
@@ -114,7 +114,7 @@ func ExportSyncCommitteeAtPeriod(rpcClient rpc.Client, p uint64, providedTx *sql
 	return nil
 }
 
-func GetSyncCommitteAtPeriod(rpcClient rpc.Client, p uint64) ([]SyncCommittee, error) {
+func GetSyncCommitteAtPeriod(rpcClient consensus.ConsensusClient, p uint64) ([]SyncCommittee, error) {
 
 	stateID := uint64(0)
 	if p > 0 {

@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -13,10 +13,8 @@ import (
 
 var logger = logrus.New().WithField("module", "exporter")
 
-var Client *rpc.Client
-
 // Start will start the export of data from rpc into the database
-func Start(client rpc.Client) {
+func Start(client consensus.ConsensusClient) {
 	go networkLivenessUpdater(client)
 	go eth1DepositsExporter()
 	go genesisDepositsExporter(client)
@@ -82,7 +80,7 @@ func Start(client rpc.Client) {
 //   - Duplicate entries for the same epoch are avoided.
 //
 // This function is intended to track network progress and consensus stability over time.
-func networkLivenessUpdater(client rpc.Client) {
+func networkLivenessUpdater(client consensus.ConsensusClient) {
 	var prevHeadEpoch uint64
 	err := db.WriterDb.Get(&prevHeadEpoch, "SELECT COALESCE(MAX(headepoch), 0) FROM network_liveness")
 	if err != nil {
@@ -136,7 +134,7 @@ func networkLivenessUpdater(client rpc.Client) {
 //
 // Genesis deposits are used to establish the initial validator set and provide
 // context for historical and auditing views in the explorer.
-func genesisDepositsExporter(client rpc.Client) {
+func genesisDepositsExporter(client consensus.ConsensusClient) {
 	for {
 		// check if the beaconchain has started
 		var latestEpoch uint64
