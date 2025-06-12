@@ -318,8 +318,9 @@ func (tc *TekuClient) GetEpochAssignments(epoch uint64) (*types.EpochAssignments
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
 			logger.Debugf("pruned mode: proposer duties unavailable for epoch %d", epoch)
+		} else {
+			return nil, fmt.Errorf("error retrieving proposer duties for epoch %v: %w", epoch, err)
 		}
-		return nil, fmt.Errorf("error retrieving proposer duties for epoch %v: %w", epoch, err)
 	} else {
 		var parsedProposerResponse consensus.StandardProposerDutiesResponse
 		if err := json.Unmarshal(proposerResp, &parsedProposerResponse); err != nil {
