@@ -249,63 +249,69 @@ func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool,
 		return fmt.Errorf("error retrieving data for slot %v: %w", slot, err)
 	}
 
-	if !block.EpochAssignments.IsEmpty() { // export the epoch assignments as they are included in the first slot of an epoch
+	if isFirstSlotOfEpoch {
 		logger.Infof("exporting duties & balances for epoch %v", utils.EpochOfSlot(slot))
-
-		// prepare the duties for export to bigtable
-		syncDutiesEpoch := make(map[types.Slot]map[types.ValidatorIndex]bool)
-		attDutiesEpoch := make(map[types.Slot]map[types.ValidatorIndex][]types.Slot)
-		for slot := epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch; slot <= (epoch+1)*utils.Config.Chain.ClConfig.SlotsPerEpoch-1; slot++ {
-			if syncDutiesEpoch[types.Slot(slot)] == nil {
-				syncDutiesEpoch[types.Slot(slot)] = make(map[types.ValidatorIndex]bool)
-			}
-			for _, validatorIndex := range block.EpochAssignments.SyncAssignments {
-				syncDutiesEpoch[types.Slot(slot)][types.ValidatorIndex(validatorIndex)] = false
-			}
-		}
-
-		for key, validatorIndex := range block.EpochAssignments.AttestorAssignments {
-			keySplit := strings.Split(key, "-")
-			attestedSlot, err := strconv.ParseUint(keySplit[0], 10, 64)
-
-			if err != nil {
-				return fmt.Errorf("error parsing attested slot from attestation key: %w", err)
-			}
-
-			if attDutiesEpoch[types.Slot(attestedSlot)] == nil {
-				attDutiesEpoch[types.Slot(attestedSlot)] = make(map[types.ValidatorIndex][]types.Slot)
-			}
-
-			attDutiesEpoch[types.Slot(attestedSlot)][types.ValidatorIndex(validatorIndex)] = []types.Slot{}
-		}
-
+		
 		g := errgroup.Group{}
 
-		// save all duties to bigtable
-		g.Go(func() error {
-			err := db.BigtableClient.SaveAttestationDuties(attDutiesEpoch)
-			if err != nil {
-				return fmt.Errorf("error exporting attestation assignments to bigtable for slot %v: %w", block.Slot, err)
-			}
-			return nil
-		})
-		g.Go(func() error {
-			err := db.BigtableClient.SaveSyncComitteeDuties(syncDutiesEpoch)
-			if err != nil {
-				return fmt.Errorf("error exporting sync committee assignments to bigtable for slot %v: %w", block.Slot, err)
-			}
-			return nil
-		})
+		// Only export Bigtable duties/balances if NOT in pruned mode or if it's the head epoch
+	        if utils.Config.Indexer.Node.Mode != "pruned" || isHeadEpoch {
+			// prepare the duties for export to bigtable
+			syncDutiesEpoch := make(map[types.Slot]map[types.ValidatorIndex]bool)
+			attDutiesEpoch := make(map[types.Slot]map[types.ValidatorIndex][]types.Slot)
 
-		// save the validator balances to bigtable
-		g.Go(func() error {
-			err := db.BigtableClient.SaveValidatorBalances(epoch, block.Validators)
-			if err != nil {
-				return fmt.Errorf("error exporting validator balances to bigtable for slot %v: %w", block.Slot, err)
+			for slot := epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch; slot <= (epoch+1)*utils.Config.Chain.ClConfig.SlotsPerEpoch-1; slot++ {
+				if syncDutiesEpoch[types.Slot(slot)] == nil {
+					syncDutiesEpoch[types.Slot(slot)] = make(map[types.ValidatorIndex]bool)
+				}
+				for _, validatorIndex := range block.EpochAssignments.SyncAssignments {
+					syncDutiesEpoch[types.Slot(slot)][types.ValidatorIndex(validatorIndex)] = false
+				}
 			}
-			return nil
-		})
-		// if we are exporting the head epoch, update the validator db table
+
+			for key, validatorIndex := range block.EpochAssignments.AttestorAssignments {
+				keySplit := strings.Split(key, "-")
+				attestedSlot, err := strconv.ParseUint(keySplit[0], 10, 64)
+
+				if err != nil {
+					return fmt.Errorf("error parsing attested slot from attestation key: %w", err)
+				}
+
+				if attDutiesEpoch[types.Slot(attestedSlot)] == nil {
+					attDutiesEpoch[types.Slot(attestedSlot)] = make(map[types.ValidatorIndex][]types.Slot)
+				}
+
+				attDutiesEpoch[types.Slot(attestedSlot)][types.ValidatorIndex(validatorIndex)] = []types.Slot{}
+			}
+
+
+			// save all duties to bigtable
+			g.Go(func() error {
+				err := db.BigtableClient.SaveAttestationDuties(attDutiesEpoch)
+				if err != nil {
+					return fmt.Errorf("error exporting attestation assignments to bigtable for slot %v: %w", block.Slot, err)
+				}
+				return nil
+			})
+			g.Go(func() error {
+				err := db.BigtableClient.SaveSyncComitteeDuties(syncDutiesEpoch)
+				if err != nil {
+					return fmt.Errorf("error exporting sync committee assignments to bigtable for slot %v: %w", block.Slot, err)
+				}
+				return nil
+			})
+
+			// save the validator balances to bigtable
+			g.Go(func() error {
+				err := db.BigtableClient.SaveValidatorBalances(epoch, block.Validators)
+				if err != nil {
+					return fmt.Errorf("error exporting validator balances to bigtable for slot %v: %w", block.Slot, err)
+				}
+				return nil
+			})
+		}
+		
+		// Always update validator table for head epoch
 		if isHeadEpoch {
 			g.Go(func() error {
 				err := db.SaveValidators(epoch, block.Validators, client, 10000, tx)
@@ -322,6 +328,7 @@ func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool,
 			})
 		}
 
+		// Always calculate participation stats
 		var epochParticipationStats *types.ValidatorParticipation
 		if epoch > 0 {
 			g.Go(func() error {
@@ -334,12 +341,13 @@ func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool,
 				return nil
 			})
 		}
-		err = g.Wait()
-		if err != nil {
+		
+		// Wait for all parallel tasks
+		if err := g.Wait(); err != nil {
 			return err
 		}
 
-		// save the epoch metadata to the database
+		// Save the epoch metadata to the database
 		err = db.SaveEpoch(epoch, block.Validators, client, tx)
 		if err != nil {
 			return fmt.Errorf("error saving epoch data: %w", err)
