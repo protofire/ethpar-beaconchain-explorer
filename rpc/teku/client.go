@@ -937,336 +937,37 @@ func (tc *TekuClient) blockFromResponse(
 	return block, nil
 }
 
-// blockFromResponse constructs a *types.Block object from the parsed consensus block response
-// and block header. It fetches additional metadata such as blob sidecars and epoch assignments,
-// and handles optional parts like SyncAggregate and ExecutionPayload.
+// GetValidatorParticipation fetches validator participation metrics for a given epoch
+// from the Teku Beacon Node REST API. It returns a ValidatorParticipation struct containing
+// participation rate, eligible/voted ETH, and finalization status.
 //
-// If the Teku node is pruned, some fields like EpochAssignments may be unavailable,
-// and the function handles this gracefully by falling back to default values.
+// The function:
+//   1. Retrieves the current chain head.
+//   2. Verifies that the requested epoch is not in the future or ongoing.
+//   3. Adjusts the request epoch to account for Teku's API calculating participation stats
+//      at the *end* of an epoch.
+//   4. Handles pruned data by returning a valid empty object if expected (404s due to non-archival node).
+//   5. Parses response and constructs a ValidatorParticipation object with appropriate values.
 //
-// Returns a fully hydrated *types.Block, or an error if any critical part is malformed or missing.
-// func (tc *TekuClient) blockFromResponse(parsedHeaders *consensus.StandardBeaconHeaderResponse, parsedResponse *consensus.StandardV2BlockResponse) (*types.Block, error) {
-// 	parsedBlock := parsedResponse.Data
-// 	slot := uint64(parsedHeaders.Data.Header.Message.Slot)
-// 	block := &types.Block{
-// 		Status:       1,
-// 		Finalized:    parsedHeaders.Finalized,
-// 		Proposer:     int64(parsedBlock.Message.ProposerIndex),
-// 		BlockRoot:    utils.MustParseHex(parsedHeaders.Data.Root),
-// 		Slot:         slot,
-// 		ParentRoot:   utils.MustParseHex(parsedBlock.Message.ParentRoot),
-// 		StateRoot:    utils.MustParseHex(parsedBlock.Message.StateRoot),
-// 		Signature:    parsedBlock.Signature,
-// 		RandaoReveal: utils.MustParseHex(parsedBlock.Message.Body.RandaoReveal),
-// 		Graffiti:     utils.MustParseHex(parsedBlock.Message.Body.Graffiti),
-// 		Eth1Data: &types.Eth1Data{
-// 			DepositRoot:  utils.MustParseHex(parsedBlock.Message.Body.Eth1Data.DepositRoot),
-// 			DepositCount: uint64(parsedBlock.Message.Body.Eth1Data.DepositCount),
-// 			BlockHash:    utils.MustParseHex(parsedBlock.Message.Body.Eth1Data.BlockHash),
-// 		},
-// 		ProposerSlashings:          make([]*types.ProposerSlashing, len(parsedBlock.Message.Body.ProposerSlashings)),
-// 		AttesterSlashings:          make([]*types.AttesterSlashing, len(parsedBlock.Message.Body.AttesterSlashings)),
-// 		Attestations:               make([]*types.Attestation, len(parsedBlock.Message.Body.Attestations)),
-// 		Deposits:                   make([]*types.Deposit, len(parsedBlock.Message.Body.Deposits)),
-// 		VoluntaryExits:             make([]*types.VoluntaryExit, len(parsedBlock.Message.Body.VoluntaryExits)),
-// 		SignedBLSToExecutionChange: make([]*types.SignedBLSToExecutionChange, len(parsedBlock.Message.Body.SignedBLSToExecutionChange)),
-// 		BlobKZGCommitments:         make([][]byte, len(parsedBlock.Message.Body.BlobKZGCommitments)),
-// 		BlobKZGProofs:              make([][]byte, len(parsedBlock.Message.Body.BlobKZGCommitments)),
-// 		AttestationDuties:          make(map[types.ValidatorIndex][]types.Slot),
-// 		SyncDuties:                 make(map[types.ValidatorIndex]bool),
-// 	}
-
-// 	for i, c := range parsedBlock.Message.Body.BlobKZGCommitments {
-// 		block.BlobKZGCommitments[i] = c
-// 	}
-
-// 	if len(parsedBlock.Message.Body.BlobKZGCommitments) > 0 {
-// 		res, err := tc.GetBlobSidecars(fmt.Sprintf("%#x", block.BlockRoot))
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		if len(res.Data) != len(parsedBlock.Message.Body.BlobKZGCommitments) {
-// 			return nil, fmt.Errorf("error constructing block at slot %v: len(blob_sidecars) != len(block.blob_kzg_commitments): %v != %v", block.Slot, len(res.Data), len(parsedBlock.Message.Body.BlobKZGCommitments))
-// 		}
-// 		for i, d := range res.Data {
-// 			if !bytes.Equal(d.KzgCommitment, block.BlobKZGCommitments[i]) {
-// 				return nil, fmt.Errorf("error constructing block at slot %v: unequal kzg_commitments at index %v: %#x != %#x", block.Slot, i, d.KzgCommitment, block.BlobKZGCommitments[i])
-// 			}
-// 			block.BlobKZGProofs[i] = d.KzgProof
-// 		}
-// 	}
-
-// 	epochAssignments, err := tc.GetEpochAssignments(slot / utils.Config.Chain.ClConfig.SlotsPerEpoch)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	if agg := parsedBlock.Message.Body.SyncAggregate; agg != nil {
-// 		bits := utils.MustParseHex(agg.SyncCommitteeBits)
-
-// 		if utils.Config.Chain.ClConfig.SyncCommitteeSize != uint64(len(bits)*8) {
-// 			return nil, fmt.Errorf("sync-aggregate-bits-size does not match sync-committee-size: %v != %v", len(bits)*8, utils.Config.Chain.ClConfig.SyncCommitteeSize)
-// 		}
-
-// 		block.SyncAggregate = &types.SyncAggregate{
-// 			SyncCommitteeValidators:    epochAssignments.SyncAssignments,
-// 			SyncCommitteeBits:          bits,
-// 			SyncAggregateParticipation: syncCommitteeParticipation(bits, int(utils.Config.Chain.ClConfig.SyncCommitteeSize)),
-// 			SyncCommitteeSignature:     utils.MustParseHex(agg.SyncCommitteeSignature),
-// 		}
-
-// 		// fill out performed sync duties
-// 		bitLen := len(block.SyncAggregate.SyncCommitteeBits) * 8
-// 		valLen := len(block.SyncAggregate.SyncCommitteeValidators)
-// 		if bitLen < valLen {
-// 			return nil, fmt.Errorf("error getting sync_committee participants: bitLen != valLen: %v != %v", bitLen, valLen)
-// 		}
-// 		for i, valIndex := range block.SyncAggregate.SyncCommitteeValidators {
-// 			block.SyncDuties[types.ValidatorIndex(valIndex)] = utils.BitAtVector(block.SyncAggregate.SyncCommitteeBits, i)
-// 		}
-// 	}
-
-// 	if payload := parsedBlock.Message.Body.ExecutionPayload; payload != nil && !bytes.Equal(payload.ParentHash, make([]byte, 32)) {
-// 		txs := make([]*types.Transaction, 0, len(payload.Transactions))
-// 		for i, rawTx := range payload.Transactions {
-// 			tx := &types.Transaction{Raw: rawTx}
-// 			var decTx gtypes.Transaction
-// 			if err := decTx.UnmarshalBinary(rawTx); err != nil {
-// 				return nil, fmt.Errorf("error parsing tx %d block %x: %w", i, payload.BlockHash, err)
-// 			} else {
-// 				h := decTx.Hash()
-// 				tx.TxHash = h[:]
-// 				tx.AccountNonce = decTx.Nonce()
-// 				// big endian
-// 				tx.Price = decTx.GasPrice().Bytes()
-// 				tx.GasLimit = decTx.Gas()
-// 				sender, err := tc.signer.Sender(&decTx)
-// 				if err != nil {
-// 					return nil, fmt.Errorf("transaction with invalid sender (slot: %v, tx-hash: %x): %w", slot, h, err)
-// 				}
-// 				tx.Sender = sender.Bytes()
-// 				if v := decTx.To(); v != nil {
-// 					tx.Recipient = v.Bytes()
-// 				} else {
-// 					tx.Recipient = []byte{}
-// 				}
-// 				tx.Amount = decTx.Value().Bytes()
-// 				tx.Payload = decTx.Data()
-// 				tx.MaxPriorityFeePerGas = decTx.GasTipCap().Uint64()
-// 				tx.MaxFeePerGas = decTx.GasFeeCap().Uint64()
-
-// 				if decTx.BlobGasFeeCap() != nil {
-// 					tx.MaxFeePerBlobGas = decTx.BlobGasFeeCap().Uint64()
-// 				}
-// 				for _, h := range decTx.BlobHashes() {
-// 					tx.BlobVersionedHashes = append(tx.BlobVersionedHashes, h.Bytes())
-// 				}
-// 			}
-// 			txs = append(txs, tx)
-// 		}
-// 		withdrawals := make([]*types.Withdrawals, 0, len(payload.Withdrawals))
-// 		for _, w := range payload.Withdrawals {
-// 			withdrawals = append(withdrawals, &types.Withdrawals{
-// 				Index:          int64(w.Index),
-// 				ValidatorIndex: uint64(w.ValidatorIndex),
-// 				Address:        w.Address,
-// 				Amount:         uint64(w.Amount),
-// 			})
-// 		}
-
-// 		block.ExecutionPayload = &types.ExecutionPayload{
-// 			ParentHash:    payload.ParentHash,
-// 			FeeRecipient:  payload.FeeRecipient,
-// 			StateRoot:     payload.StateRoot,
-// 			ReceiptsRoot:  payload.ReceiptsRoot,
-// 			LogsBloom:     payload.LogsBloom,
-// 			Random:        payload.PrevRandao,
-// 			BlockNumber:   uint64(payload.BlockNumber),
-// 			GasLimit:      uint64(payload.GasLimit),
-// 			GasUsed:       uint64(payload.GasUsed),
-// 			Timestamp:     uint64(payload.Timestamp),
-// 			ExtraData:     payload.ExtraData,
-// 			BaseFeePerGas: uint64(payload.BaseFeePerGas),
-// 			BlockHash:     payload.BlockHash,
-// 			Transactions:  txs,
-// 			Withdrawals:   withdrawals,
-// 			BlobGasUsed:   uint64(payload.BlobGasUsed),
-// 			ExcessBlobGas: uint64(payload.ExcessBlobGas),
-// 		}
-// 	}
-
-// 	// TODO: this is legacy from old Teku API. Does it even still apply?
-// 	if block.Eth1Data.DepositCount > 2147483647 { // Sometimes the Teku node does return bogus data for the DepositCount value
-// 		block.Eth1Data.DepositCount = 0
-// 	}
-
-// 	for i, proposerSlashing := range parsedBlock.Message.Body.ProposerSlashings {
-// 		block.ProposerSlashings[i] = &types.ProposerSlashing{
-// 			ProposerIndex: uint64(proposerSlashing.SignedHeader1.Message.ProposerIndex),
-// 			Header1: &types.Block{
-// 				Slot:       uint64(proposerSlashing.SignedHeader1.Message.Slot),
-// 				ParentRoot: utils.MustParseHex(proposerSlashing.SignedHeader1.Message.ParentRoot),
-// 				StateRoot:  utils.MustParseHex(proposerSlashing.SignedHeader1.Message.StateRoot),
-// 				Signature:  utils.MustParseHex(proposerSlashing.SignedHeader1.Signature),
-// 				BodyRoot:   utils.MustParseHex(proposerSlashing.SignedHeader1.Message.BodyRoot),
-// 			},
-// 			Header2: &types.Block{
-// 				Slot:       uint64(proposerSlashing.SignedHeader2.Message.Slot),
-// 				ParentRoot: utils.MustParseHex(proposerSlashing.SignedHeader2.Message.ParentRoot),
-// 				StateRoot:  utils.MustParseHex(proposerSlashing.SignedHeader2.Message.StateRoot),
-// 				Signature:  utils.MustParseHex(proposerSlashing.SignedHeader2.Signature),
-// 				BodyRoot:   utils.MustParseHex(proposerSlashing.SignedHeader2.Message.BodyRoot),
-// 			},
-// 		}
-// 	}
-
-// 	for i, attesterSlashing := range parsedBlock.Message.Body.AttesterSlashings {
-// 		block.AttesterSlashings[i] = &types.AttesterSlashing{
-// 			Attestation1: &types.IndexedAttestation{
-// 				Data: &types.AttestationData{
-// 					Slot:            uint64(attesterSlashing.Attestation1.Data.Slot),
-// 					CommitteeIndex:  uint64(attesterSlashing.Attestation1.Data.Index),
-// 					BeaconBlockRoot: utils.MustParseHex(attesterSlashing.Attestation1.Data.BeaconBlockRoot),
-// 					Source: &types.Checkpoint{
-// 						Epoch: uint64(attesterSlashing.Attestation1.Data.Source.Epoch),
-// 						Root:  utils.MustParseHex(attesterSlashing.Attestation1.Data.Source.Root),
-// 					},
-// 					Target: &types.Checkpoint{
-// 						Epoch: uint64(attesterSlashing.Attestation1.Data.Target.Epoch),
-// 						Root:  utils.MustParseHex(attesterSlashing.Attestation1.Data.Target.Root),
-// 					},
-// 				},
-// 				Signature:        utils.MustParseHex(attesterSlashing.Attestation1.Signature),
-// 				AttestingIndices: uint64List(attesterSlashing.Attestation1.AttestingIndices),
-// 			},
-// 			Attestation2: &types.IndexedAttestation{
-// 				Data: &types.AttestationData{
-// 					Slot:            uint64(attesterSlashing.Attestation2.Data.Slot),
-// 					CommitteeIndex:  uint64(attesterSlashing.Attestation2.Data.Index),
-// 					BeaconBlockRoot: utils.MustParseHex(attesterSlashing.Attestation2.Data.BeaconBlockRoot),
-// 					Source: &types.Checkpoint{
-// 						Epoch: uint64(attesterSlashing.Attestation2.Data.Source.Epoch),
-// 						Root:  utils.MustParseHex(attesterSlashing.Attestation2.Data.Source.Root),
-// 					},
-// 					Target: &types.Checkpoint{
-// 						Epoch: uint64(attesterSlashing.Attestation2.Data.Target.Epoch),
-// 						Root:  utils.MustParseHex(attesterSlashing.Attestation2.Data.Target.Root),
-// 					},
-// 				},
-// 				Signature:        utils.MustParseHex(attesterSlashing.Attestation2.Signature),
-// 				AttestingIndices: uint64List(attesterSlashing.Attestation2.AttestingIndices),
-// 			},
-// 		}
-// 	}
-
-// 	for i, attestation := range parsedBlock.Message.Body.Attestations {
-// 		a := &types.Attestation{
-// 			AggregationBits: utils.MustParseHex(attestation.AggregationBits),
-// 			Attesters:       []uint64{},
-// 			Data: &types.AttestationData{
-// 				Slot:            uint64(attestation.Data.Slot),
-// 				CommitteeIndex:  uint64(attestation.Data.Index),
-// 				BeaconBlockRoot: utils.MustParseHex(attestation.Data.BeaconBlockRoot),
-// 				Source: &types.Checkpoint{
-// 					Epoch: uint64(attestation.Data.Source.Epoch),
-// 					Root:  utils.MustParseHex(attestation.Data.Source.Root),
-// 				},
-// 				Target: &types.Checkpoint{
-// 					Epoch: uint64(attestation.Data.Target.Epoch),
-// 					Root:  utils.MustParseHex(attestation.Data.Target.Root),
-// 				},
-// 			},
-// 			Signature: utils.MustParseHex(attestation.Signature),
-// 		}
-
-// 		aggregationBits := bitfield.Bitlist(a.AggregationBits)
-// 		assignments, err := tc.GetEpochAssignments(a.Data.Slot / utils.Config.Chain.ClConfig.SlotsPerEpoch)
-// 		if err != nil {
-// 			logger.Warnf("epoch assignments unavailable for attestation at slot %d: %v", a.Data.Slot, err)
-// 		}
-// 		if assignments == nil {
-// 			// No attestor assignment data available, skip decoding individual validators
-// 			block.Attestations[i] = a
-// 			continue
-// 		}
-
-// 		for j := uint64(0); j < aggregationBits.Len(); j++ {
-// 			if aggregationBits.BitAt(j) {
-// 				validator, found := assignments.AttestorAssignments[utils.FormatAttestorAssignmentKey(a.Data.Slot, a.Data.CommitteeIndex, j)]
-// 				if !found {
-// 					validator = 0
-// 					logger.Errorf("unknown attestor: block %d, slot %d, committee %d, member index %d", block.Slot, a.Data.Slot, a.Data.CommitteeIndex, j)
-// 				}
-// 				a.Attesters = append(a.Attesters, validator)
-
-// 				if block.AttestationDuties[types.ValidatorIndex(validator)] == nil {
-// 					block.AttestationDuties[types.ValidatorIndex(validator)] = []types.Slot{types.Slot(a.Data.Slot)}
-// 				} else {
-// 					block.AttestationDuties[types.ValidatorIndex(validator)] = append(
-// 						block.AttestationDuties[types.ValidatorIndex(validator)],
-// 						types.Slot(a.Data.Slot),
-// 					)
-// 				}
-// 			}
-// 		}
-
-// 		block.Attestations[i] = a
-// 	}
-
-// 	for i, deposit := range parsedBlock.Message.Body.Deposits {
-// 		d := &types.Deposit{
-// 			Proof:                 nil,
-// 			PublicKey:             utils.MustParseHex(deposit.Data.Pubkey),
-// 			WithdrawalCredentials: utils.MustParseHex(deposit.Data.WithdrawalCredentials),
-// 			Amount:                uint64(deposit.Data.Amount),
-// 			Signature:             utils.MustParseHex(deposit.Data.Signature),
-// 		}
-
-// 		block.Deposits[i] = d
-// 	}
-
-// 	for i, voluntaryExit := range parsedBlock.Message.Body.VoluntaryExits {
-// 		block.VoluntaryExits[i] = &types.VoluntaryExit{
-// 			Epoch:          uint64(voluntaryExit.Message.Epoch),
-// 			ValidatorIndex: uint64(voluntaryExit.Message.ValidatorIndex),
-// 			Signature:      utils.MustParseHex(voluntaryExit.Signature),
-// 		}
-// 	}
-
-// 	for i, blsChange := range parsedBlock.Message.Body.SignedBLSToExecutionChange {
-// 		block.SignedBLSToExecutionChange[i] = &types.SignedBLSToExecutionChange{
-// 			Message: types.BLSToExecutionChange{
-// 				Validatorindex: uint64(blsChange.Message.ValidatorIndex),
-// 				BlsPubkey:      blsChange.Message.FromBlsPubkey,
-// 				Address:        blsChange.Message.ToExecutionAddress,
-// 			},
-// 			Signature: blsChange.Signature,
-// 		}
-// 	}
-
-// 	return block, nil
-// }
-
-// GetValidatorParticipation will get the validator participation from the Teku RPC api
+// Returns an empty ValidatorParticipation object with zero values and no error if data is pruned.
 func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorParticipation, error) {
-
 	head, err := tc.GetChainHead()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get chain head: %w", err)
 	}
 
 	if epoch > head.HeadEpoch {
 		return nil, fmt.Errorf("epoch %v is newer than the latest head %v", epoch, TekuLatestHeadEpoch)
 	}
+
 	if epoch == head.HeadEpoch {
-		// participation stats are calculated at the end of an epoch,
-		// making it impossible to retrieve stats of an currently ongoing epoch
-		return nil, fmt.Errorf("epoch %v can't be retrieved as it hasn't finished yet", epoch)
+		// Participation stats are not available for an ongoing epoch
+		return nil, fmt.Errorf("epoch %v is ongoing and cannot be queried", epoch)
 	}
 
 	requestEpoch := epoch
-
 	if epoch+1 < head.HeadEpoch {
+		// Teku provides finalized data one epoch after
 		requestEpoch += 1
 	}
 
@@ -1274,28 +975,51 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 
 	resp, err := tc.get(fmt.Sprintf("%s/teku/validator_inclusion/%d/global", tc.endpoint, requestEpoch))
 	if err != nil {
+		// TODO: pruned node workaround
+		if isPrunedError(err) {
+			logger.Debugf("pruned mode: epoch %v pruned from node history; returning empty participation", requestEpoch)
+			return &types.ValidatorParticipation{
+				Epoch:                   epoch,
+				GlobalParticipationRate: 0,
+				VotedEther:              0,
+				EligibleEther:           0,
+				Finalized:               false,
+			}, nil
+		}
 		return nil, fmt.Errorf("error retrieving validator participation data for epoch %v: %w", requestEpoch, err)
 	}
 
 	var parsedResponse consensus.StandardValidatorParticipationResponse
-	err = json.Unmarshal(resp, &parsedResponse)
-	if err != nil {
+	if err := json.Unmarshal(resp, &parsedResponse); err != nil {
 		return nil, fmt.Errorf("error parsing validator participation data for epoch %v: %w", epoch, err)
 	}
 
 	var res *types.ValidatorParticipation
+	
 	if epoch < requestEpoch {
-		// we requested the next epoch, so we have to use the previous value for everything here
-
+		// Teku reports stats under 'previous' when requesting +1 epoch
 		prevEpochActiveGwei := parsedResponse.Data.PreviousEpochActiveGwei
+		
+		// Sometimes PreviousEpochActiveGwei is 0 (rare case), try to fallback
 		if prevEpochActiveGwei == 0 {
 			prevResp, err := tc.get(fmt.Sprintf("%s/teku/validator_inclusion/%d/global", tc.endpoint, requestEpoch-1))
 			if err != nil {
+				// TODO: pruned node workaround
+				if isPrunedError(err) {
+					logger.Debugf("pruned mode: prevEpoch %v data pruned; returning empty participation", requestEpoch-1)
+					return &types.ValidatorParticipation{
+						Epoch:                   epoch,
+						GlobalParticipationRate: 0,
+						VotedEther:              0,
+						EligibleEther:           0,
+						Finalized:               false,
+					}, nil
+				}
 				return nil, fmt.Errorf("error retrieving validator participation data for prevEpoch %v: %w", requestEpoch-1, err)
 			}
+
 			var parsedPrevResponse consensus.StandardValidatorParticipationResponse
-			err = json.Unmarshal(prevResp, &parsedPrevResponse)
-			if err != nil {
+			if err := json.Unmarshal(prevResp, &parsedPrevResponse); err != nil {
 				return nil, fmt.Errorf("error parsing validator participation data for prevEpoch %v: %w", epoch, err)
 			}
 			prevEpochActiveGwei = parsedPrevResponse.Data.CurrentEpochActiveGwei
@@ -1303,7 +1027,7 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 
 		res = &types.ValidatorParticipation{
 			Epoch:                   epoch,
-			GlobalParticipationRate: float32(parsedResponse.Data.PreviousEpochTargetAttestingGwei) / float32(prevEpochActiveGwei),
+			GlobalParticipationRate: safeDivideFloat(parsedResponse.Data.PreviousEpochTargetAttestingGwei, prevEpochActiveGwei),
 			VotedEther:              uint64(parsedResponse.Data.PreviousEpochTargetAttestingGwei),
 			EligibleEther:           uint64(prevEpochActiveGwei),
 			Finalized:               epoch <= head.FinalizedEpoch && head.JustifiedEpoch > 0,
@@ -1311,7 +1035,7 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 	} else {
 		res = &types.ValidatorParticipation{
 			Epoch:                   epoch,
-			GlobalParticipationRate: float32(parsedResponse.Data.CurrentEpochTargetAttestingGwei) / float32(parsedResponse.Data.CurrentEpochActiveGwei),
+			GlobalParticipationRate: safeDivideFloat(parsedResponse.Data.CurrentEpochTargetAttestingGwei, parsedResponse.Data.CurrentEpochActiveGwei),
 			VotedEther:              uint64(parsedResponse.Data.CurrentEpochTargetAttestingGwei),
 			EligibleEther:           uint64(parsedResponse.Data.CurrentEpochActiveGwei),
 			Finalized:               epoch <= head.FinalizedEpoch && head.JustifiedEpoch > 0,
@@ -1320,6 +1044,26 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 	return res, nil
 }
 
+// GetSyncCommittee fetches sync committee information for a given beacon state and epoch
+// from a Teku beacon node via the standard REST API.
+//
+// Sync committees are part of Ethereum's consensus mechanism used in light client sync.
+// This method queries the `/eth/v1/beacon/states/{state_id}/sync_committees` endpoint
+// with a specific epoch as a query parameter.
+//
+// Parameters:
+//   - stateID: The state identifier (usually a block root, block ID like "head", "finalized", etc.).
+//   - epoch: The target epoch for which to fetch sync committee data.
+//
+// Returns:
+//   - *StandardSyncCommitteeData: A pointer to a struct containing validators and their aggregates.
+//   - error: An error if the request or decoding fails.
+//
+// Behavior:
+//   - If the beacon node has pruned historical state (non-archival), the method gracefully handles
+//     404 or similar errors by returning an empty sync committee object and no error.
+//   - This ensures compatibility with non-archival nodes while allowing the caller to distinguish
+//     between actual data and missing data due to pruning.
 func (tc *TekuClient) GetSyncCommittee(stateID string, epoch uint64) (*consensus.StandardSyncCommitteeData, error) {
 	syncCommitteesResp, err := tc.get(fmt.Sprintf("%s/eth/v1/beacon/states/%s/sync_committees?epoch=%d", tc.endpoint, stateID, epoch))
 	if err != nil {
