@@ -850,7 +850,7 @@ func SaveEpoch(epoch uint64, validators []*types.Validator, client consensus.Con
 	if validatorsCount > 0 {
 		validatorBalanceAverage = new(big.Int).Div(validatorBalanceSum, new(big.Int).SetInt64(int64(validatorsCount)))
 	}
-	
+
 	_, err := tx.Exec(`
 		INSERT INTO epochs (
 			epoch, 

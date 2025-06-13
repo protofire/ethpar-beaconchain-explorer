@@ -751,12 +751,12 @@ type BlockPageTransaction struct {
 type BlockPageAttestation struct {
 	BlockSlot       uint64        `db:"block_slot"`
 	BlockIndex      uint64        `db:"block_index"`
+	BlockRoot	[]byte        `db:"block_root"`
 	AggregationBits []byte        `db:"aggregationbits"`
 	Validators      pq.Int64Array `db:"validators"`
 	Signature       []byte        `db:"signature"`
 	Slot            uint64        `db:"slot"`
 	CommitteeIndex  uint64        `db:"committeeindex"`
-	CommitteeBits   []byte        `db:"committeebits"`
 	BeaconBlockRoot []byte        `db:"beaconblockroot"`
 	SourceEpoch     uint64        `db:"source_epoch"`
 	SourceRoot      []byte        `db:"source_root"`

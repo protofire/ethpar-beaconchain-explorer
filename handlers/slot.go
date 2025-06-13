@@ -172,12 +172,12 @@ func getAttestationsData(slot uint64, offset int64) ([]*types.BlockPageAttestati
 		SELECT
 			block_slot,
 			block_index,
+			block_root,
 			aggregationbits,
 			validators,
 			signature,
 			slot,
 			committeeindex,
-			committeebits,
 			beaconblockroot,
 			source_epoch,
 			source_root,
@@ -198,12 +198,12 @@ func getAttestationsData(slot uint64, offset int64) ([]*types.BlockPageAttestati
 		err := rows.Scan(
 			&attestation.BlockSlot,
 			&attestation.BlockIndex,
+			&attestation.BlockRoot,
 			&attestation.AggregationBits,
 			&attestation.Validators,
 			&attestation.Signature,
 			&attestation.Slot,
 			&attestation.CommitteeIndex,
-			&attestation.CommitteeBits,
 			&attestation.BeaconBlockRoot,
 			&attestation.SourceEpoch,
 			&attestation.SourceRoot,
@@ -814,6 +814,7 @@ func BlockTransactionsData(w http.ResponseWriter, r *http.Request) {
 type attestationsData struct {
 	BlockIndex      uint64        `json:"BlockIndex"`
 	Slot            uint64        `json:"Slot"`
+	BlockRoot       string        `json:"BlockRoot"`
 	CommitteeIndex  uint64        `json:"CommitteeIndex"`
 	CommitteeBits   template.HTML `json:"CommitteeBits"`
 	AggregationBits template.HTML `json:"AggregationBits"`
@@ -866,8 +867,8 @@ func SlotAttestationsData(w http.ResponseWriter, r *http.Request) {
 		data[i] = &attestationsData{
 			BlockIndex:      v.BlockIndex,
 			Slot:            v.Slot,
+			BlockRoot:       fmt.Sprintf("%x", v.BlockRoot),
 			CommitteeIndex:  v.CommitteeIndex,
-			CommitteeBits:   utils.FormatCommitteeBitList(v.CommitteeBits),
 			AggregationBits: utils.FormatBitlist(v.AggregationBits),
 			Validators:      validators,
 			BeaconBlockRoot: fmt.Sprintf("%x", v.BeaconBlockRoot),
