@@ -416,11 +416,3 @@ func buildBLSChanges(
 		}
 	}
 }
-
-// safeDivideFloat prevents division by zero and returns 0.0 in such cases
-func safeDivideFloat(numerator, denominator codec.Uint64Str) float32 {
-	if denominator == 0 {
-		return 0.0
-	}
-	return float32(numerator) / float32(denominator)
-}

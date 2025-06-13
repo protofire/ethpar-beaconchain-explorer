@@ -32,6 +32,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/protofire/ethpar-beaconchain-explorer/codec"
 	"github.com/protofire/ethpar-beaconchain-explorer/config"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
@@ -1924,4 +1925,12 @@ func FormatConsolidationStatus(queuedAtEpoch, processedAtEpoch int64, consolidat
 	}
 
 	return ""
+}
+
+// SafeDivideFloat prevents division by zero and returns 0.0 in such cases
+func SafeDivideFloat(numerator, denominator codec.Uint64Str) float32 {
+	if denominator == 0 {
+		return 0.0
+	}
+	return float32(numerator) / float32(denominator)
 }

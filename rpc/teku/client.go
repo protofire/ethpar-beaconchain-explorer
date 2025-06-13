@@ -1027,7 +1027,7 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 
 		res = &types.ValidatorParticipation{
 			Epoch:                   epoch,
-			GlobalParticipationRate: safeDivideFloat(parsedResponse.Data.PreviousEpochTargetAttestingGwei, prevEpochActiveGwei),
+			GlobalParticipationRate: utils.SafeDivideFloat(parsedResponse.Data.PreviousEpochTargetAttestingGwei, prevEpochActiveGwei),
 			VotedEther:              uint64(parsedResponse.Data.PreviousEpochTargetAttestingGwei),
 			EligibleEther:           uint64(prevEpochActiveGwei),
 			Finalized:               epoch <= head.FinalizedEpoch && head.JustifiedEpoch > 0,
@@ -1035,7 +1035,7 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 	} else {
 		res = &types.ValidatorParticipation{
 			Epoch:                   epoch,
-			GlobalParticipationRate: safeDivideFloat(parsedResponse.Data.CurrentEpochTargetAttestingGwei, parsedResponse.Data.CurrentEpochActiveGwei),
+			GlobalParticipationRate: utils.SafeDivideFloat(parsedResponse.Data.CurrentEpochTargetAttestingGwei, parsedResponse.Data.CurrentEpochActiveGwei),
 			VotedEther:              uint64(parsedResponse.Data.CurrentEpochTargetAttestingGwei),
 			EligibleEther:           uint64(parsedResponse.Data.CurrentEpochActiveGwei),
 			Finalized:               epoch <= head.FinalizedEpoch && head.JustifiedEpoch > 0,
