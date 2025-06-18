@@ -1934,3 +1934,11 @@ func SafeDivideFloat(numerator, denominator codec.Uint64Str) float32 {
 	}
 	return float32(numerator) / float32(denominator)
 }
+
+// BigMin returns the smaller of two big.Int values
+func BigMin(a, b *big.Int) *big.Int {
+	if a.Cmp(b) <= 0 {
+		return new(big.Int).Set(a)
+	}
+	return new(big.Int).Set(b)
+}

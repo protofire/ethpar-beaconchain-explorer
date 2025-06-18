@@ -345,7 +345,6 @@ type ValidatorPageData struct {
 	SlashedBy                                uint64
 	SlashedAt                                uint64
 	SlashedFor                               string
-	ApproxDepositProcessedEpoch              uint64
 	ActivationEligibilityEpoch               uint64 `db:"activationeligibilityepoch"`
 	ActivationEpoch                          uint64 `db:"activationepoch"`
 	ExitEpoch                                uint64 `db:"exitepoch"`
@@ -366,6 +365,7 @@ type ValidatorPageData struct {
 	DepositsCount                            uint64
 	WithdrawalCount                          uint64
 	SlashingsCount                           uint64
+	PendingCount                             uint64
 	SyncCount                                uint64 // amount of sync committees the validator was (and is) part of
 	SlotsPerSyncCommittee                    uint64
 	FutureDutiesEpoch                        uint64
@@ -385,6 +385,7 @@ type ValidatorPageData struct {
 	Apr7d                                    ClElFloat64   `json:"apr7d"`
 	Apr31d                                   ClElFloat64   `json:"apr31d"`
 	Apr365d                                  ClElFloat64   `json:"apr365d"`
+	SyncLuck                                 float64
 	SyncEstimate                             *time.Time
 	AvgSyncInterval                          *time.Duration
 	Rank7d                                   int64 `db:"rank7d"`
@@ -417,19 +418,7 @@ type ValidatorPageData struct {
 	EstimatedNextWithdrawal                  template.HTML
 	AddValidatorWatchlistModal               *AddValidatorWatchlistModal
 	NextWithdrawalRow                        [][]interface{}
-	ConsolidationRequests                    []*FrontendConsolidationRequest
-	ExecutionConsolidations                  []*FrontendExecutionConsolidationRequest
-	MoveToCompoundingRequest                 *FrontendMoveToCompoundingRequest
-	ExecutionWithdrawals                     []*FrontendExecutionWithdrawalRequest
-	ConsolidationTargetIndex                 int64
-	WithdrawalRequests                       []*FrontendWithdrawalRequest
 	ValidatorProposalData
-	ElectraHasHappened               bool
-	PendingDepositAboveMinActivation bool
-	EstimatedIndexEpoch              uint64
-	EstimatedIndexTs                 time.Time
-	ConsensusElExits                 []*FrontendConsensusELExitRequest
-	EnableWithdrawalsTab             bool
 }
 
 type RocketpoolValidatorPageData struct {

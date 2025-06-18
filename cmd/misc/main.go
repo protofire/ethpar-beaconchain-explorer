@@ -16,13 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"firebase.google.com/go/v4/messaging"
-	"go.uber.org/atomic"
-
 	"github.com/protofire/ethpar-beaconchain-explorer/cmd/misc/commands"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/exporter"
-	"github.com/protofire/ethpar-beaconchain-explorer/notify"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/lighthouse"
@@ -126,14 +122,6 @@ func main() {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(5)
-
-	if utils.Config.Chain.PectraWithdrawalRequestContractAddress == "" {
-		utils.LogFatal(nil, "missing config pectraWithdrawalRequestContractAddress, please provide via explorer config", 0)
-	}
-
-	if utils.Config.Chain.PectraConsolidationRequestContractAddress == "" {
-		utils.LogFatal(nil, "missing config pectraConsolidationRequestContractAddress, please provide via explorer config", 0)
-	}
 
 	go func() {
 		defer wg.Done()
@@ -338,8 +326,6 @@ func main() {
 		exportHistoricPrices(opts.StartDay, opts.EndDay)
 	case "index-missing-blocks":
 		indexMissingBlocks(opts.StartBlock, opts.EndBlock, bt, erigonClient)
-	case "re-index-blocks":
-		reIndexBlocks(opts.StartBlock, opts.EndBlock, bt, erigonClient, opts.Transformers, opts.BatchSize, opts.DataConcurrency)
 	case "migrate-last-attestation-slot-bigtable":
 		migrateLastAttestationSlotToBigtable()
 	case "migrate-app-purchases":
@@ -460,10 +446,6 @@ func main() {
 		err = disableUserPerEmail()
 	case "fix-epochs":
 		err = fixEpochs()
-	case "fix-internal-txs-from-node":
-		fixInternalTxsFromNode(opts.StartBlock, opts.EndBlock, opts.BatchSize, opts.DataConcurrency, bt)
-	case "validate-firebase-tokens":
-		err = validateFirebaseTokens()
 	default:
 		utils.LogFatal(nil, fmt.Sprintf("unknown command %s", opts.Command), 2)
 	}
@@ -564,52 +546,6 @@ func disableUserPerEmail() error {
 	}
 
 	return nil
-}
-
-func fixInternalTxsFromNode(startBlock, endBlock, batchSize, concurrency uint64, bt *db.Bigtable) {
-	if endBlock > 0 && endBlock < startBlock {
-		utils.LogError(nil, fmt.Sprintf("endBlock [%v] < startBlock [%v]", endBlock, startBlock), 0)
-		return
-	}
-
-	if concurrency == 0 {
-		utils.LogError(nil, "concurrency must be greater than 0", 0)
-		return
-	}
-	if bt == nil {
-		utils.LogError(nil, "no bigtable provided", 0)
-		return
-	}
-
-	transformers := make([]func(blk *types.Eth1Block, cache *freecache.Cache) (*types.BulkMutations, *types.BulkMutations, error), 0)
-	transformers = append(transformers, bt.TransformBlock, bt.TransformTx, bt.TransformItx)
-
-	to := endBlock
-	if endBlock == math.MaxInt64 {
-		lastBlockFromBlocksTable, err := bt.GetLastBlockInBlocksTable()
-		if err != nil {
-			utils.LogError(err, "error retrieving last blocks from blocks table", 0)
-			return
-		}
-
-		to = uint64(lastBlockFromBlocksTable)
-	}
-
-	cache := freecache.NewCache(100 * 1024 * 1024) // 100 MB limit
-	blockCount := utilMath.MaxU64(1, batchSize)
-
-	logrus.Infof("Starting to reindex all txs for blocks ranging from %d to %d", startBlock, to)
-	for from := startBlock; from <= to; from = from + blockCount {
-		toBlock := utilMath.MinU64(to, from+blockCount-1)
-
-		logrus.Infof("reindexing txs for blocks from height %v to %v in data table ...", from, toBlock)
-		err := bt.ReindexITxsFromNode(int64(from), int64(toBlock), int64(batchSize), int64(concurrency), transformers, cache)
-		if err != nil {
-			utils.LogError(err, "error indexing from bigtable", 0)
-		}
-		cache.Clear()
-
-	}
 }
 
 func fixEns(erigonClient *rpc.ErigonClient) error {
@@ -1613,7 +1549,7 @@ func indexMissingBlocks(start uint64, end uint64, bt *db.Bigtable, client *rpc.E
 			if _, err := db.BigtableClient.GetBlockFromBlocksTable(block); err != nil {
 				logrus.Infof("could not load [%v] from blocks table, will try to fetch it from the node and save it", block)
 
-				bc, _, err := client.GetBlock(int64(block), "geth")
+				bc, _, err := client.GetBlock(int64(block), "parity/geth")
 				if err != nil {
 					utils.LogError(err, fmt.Sprintf("error getting block %v from the node", block), 0)
 					return
@@ -1631,150 +1567,35 @@ func indexMissingBlocks(start uint64, end uint64, bt *db.Bigtable, client *rpc.E
 	}
 }
 
-// Goes through the blocks in the given range from [start] to [end] and re indexes them with the provided transformers
-//
-//	Both [start] and [end] are inclusive
-//	Pass math.MaxInt64 as [end] to export from [start] to the last block in the blocks table
-func reIndexBlocks(start uint64, end uint64, bt *db.Bigtable, client *rpc.ErigonClient, transformerFlag string, batchSize uint64, concurrency uint64) {
-	if start > 0 && end < start {
-		utils.LogError(nil, fmt.Sprintf("endBlock [%v] < startBlock [%v]", end, start), 0)
+func indexOldEth1Blocks(startBlock uint64, endBlock uint64, batchSize uint64, concurrency uint64, transformerFlag string, bt *db.Bigtable, client *rpc.ErigonClient) {
+	if endBlock > 0 && endBlock < startBlock {
+		utils.LogError(nil, fmt.Sprintf("endBlock [%v] < startBlock [%v]", endBlock, startBlock), 0)
 		return
 	}
 	if concurrency == 0 {
 		utils.LogError(nil, "concurrency must be greater than 0", 0)
 		return
 	}
-	if end == math.MaxInt64 {
-		lastBlockFromBlocksTable, err := bt.GetLastBlockInBlocksTable()
-		if err != nil {
-			logrus.Errorf("error retrieving last blocks from blocks table: %v", err)
-			return
-		}
-		end = uint64(lastBlockFromBlocksTable)
-	}
-	transformers, importENSChanges, err := getTransformers(transformerFlag, bt)
-	if err != nil {
-		utils.LogError(nil, err, 0)
+	if bt == nil {
+		utils.LogError(nil, "no bigtable provided", 0)
 		return
 	}
-	if importENSChanges {
-		if err := bt.ImportEnsUpdates(client.GetNativeClient(), math.MaxInt64); err != nil {
-			utils.LogError(err, "error importing ens from events", 0)
-			return
-		}
-	}
 
-	readGroup := errgroup.Group{}
-	readGroup.SetLimit(int(concurrency))
-
-	writeGroup := errgroup.Group{}
-	writeGroup.SetLimit(int(concurrency*concurrency) + 1)
-
-	cache := freecache.NewCache(100 * 1024 * 1024) // 100 MB limit
-	quit := make(chan struct{})
-
-	sink := make(chan *types.Eth1Block)
-	writeGroup.Go(func() error {
-		for {
-			select {
-			case block, ok := <-sink:
-				if !ok {
-					return nil
-				}
-				writeGroup.Go(func() error {
-					if err := bt.SaveBlock(block); err != nil {
-						return fmt.Errorf("error saving block %v: %w", block.Number, err)
-					}
-					err := bt.IndexBlocksWithTransformers([]*types.Eth1Block{block}, transformers, cache)
-					if err != nil {
-						return fmt.Errorf("error indexing from bigtable: %w", err)
-					}
-					logrus.Infof("%d indexed", block.Number)
-					return nil
-				})
-			case <-quit:
-				return nil
-			}
-		}
-	})
-
-	type Report struct {
-		Time time.Time
-		Slot int64
-	}
-	currSlot := atomic.NewInt64(int64(start))
-	lastReport := atomic.NewPointer(&Report{Time: time.Now(), Slot: currSlot.Load()})
-
-	go func() {
-		t := time.NewTicker(10 * time.Second)
-		for {
-			newReport := &Report{Time: time.Now(), Slot: currSlot.Load()}
-			oldReport := lastReport.Swap(newReport)
-			blocksPerSecond := float64(newReport.Slot-oldReport.Slot) / newReport.Time.Sub(oldReport.Time).Seconds()
-			logrus.Infof("indexed %d blocks in %.2fs (%.2f b/s, curr_block: %d, last_block: %d, blocks_left: %d, est_time_left: %s)", newReport.Slot-oldReport.Slot, newReport.Time.Sub(oldReport.Time).Seconds(), blocksPerSecond, newReport.Slot, end, int64(end)-newReport.Slot, time.Duration(float64(int64(end)-newReport.Slot)/blocksPerSecond)*time.Second)
-			select {
-			case <-t.C:
-			case <-quit:
-				return
-			}
-		}
-	}()
-
-	var errs []error
-	var mu sync.Mutex
-	for i := start; i <= end; i = i + batchSize {
-		height := int64(i)
-		readGroup.Go(func() error {
-			currSlot.Swap(height)
-			heightEnd := height + int64(batchSize) - 1
-			if heightEnd > int64(end) {
-				heightEnd = int64(end)
-			}
-			blocks, err := client.GetBlocks(height, heightEnd, "geth")
-			if err != nil {
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("cannot read block range %d-%d: %w", height, heightEnd, err))
-				mu.Unlock()
-				logrus.WithFields(map[string]interface{}{
-					"message": err.Error(),
-					"start":   height,
-					"end":     heightEnd,
-				}).Error("cannot read block range")
-				return nil
-			}
-			for _, block := range blocks {
-				sink <- block
-			}
-			return nil
-		})
-	}
-	if err := readGroup.Wait(); err != nil {
-		panic(err)
-	}
-	for _, err := range errs {
-		logrus.Error(err.Error())
-	}
-	quit <- struct{}{}
-	close(sink)
-	if err := writeGroup.Wait(); err != nil {
-		panic(err)
-	}
-}
-
-func getTransformers(transformerFlag string, bt *db.Bigtable) ([]db.TransformFunc, bool, error) {
-	transforms := make([]db.TransformFunc, 0)
+	transforms := make([]func(blk *types.Eth1Block, cache *freecache.Cache) (*types.BulkMutations, *types.BulkMutations, error), 0)
 
 	logrus.Infof("transformerFlag: %v", transformerFlag)
 	transformerList := strings.Split(transformerFlag, ",")
 	if transformerFlag == "all" {
-		transformerList = []string{"TransformBlock", "TransformTx", "TransformBlobTx", "TransformItx", "TransformERC20", "TransformERC721", "TransformERC1155", "TransformWithdrawals", "TransformUncle", "TransformEnsNameRegistered", "TransformContract", "TransformConsolidationRequests", "TransformWithdrawalRequests"}
+		transformerList = []string{"TransformBlock", "TransformTx", "TransformBlobTx", "TransformItx", "TransformERC20", "TransformERC721", "TransformERC1155", "TransformWithdrawals", "TransformUncle", "TransformEnsNameRegistered", "TransformContract"}
 	} else if len(transformerList) == 0 {
 		utils.LogError(nil, "no transformer functions provided", 0)
-		return nil, false, fmt.Errorf("no transformer functions provided")
+		return
 	}
 	logrus.Infof("transformers: %v", transformerList)
-
 	importENSChanges := false
+	/**
+	* Add additional transformers you want to sync to this switch case
+	**/
 	for _, t := range transformerList {
 		switch t {
 		case "TransformBlock":
@@ -1800,35 +1621,10 @@ func getTransformers(transformerFlag string, bt *db.Bigtable) ([]db.TransformFun
 			importENSChanges = true
 		case "TransformContract":
 			transforms = append(transforms, bt.TransformContract)
-		case "TransformConsolidationRequests":
-			transforms = append(transforms, bt.TransformConsolidationRequests)
-		case "TransformWithdrawalRequests":
-			transforms = append(transforms, bt.TransformWithdrawalRequests)
 		default:
-			return nil, false, fmt.Errorf("invalid transformer flag %v", t)
+			utils.LogError(nil, "Invalid transformer flag %v", 0)
+			return
 		}
-	}
-	return transforms, importENSChanges, nil
-}
-
-func indexOldEth1Blocks(startBlock uint64, endBlock uint64, batchSize uint64, concurrency uint64, transformerFlag string, bt *db.Bigtable, client *rpc.ErigonClient) {
-	if endBlock > 0 && endBlock < startBlock {
-		utils.LogError(nil, fmt.Sprintf("endBlock [%v] < startBlock [%v]", endBlock, startBlock), 0)
-		return
-	}
-	if concurrency == 0 {
-		utils.LogError(nil, "concurrency must be greater than 0", 0)
-		return
-	}
-	if bt == nil {
-		utils.LogError(nil, "no bigtable provided", 0)
-		return
-	}
-
-	transforms, importENSChanges, err := getTransformers(transformerFlag, bt)
-	if err != nil {
-		utils.LogError(nil, err, 0)
-		return
 	}
 
 	cache := freecache.NewCache(100 * 1024 * 1024) // 100 MB limit
@@ -2301,50 +2097,4 @@ func askForConfirmation(q string) bool {
 		return true
 	}
 	return false
-}
-
-func validateFirebaseTokens() error {
-	// retrieve all userIds and tokens from the database
-
-	var users []struct {
-		ID    uint64 `db:"user_id"`
-		Token string `db:"notification_token"`
-	}
-
-	err := db.FrontendWriterDB.Select(&users, `select DISTINCT ON (user_id, notification_token) user_id, notification_token from users_devices where length(notification_token) > 20 and user_id = xxx;`)
-
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
-	// badge := 1
-	for _, user := range users {
-		// validate the token by trying to send a message to the user
-
-		notification := new(messaging.Notification)
-		notification.Title = "test"
-		notification.Body = "this is a test message"
-
-		message := new(messaging.Message)
-		message.Notification = notification
-		message.Token = user.Token
-
-		message.APNS = new(messaging.APNSConfig)
-		message.APNS.Payload = new(messaging.APNSPayload)
-		message.APNS.Payload.Aps = new(messaging.Aps)
-		message.APNS.Payload.Aps.Sound = "default"
-		// message.APNS.Payload.Aps.Badge = &badge
-		// message.APNS.Payload.Aps.AlertString = "test"
-
-		meassages := []*messaging.Message{
-			message,
-		}
-
-		err := notify.SendPushBatch(meassages, false)
-		if err != nil {
-			logrus.Fatal(err)
-		}
-	}
-
-	return nil
 }
