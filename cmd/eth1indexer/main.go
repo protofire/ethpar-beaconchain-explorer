@@ -35,7 +35,18 @@ import (
 	_ "net/http/pprof"
 )
 
+func initLogger(debug bool) {
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+}
+
 func main() {
+	debug := os.Getenv("LOG_LEVEL") == "debug"
+	initLogger(debug)
+
 	erigonEndpoint := flag.String("erigon", "", "Erigon archive node enpoint")
 	block := flag.Int64("block", 0, "Index a specific block")
 
@@ -493,6 +504,7 @@ func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) err
 	// get latest block from the node
 	latestNodeBlock, err := client.GetNativeClient().BlockByNumber(ctx, nil)
 	if err != nil {
+		logrus.Debugf("error getting latest node block: %w", err)
 		return err
 	}
 	latestNodeBlockNumber := latestNodeBlock.NumberU64()
@@ -504,6 +516,7 @@ func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) err
 	for i := latestNodeBlockNumber - uint64(depth); i <= latestNodeBlockNumber; i++ {
 		nodeBlock, err := client.GetNativeClient().HeaderByNumber(ctx, big.NewInt(int64(i)))
 		if err != nil {
+			logrus.Debugf("error getting block header for block %s: %w", i, err)
 			return err
 		}
 
