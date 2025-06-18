@@ -501,6 +501,12 @@ func UpdateTokenPrices(bt *db.Bigtable, client *rpc.ErigonClient, tokenListPath 
 
 func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) error {
 	ctx := context.Background()
+	var raw json.RawMessage
+	err := client.GetNativeClient().Client().CallContext(ctx, &raw, "eth_getBlockByNumber", "latest", true)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	logrus.Debugf("raw getBlockByNumber response: %s", string(raw))
 	// get latest block from the node
 	latestNodeBlock, err := client.GetNativeClient().BlockByNumber(ctx, nil)
 	if err != nil {
@@ -514,12 +520,6 @@ func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) err
 		depth = int(latestNodeBlockNumber)
 	}
 	for i := latestNodeBlockNumber - uint64(depth); i <= latestNodeBlockNumber; i++ {
-		var raw json.RawMessage
-		err := client.GetNativeClient().Client().CallContext(ctx, &raw, "eth_getBlockByNumber", "latest", true)
-		if err != nil {
-			logrus.Fatal(err)
-		}
-		logrus.Debugf("raw getBlockByNumber response: %s", string(raw))
 		nodeBlock, err := client.GetNativeClient().HeaderByNumber(ctx, big.NewInt(int64(i)))
 		if err != nil {
 			logrus.Debugf("error getting block header for block %s: %v", i, err)
