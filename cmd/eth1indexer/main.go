@@ -504,7 +504,7 @@ func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) err
 	// get latest block from the node
 	latestNodeBlock, err := client.GetNativeClient().BlockByNumber(ctx, nil)
 	if err != nil {
-		logrus.Debugf("error getting latest node block: %w", err)
+		logrus.Debugf("error getting latest node block: %v", err)
 		return err
 	}
 	latestNodeBlockNumber := latestNodeBlock.NumberU64()
@@ -514,9 +514,15 @@ func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) err
 		depth = int(latestNodeBlockNumber)
 	}
 	for i := latestNodeBlockNumber - uint64(depth); i <= latestNodeBlockNumber; i++ {
+		var raw json.RawMessage
+		err := client.GetNativeClient().Client().CallContext(ctx, &raw, "eth_getBlockByNumber", "latest", true)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		logrus.Debugf("raw getBlockByNumber response: %s", string(raw))
 		nodeBlock, err := client.GetNativeClient().HeaderByNumber(ctx, big.NewInt(int64(i)))
 		if err != nil {
-			logrus.Debugf("error getting block header for block %s: %w", i, err)
+			logrus.Debugf("error getting block header for block %s: %v", i, err)
 			return err
 		}
 
