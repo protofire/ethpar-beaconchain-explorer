@@ -502,7 +502,8 @@ func UpdateTokenPrices(bt *db.Bigtable, client *rpc.ErigonClient, tokenListPath 
 func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) error {
 	ctx := context.Background()
 	var raw json.RawMessage
-	err := client.GetNativeClient().Client().CallContext(ctx, &raw, "eth_getBlockByNumber", "latest", true)
+	latest, _ := client.GetNativeClient().BlockNumber(ctx)
+	err := client.GetNativeClient().Client().CallContext(ctx, &raw, "eth_getBlockByNumber", latest, true)
 	if err != nil {
 		logrus.Fatal(err)
 	}
