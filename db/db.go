@@ -1838,7 +1838,7 @@ func GetQueueAheadOfValidator(validatorIndex uint64) (uint64, error) {
 	return res, err
 }
 
-func GetValidatorNames(validators []uint64) (map[uint64]string, error) {
+func GetValidatorNames(validators []int64) (map[int64]string, error) {
 	logger.Infof("getting validator names for %d validators", len(validators))
 	rows, err := ReaderDb.Query(`
 		SELECT validatorindex, validator_names.name 
@@ -1851,10 +1851,10 @@ func GetValidatorNames(validators []uint64) (map[uint64]string, error) {
 	}
 	defer rows.Close()
 
-	validatorIndexToNameMap := make(map[uint64]string, 30000)
+	validatorIndexToNameMap := make(map[int64]string, 30000)
 
 	for rows.Next() {
-		var index uint64
+		var index int64
 		var name string
 
 		err := rows.Scan(&index, &name)
@@ -3145,6 +3145,28 @@ func GetValidatorIncomePerformance(validators []uint64, incomePerformance *types
 			COALESCE(SUM(mev_performance_total), 0)     AS el_performance_wei_total
 		FROM validator_performance 
 		WHERE validatorindex = ANY($1)`, validatorsPQArray)
+}
+
+func GetTotalValidatorDeposits(validators []uint64, totalDeposits *uint64) error {
+	validatorsPQArray := pq.Array(validators)
+	return ReaderDb.Get(totalDeposits, `
+		SELECT 
+			COALESCE(SUM(amount), 0) 
+		FROM blocks_deposits d
+		INNER JOIN blocks b ON b.blockroot = d.block_root AND b.status = '1' 
+		WHERE publickey IN (SELECT pubkey FROM validators WHERE validatorindex = ANY($1))
+	`, validatorsPQArray)
+}
+
+func GetValidatorDepositsForSlots(validators []uint64, fromSlot uint64, toSlot uint64, deposits *uint64) error {
+	validatorsPQArray := pq.Array(validators)
+	return ReaderDb.Get(deposits, `
+		SELECT 
+			COALESCE(SUM(amount), 0) 
+		FROM blocks_deposits d
+		INNER JOIN blocks b ON b.blockroot = d.block_root AND b.status = '1' and b.slot >= $2 and b.slot <= $3
+		WHERE publickey IN (SELECT pubkey FROM validators WHERE validatorindex = ANY($1))
+	`, validatorsPQArray, fromSlot, toSlot)
 }
 
 type SlotRange struct {

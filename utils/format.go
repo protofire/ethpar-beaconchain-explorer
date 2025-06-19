@@ -33,10 +33,7 @@ import (
 
 const CalculatingHint = `Calculating…`
 
-func BeginningOfSetWithdrawalCredentials(version int) string {
-	hexVersion := fmt.Sprintf("%02x", version)
-	return fmt.Sprintf("%s0000000000000000000000", hexVersion)
-}
+const BeginningOfSetWithdrawalCredentials = "010000000000000000000000"
 
 func FormatMessageToHtml(message string) template.HTML {
 	message = fmt.Sprint(strings.Replace(message, "Error: ", "", 1))
@@ -778,7 +775,7 @@ func FormatWithdawalCredentials(hash []byte, addCopyButton bool) template.HTML {
 }
 
 func FormatAddressToWithdrawalCredentials(address []byte, addCopyButton bool, version int) template.HTML {
-	credentials, err := hex.DecodeString(BeginningOfSetWithdrawalCredentials(version))
+	credentials, err := hex.DecodeString(BeginningOfSetWithdrawalCredentials)
 	if err != nil {
 		return "INVALID CREDENTIALS"
 	}
@@ -1162,12 +1159,12 @@ func FormatSlashedValidatorInt64(validator int64) template.HTML {
 }
 
 // FormatSlashedValidator will return html formatted text for a slashed validator
-func FormatSlashedValidator(validator uint64) template.HTML {
+func FormatSlashedValidator(validator int64) template.HTML {
 	return template.HTML(fmt.Sprintf("<i class=\"fas fa-user-slash text-danger mr-2\"></i><a href=\"/validator/%v\">%v</a>", validator, validator))
 }
 
 // FormatSlashedValidator will return html formatted text for a slashed validator
-func FormatSlashedValidatorWithName(validator uint64, name string) template.HTML {
+func FormatSlashedValidatorWithName(validator int64, name string) template.HTML {
 	if name != "" {
 		return template.HTML(fmt.Sprintf("<i class=\"fas fa-user-slash text-danger mr-2\"></i><a href=\"/validator/%v\">%v (<span class=\"text-truncate\">"+html.EscapeString(name)+"</span>)</a>", validator, validator))
 	} else {
@@ -1176,7 +1173,7 @@ func FormatSlashedValidatorWithName(validator uint64, name string) template.HTML
 }
 
 // FormatSlashedValidators will return html formatted text for slashed validators
-func FormatSlashedValidators(validators []uint64) template.HTML {
+func FormatSlashedValidators(validators []int64) template.HTML {
 	vals := make([]string, 0, len(validators))
 	for _, v := range validators {
 		vals = append(vals, fmt.Sprintf("<i class=\"fas fa-user-slash text-danger mr-2\"></i><a href=\"/validator/%v\">%v</a>", v, v))
@@ -1185,7 +1182,7 @@ func FormatSlashedValidators(validators []uint64) template.HTML {
 }
 
 // FormatSlashedValidators will return html formatted text for slashed validators
-func FormatSlashedValidatorsWithName(validators []uint64, nameMap map[uint64]string) template.HTML {
+func FormatSlashedValidatorsWithName(validators []int64, nameMap map[int64]string) template.HTML {
 	vals := make([]string, 0, len(validators))
 	for _, v := range validators {
 		name := nameMap[v]

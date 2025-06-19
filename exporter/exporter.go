@@ -21,9 +21,6 @@ func Start(client consensus.ConsensusClient) {
 	go checkSubscriptions()
 	go syncCommitteesExporter(client)
 	go syncCommitteesCountExporter()
-	if utils.Config.Indexer.PendingQueueIndexer.Enabled {
-		go NewPendingQueueIndexer(client).Start()
-	}
 	if utils.Config.SSVExporter.Enabled {
 		go ssvExporter()
 	}

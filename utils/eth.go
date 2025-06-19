@@ -150,14 +150,6 @@ func GetBalanceChurnLimit(totalActiveBalance uint64) uint64 {
 	return balanceChurnLimit - (balanceChurnLimit % Config.ClConfig.EffectiveBalanceIncrement)
 }
 
-func GetActivationExitChurnLimit(totalActiveBalance uint64) uint64 {
-	balanceChurnLimit := GetBalanceChurnLimit(totalActiveBalance)
-	if balanceChurnLimit > Config.ClConfig.MaxPerEpochActivationExitChurnLimit {
-		return Config.ClConfig.MaxPerEpochActivationExitChurnLimit
-	}
-	return balanceChurnLimit
-}
-
 func ElectraHasHappened(epoch uint64) bool {
 	return epoch >= Config.Chain.ClConfig.ElectraForkEpoch
 }

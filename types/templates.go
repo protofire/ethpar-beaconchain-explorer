@@ -231,7 +231,7 @@ type IndexPageDataBlocks struct {
 	Epoch                uint64        `json:"epoch"`
 	Slot                 uint64        `json:"slot"`
 	Ts                   time.Time     `json:"ts"`
-	Proposer             uint64        `db:"proposer" json:"proposer"`
+	Proposer             int64         `db:"proposer" json:"proposer"`
 	ProposerFormatted    template.HTML `json:"proposer_formatted"`
 	BlockRoot            []byte        `db:"blockroot" json:"block_root"`
 	BlockRootFormatted   string        `json:"block_root_formatted"`
@@ -266,7 +266,7 @@ type BlocksPageDataBlocks struct {
 	Epoch                uint64        `json:"epoch"`
 	Slot                 uint64        `json:"slot"`
 	Ts                   time.Time     `json:"ts"`
-	Proposer             uint64        `db:"proposer" json:"proposer"`
+	Proposer             int64         `db:"proposer" json:"proposer"`
 	ProposerFormatted    template.HTML `json:"proposer_formatted"`
 	BlockRoot            []byte        `db:"blockroot" json:"block_root"`
 	BlockRootFormatted   string        `json:"block_root_formatted"`
@@ -580,11 +580,11 @@ type VisPageData struct {
 
 // VisChartData is a struct to hold the visualizations chart data
 type VisChartData struct {
-	Slot       uint64 `db:"slot" json:"-"`
-	BlockRoot  []byte `db:"blockroot" json:"-"`
-	ParentRoot []byte `db:"parentroot" json:"-"`
+	Slot       uint64   `db:"slot" json:"-"`
+	BlockRoot  []byte   `db:"blockroot" json:"-"`
+	ParentRoot []byte   `db:"parentroot" json:"-"`
 
-	Proposer uint64 `db:"proposer" json:"proposer"`
+	Proposer   int64    `db:"proposer" json:"proposer"`
 
 	Number     uint64   `json:"number"`
 	Timestamp  uint64   `json:"timestamp"`
@@ -623,7 +623,7 @@ type BlockPageData struct {
 	Ts                     time.Time
 	NextSlot               uint64
 	PreviousSlot           uint64
-	Proposer               uint64  `db:"proposer"`
+	Proposer               int64   `db:"proposer"`
 	BlockRoot              []byte  `db:"blockroot"`
 	ParentRoot             []byte  `db:"parentroot"`
 	StateRoot              []byte  `db:"stateroot"`
@@ -1154,7 +1154,7 @@ type ValidatorEarnings struct {
 type ValidatorAttestationSlashing struct {
 	Epoch                  uint64        `db:"epoch" json:"epoch,omitempty"`
 	Slot                   uint64        `db:"slot" json:"slot,omitempty"`
-	Proposer               uint64        `db:"proposer" json:"proposer,omitempty"`
+	Proposer               int64         `db:"proposer" json:"proposer,omitempty"`
 	Attestestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
 	Attestestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
 }
@@ -1162,8 +1162,8 @@ type ValidatorAttestationSlashing struct {
 type ValidatorProposerSlashing struct {
 	Epoch         uint64 `db:"epoch" json:"epoch,omitempty"`
 	Slot          uint64 `db:"slot" json:"slot,omitempty"`
-	Proposer      uint64 `db:"proposer" json:"proposer,omitempty"`
-	ProposerIndex uint64 `db:"proposerindex" json:"proposer_index,omitempty"`
+	Proposer      int64  `db:"proposer" json:"proposer,omitempty"`
+	ProposerIndex int64  `db:"proposerindex" json:"proposer_index,omitempty"`
 }
 
 type ValidatorHistory struct {
@@ -1182,8 +1182,8 @@ type ValidatorHistory struct {
 type ValidatorSlashing struct {
 	Epoch                  uint64        `db:"epoch" json:"epoch,omitempty"`
 	Slot                   uint64        `db:"slot" json:"slot,omitempty"`
-	Proposer               uint64        `db:"proposer" json:"proposer,omitempty"`
-	SlashedValidator       *uint64       `db:"slashedvalidator" json:"slashed_validator,omitempty"`
+	Proposer               int64         `db:"proposer" json:"proposer,omitempty"`
+	SlashedValidator       *int64       `db:"slashedvalidator" json:"slashed_validator,omitempty"`
 	Attestestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
 	Attestestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
 	Type                   string        `db:"type" json:"type"`
@@ -2053,7 +2053,7 @@ type RelaysRespBlock struct {
 	Slot                 uint64           `db:"slot"`
 	Builder              []byte           `db:"builder_pubkey"`
 	ProposerFeeRecipient []byte           `db:"proposer_fee_recipient"`
-	Proposer             uint64           `db:"proposer"`
+	Proposer             int64            `db:"proposer"`
 	BlockExtraData       string           `db:"block_extra_data"`
 }
 
