@@ -371,9 +371,8 @@ func getNextWithdrawalRow(queryValidators []uint64, currency string) ([][]interf
 			continue
 		}
 
-		maxEB := utils.GetMaxEffectiveBalanceByWithdrawalCredentials(v.WithdrawalCredentials)
 		if (balance[0].Balance > 0 && v.WithdrawableEpoch <= epoch) ||
-			(balance[0].EffectiveBalance == maxEB && balance[0].Balance > maxEB) {
+			(balance[0].EffectiveBalance == utils.Config.Chain.ClConfig.MaxEffectiveBalance && balance[0].Balance > utils.Config.Chain.ClConfig.MaxEffectiveBalance) {
 			// this validator is eligible for withdrawal, check if it is the next one
 			if nextValidator == nil || v.Index > *stats.LatestValidatorWithdrawalIndex {
 				nextValidator = v
@@ -421,17 +420,16 @@ func getNextWithdrawalRow(queryValidators []uint64, currency string) ([][]interf
 		withdrawalCredentialsTemplate = `<span class="text-muted">N/A</span>`
 	}
 
-	maxEB := utils.GetMaxEffectiveBalanceByWithdrawalCredentials(nextValidator.WithdrawalCredentials)
 	var withdrawalAmount uint64
 	if nextValidator.WithdrawableEpoch <= epoch {
 		// full withdrawal
 		withdrawalAmount = nextValidator.Balance
 	} else {
 		// partial withdrawal
-		withdrawalAmount = nextValidator.Balance - maxEB
+		withdrawalAmount = nextValidator.Balance - utils.Config.Chain.ClConfig.MaxEffectiveBalance
 	}
 
-	if lastWithdrawnEpoch == epoch || nextValidator.Balance < maxEB {
+	if lastWithdrawnEpoch == epoch || nextValidator.Balance < utils.Config.Chain.ClConfig.MaxEffectiveBalance {
 		withdrawalAmount = 0
 	}
 
@@ -440,7 +438,7 @@ func getNextWithdrawalRow(queryValidators []uint64, currency string) ([][]interf
 		utils.FormatValidator(nextValidator.Index),
 		template.HTML(fmt.Sprintf(`<span class="text-muted">~ %s</span>`, utils.FormatEpoch(uint64(utils.TimeToEpoch(timeToWithdrawal))))),
 		template.HTML(fmt.Sprintf(`<span class="text-muted">~ %s</span>`, utils.FormatBlockSlot(utils.TimeToSlot(uint64(timeToWithdrawal.Unix()))))),
-		template.HTML(fmt.Sprintf(`<span class="text-muted"><span data-toggle="tooltip" title="Due to uncertainty in execution-triggered withdrawals, your withdrawal may take up to twice the estimated time to process."><i class="far ml-1 fa-question-circle" style="margin-left: 0px !important;"></i></span> ~ %s</span>`, utils.FormatTimestamp(timeToWithdrawal.Unix()))),
+		template.HTML(fmt.Sprintf(`<span class="">~ %s</span>`, utils.FormatTimestamp(timeToWithdrawal.Unix()))),
 		withdrawalCredentialsTemplate,
 		template.HTML(fmt.Sprintf(`<span class="text-muted"><span data-toggle="tooltip" title="If the withdrawal were to be processed at this very moment, this amount would be withdrawn"><i class="far ml-1 fa-question-circle" style="margin-left: 0px !important;"></i></span> %s</span>`, utils.FormatClCurrency(withdrawalAmount, currency, 6, true, false, false, true))),
 	})
@@ -683,7 +681,7 @@ func DashboardDataWithdrawals(w http.ResponseWriter, r *http.Request) {
 			utils.FormatEpoch(utils.EpochOfSlot(w.Slot)),
 			utils.FormatBlockSlot(w.Slot),
 			utils.FormatTimestamp(utils.SlotToTime(w.Slot).Unix()),
-			utils.FormatWithdrawalAddress(w.Address, nil, "", false, false, true),
+			utils.FormatAddress(w.Address, nil, "", false, false, true),
 			utils.FormatClCurrency(w.Amount, reqCurrency, 6, true, false, false, true),
 		})
 	}

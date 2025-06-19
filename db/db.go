@@ -24,13 +24,13 @@ import (
 
 	_ "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 	prysm_deposit "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
 	"github.com/sirupsen/logrus"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 //go:embed migrations/*.sql
@@ -656,45 +656,11 @@ func GetValidatorDeposits(publicKey []byte) (*types.ValidatorDeposits, error) {
 			blocks_deposits.signature
 		FROM blocks_deposits
 		INNER JOIN blocks ON (blocks_deposits.block_root = blocks.blockroot AND blocks.status = '1') OR (blocks_deposits.block_slot = 0 AND blocks_deposits.block_slot = blocks.slot AND blocks_deposits.publickey = $1)
-		WHERE blocks_deposits.publickey = $1
-		UNION ALL
-		SELECT
-			blocks_deposit_requests_v2.slot_processed as block_slot,
-			blocks_deposit_requests_v2.index_processed as request_index,
-			blocks_deposit_requests_v2.block_processed_root as block_root,
-			null,
-			blocks_deposit_requests_v2.pubkey,
-			blocks_deposit_requests_v2.withdrawal_credentials,
-			blocks_deposit_requests_v2.amount,
-			blocks_deposit_requests_v2.signature
-		FROM blocks_deposit_requests_v2
-		INNER JOIN blocks ON (blocks_deposit_requests_v2.block_processed_root = blocks.blockroot AND blocks.status = '1') OR (blocks_deposit_requests_v2.slot_processed = 0 AND blocks_deposit_requests_v2.slot_processed = blocks.slot AND blocks_deposit_requests_v2.pubkey = $1)
-		WHERE blocks_deposit_requests_v2.pubkey = $1
-		AND blocks_deposit_requests_v2.status = 'completed'
-		ORDER BY block_slot DESC, block_index DESC
-		`, publicKey)
+		WHERE blocks_deposits.publickey = $1`, publicKey)
 	if err != nil {
 		return nil, err
 	}
-
-	pendingDeposits, err := GetPendingDeposits(publicKey, 10)
-	if err == nil {
-		deposits.PendingEth2Deposits = make([]types.Eth2Deposit, 0, len(pendingDeposits))
-		for _, deposit := range pendingDeposits {
-			deposits.PendingEth2Deposits = append(deposits.PendingEth2Deposits, types.Eth2Deposit{
-				BlockSlot:             deposit.EstClearEpoch * utils.Config.ClConfig.SlotsPerEpoch,
-				BlockIndex:            0,
-				BlockRoot:             nil,
-				Proof:                 nil,
-				Publickey:             publicKey,
-				Withdrawalcredentials: deposit.WithdrawalCredentials,
-				Amount:                deposit.Amount,
-				Signature:             deposit.Signature,
-			})
-		}
-	}
-
-	return utils.FixELDepositValidity(deposits), nil
+	return deposits, nil
 }
 
 // UpdateCanonicalBlocks will update the blocks for an epoch range in the database
@@ -1592,8 +1558,8 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 			}
 			rows, _ := res.RowsAffected()
 			logger.WithFields(logrus.Fields{
-				"slot":        b.Slot,
-				"blockRoot":   fmt.Sprintf("%x", b.BlockRoot),
+				"slot":         b.Slot,
+				"blockRoot":    fmt.Sprintf("%x", b.BlockRoot),
 				"rowsInserted": rows,
 			}).Info("stmtBlock insert")
 			blockLog.WithField("duration", time.Since(t)).Tracef("stmtBlock")
