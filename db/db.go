@@ -1838,7 +1838,7 @@ func GetQueueAheadOfValidator(validatorIndex uint64) (uint64, error) {
 	return res, err
 }
 
-func GetValidatorNames(validators []uint64) (map[uint64]string, error) {
+func GetValidatorNames(validators []int64) (map[int64]string, error) {
 	logger.Infof("getting validator names for %d validators", len(validators))
 	rows, err := ReaderDb.Query(`
 		SELECT validatorindex, validator_names.name 
@@ -1851,10 +1851,10 @@ func GetValidatorNames(validators []uint64) (map[uint64]string, error) {
 	}
 	defer rows.Close()
 
-	validatorIndexToNameMap := make(map[uint64]string, 30000)
+	validatorIndexToNameMap := make(map[int64]string, 30000)
 
 	for rows.Next() {
-		var index uint64
+		var index int64
 		var name string
 
 		err := rows.Scan(&index, &name)
