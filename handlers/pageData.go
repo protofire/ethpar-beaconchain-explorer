@@ -387,7 +387,7 @@ func createMenuItems(active string, isMain bool) []types.MainMenuItem {
 						},
 						{
 							Label: "API Docs",
-							Path:  "/api/v1/docs",
+							Path:  "/api/v1/docs/index.html",
 							Icon:  "fa-book-reader",
 						},
 						{
@@ -414,6 +414,12 @@ func createMenuItems(active string, isMain bool) []types.MainMenuItem {
 				}, {
 					Label: "Services",
 					Links: []types.NavigationLink{
+						{
+							Label:         "Eversteel",
+							Path:          "https://eversteel.io/",
+							CustomIcon:    "eversteel_logo_svg",
+							IsHighlighted: true,
+						},
 						{
 							Label: "Knowledge Base",
 							Path:  "https://kb.beaconcha.in",
@@ -603,7 +609,7 @@ func createMenuItemsGnosis(active string, isMain bool) []types.MainMenuItem {
 						},
 						{
 							Label: "API Docs",
-							Path:  "/api/v1/docs",
+							Path:  "/api/v1/docs/index.html",
 							Icon:  "fa-book-reader",
 						},
 						{
@@ -621,6 +627,12 @@ func createMenuItemsGnosis(active string, isMain bool) []types.MainMenuItem {
 				{
 					Label: "Services",
 					Links: []types.NavigationLink{
+						{
+							Label:         "Eversteel",
+							Path:          "https://eversteel.io/",
+							CustomIcon:    "eversteel_logo_svg",
+							IsHighlighted: true,
+						},
 						{
 							Label: "Knowledge Base",
 							Path:  "https://kb.beaconcha.in",

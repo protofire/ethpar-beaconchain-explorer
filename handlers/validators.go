@@ -17,6 +17,11 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 )
 
+type states struct {
+	Name  string `db:"statename"`
+	Count uint64 `db:"statecount"`
+}
+
 // Validators returns the validators using a go template
 func Validators(w http.ResponseWriter, r *http.Request) {
 	templateFiles := append(layoutTemplateFiles, "validators.html")
@@ -26,36 +31,38 @@ func Validators(w http.ResponseWriter, r *http.Request) {
 
 	validatorsPageData := types.ValidatorsPageData{}
 
-	var currentStateCounts []*types.ValidatorStateCountRow
-	err := db.ReaderDb.Select(&currentStateCounts, "SELECT status, validator_count FROM validators_status_counts")
+	var currentStateCounts []*states
+
+	qry := "SELECT status AS statename, COUNT(*) AS statecount FROM validators GROUP BY status"
+	err := db.ReaderDb.Select(&currentStateCounts, qry)
 	if err != nil {
-		utils.LogError(err, "error retrieving validators state counts", 0, nil)
+		utils.LogError(err, "error retrieving validators data", 0)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	for _, status := range currentStateCounts {
-		switch status.Name {
+	for _, state := range currentStateCounts {
+		switch state.Name {
 		case "pending":
-			validatorsPageData.PendingCount = status.Count
+			validatorsPageData.PendingCount = state.Count
 		case "active_online":
-			validatorsPageData.ActiveOnlineCount = status.Count
+			validatorsPageData.ActiveOnlineCount = state.Count
 		case "active_offline":
-			validatorsPageData.ActiveOfflineCount = status.Count
+			validatorsPageData.ActiveOfflineCount = state.Count
 		case "slashing_online":
-			validatorsPageData.SlashingOnlineCount = status.Count
+			validatorsPageData.SlashingOnlineCount = state.Count
 		case "slashing_offline":
-			validatorsPageData.SlashingOfflineCount = status.Count
+			validatorsPageData.SlashingOfflineCount = state.Count
 		case "slashed":
-			validatorsPageData.Slashed = status.Count
+			validatorsPageData.Slashed = state.Count
 		case "exiting_online":
-			validatorsPageData.ExitingOnlineCount = status.Count
+			validatorsPageData.ExitingOnlineCount = state.Count
 		case "exiting_offline":
-			validatorsPageData.ExitingOfflineCount = status.Count
+			validatorsPageData.ExitingOfflineCount = state.Count
 		case "exited":
-			validatorsPageData.VoluntaryExitsCount = status.Count
+			validatorsPageData.VoluntaryExitsCount = state.Count
 		case "deposited":
-			validatorsPageData.DepositedCount = status.Count
+			validatorsPageData.DepositedCount = state.Count
 		}
 	}
 
@@ -358,7 +365,7 @@ func ValidatorsData(w http.ResponseWriter, r *http.Request) {
 	}
 	countFiltered := uint64(0)
 	if dataQuery.StateFilter != "" {
-		qry = fmt.Sprintf(`SELECT SUM(validator_count) FROM validators_status_counts AS validators %s`, dataQuery.StateFilter)
+		qry = fmt.Sprintf(`SELECT COUNT(*) FROM validators %s`, dataQuery.StateFilter)
 		err = db.ReaderDb.Get(&countFiltered, qry)
 		if err != nil {
 			utils.LogError(err, "error retrieving validators total count", 0, errFields)
