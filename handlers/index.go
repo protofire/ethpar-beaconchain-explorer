@@ -97,19 +97,30 @@ func getSlotVizData(currentEpoch uint64) *types.SlotVizPageData {
 }
 
 func calculateChurn(page *types.IndexPageData) {
-	limit := services.GetLatestStats().ValidatorActivationChurnLimit
-	pending_validators := services.GetLatestStats().PendingValidatorCount
-	// calculate daily new validators
-	limit_per_day := *limit * uint64(225)
-	// calculate how long it will take for a new deposit to be processed
-	time := float64(*pending_validators) / float64((limit_per_day))
+	stats := services.GetLatestStats()
+	if stats == nil || stats.ValidatorActivationChurnLimit == nil || stats.PendingValidatorCount == nil {
+		page.NewDepositProcessAfter = "unknown"
+		page.ValidatorsPerEpoch = 0
+		page.ValidatorsPerDay = 0
+		return
+	}
+
+	limit := *stats.ValidatorActivationChurnLimit
+	pendingValidators := *stats.PendingValidatorCount
+
+	// Calculate daily new validators
+	limitPerDay := limit * 225
+
+	// Calculate how long it will take for a new deposit to be processed
+	timeDays := float64(pendingValidators) / float64(limitPerDay)
 	const hoursPerDay = 24
-	wholeDays, fractionalDays := math.Modf(time)
+	wholeDays, fractionalDays := math.Modf(timeDays)
 
 	hours := int(fractionalDays * hoursPerDay)
 
-	time_as_days := fmt.Sprintf("%d days and %d hours", int(wholeDays), hours)
-	page.NewDepositProcessAfter = time_as_days
-	page.ValidatorsPerEpoch = *limit
-	page.ValidatorsPerDay = limit_per_day
+	timeAsDays := fmt.Sprintf("%d days and %d hours", int(wholeDays), hours)
+
+	page.NewDepositProcessAfter = timeAsDays
+	page.ValidatorsPerEpoch = limit
+	page.ValidatorsPerDay = limitPerDay
 }
