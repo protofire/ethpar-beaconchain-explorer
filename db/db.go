@@ -3147,6 +3147,28 @@ func GetValidatorIncomePerformance(validators []uint64, incomePerformance *types
 		WHERE validatorindex = ANY($1)`, validatorsPQArray)
 }
 
+func GetTotalValidatorDeposits(validators []uint64, totalDeposits *uint64) error {
+	validatorsPQArray := pq.Array(validators)
+	return ReaderDb.Get(totalDeposits, `
+		SELECT 
+			COALESCE(SUM(amount), 0) 
+		FROM blocks_deposits d
+		INNER JOIN blocks b ON b.blockroot = d.block_root AND b.status = '1' 
+		WHERE publickey IN (SELECT pubkey FROM validators WHERE validatorindex = ANY($1))
+	`, validatorsPQArray)
+}
+
+func GetValidatorDepositsForSlots(validators []uint64, fromSlot uint64, toSlot uint64, deposits *uint64) error {
+	validatorsPQArray := pq.Array(validators)
+	return ReaderDb.Get(deposits, `
+		SELECT 
+			COALESCE(SUM(amount), 0) 
+		FROM blocks_deposits d
+		INNER JOIN blocks b ON b.blockroot = d.block_root AND b.status = '1' and b.slot >= $2 and b.slot <= $3
+		WHERE publickey IN (SELECT pubkey FROM validators WHERE validatorindex = ANY($1))
+	`, validatorsPQArray, fromSlot, toSlot)
+}
+
 type SlotRange struct {
 	StartSlot uint64
 	EndSlot   uint64

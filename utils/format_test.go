@@ -31,7 +31,7 @@ func TestBeginningOfSetWithdrawalCredentials(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			v := BeginningOfSetWithdrawalCredentials(tt.version)
+			v := BeginningOfSetWithdrawalCredentials
 			if v != tt.expected {
 				t.Errorf("wrong beginning of set withdrawal credentials for version %v: %v expected %v", tt.version, v, tt.expected)
 			}

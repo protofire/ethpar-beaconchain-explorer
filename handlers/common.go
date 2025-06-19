@@ -63,7 +63,6 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 	totalBalance := uint64(0)
 
 	g := errgroup.Group{}
-	incomeForApr := types.ValidatorIncomePerformance{}
 	g.Go(func() error {
 		latestBalances, err := db.BigtableClient.GetValidatorBalanceHistory(validators, latestFinalizedEpoch, latestFinalizedEpoch)
 		if err != nil {
@@ -84,18 +83,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 
 			totalBalance += balance[0].Balance
 		}
-
-		// get performance for all validators with an effective balance, used for apr
-		// If we would use ${income} for APR, validators that have exited would be included in the performance but
-		// not on the divisor side as the effective balance is now zero, which would result in a higher/wrong APR.
-		// Hence we ignore exited validators in the APR calculation
-		indicesWithBalances := make([]uint64, 0)
-		for index := range balancesMap {
-			if balancesMap[index].EffectiveBalance > 0 {
-				indicesWithBalances = append(indicesWithBalances, index)
-			}
-		}
-		return db.GetValidatorIncomePerformance(indicesWithBalances, &incomeForApr)
+		return nil
 	})
 
 	income := types.ValidatorIncomePerformance{}
@@ -105,14 +93,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 
 	var totalDeposits uint64
 	g.Go(func() error {
-		deposits, err := db.GetValidatorDepositsAndIncomingConsolidations(nil, validators)
-		if err != nil {
-			return err
-		}
-		for _, deposit := range deposits {
-			totalDeposits += deposit.DepositsAmount
-		}
-		return nil
+		return db.GetTotalValidatorDeposits(validators, &totalDeposits)
 	})
 
 	var firstActivationEpoch uint64
@@ -135,22 +116,11 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 				return err
 			}
 		}
-		deposits, err := db.GetValidatorDepositsAndIncomingConsolidations(&db.SlotRange{StartSlot: firstSlot, EndSlot: lastSlot}, validators)
+		err := db.GetValidatorDepositsForSlots(validators, firstSlot, lastSlot, &lastDeposits)
 		if err != nil {
 			return err
 		}
-		for _, deposit := range deposits {
-			lastDeposits += deposit.DepositsAmount
-		}
-
-		withdrawals, err := db.GetValidatorWithdrawalsAndOutgoingConsolidations(&db.SlotRange{StartSlot: firstSlot, EndSlot: lastSlot}, validators)
-		if err != nil {
-			return err
-		}
-		for _, withdrawal := range withdrawals {
-			lastWithdrawals += withdrawal.WithdrawalsAmount
-		}
-		return nil
+		return db.GetValidatorWithdrawalsForSlots(validators, firstSlot, lastSlot, &lastWithdrawals)
 	})
 
 	proposals := []types.ValidatorProposalInfo{}
@@ -165,19 +135,11 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 
 	clElPrice := price.GetPrice(utils.Config.Frontend.ClCurrency, utils.Config.Frontend.ElCurrency)
 
-	totalEB := decimal.NewFromInt(0)
-	for _, v := range balancesMap {
-		totalEB = totalEB.Add(decimal.NewFromInt(int64(v.EffectiveBalance)))
-	}
-	// convert totalEB to el currency needed for el apr (fe gnosis)
-	totalEBInEl := totalEB.Mul(decimal.NewFromFloat(clElPrice))
-
-	if totalEB.IsZero() {
-		totalEB = decimal.NewFromInt(math.MaxInt64) // if all validators have exited, make all aprs zero by dividing by max int
-		totalEBInEl = decimal.NewFromInt(math.MaxInt64)
+	if totalDeposits == 0 {
+		totalDeposits = utils.Config.Chain.ClConfig.MaxEffectiveBalance * uint64(len(validators))
 	}
 
-	clApr7d := incomeForApr.ClIncomeWei7d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(totalEB, 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(7)).InexactFloat64()
+	clApr7d := income.ClIncomeWei7d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(decimal.NewFromInt(int64(totalDeposits)), 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(7)).InexactFloat64()
 	if clApr7d < float64(-1) {
 		clApr7d = float64(-1)
 	}
@@ -185,7 +147,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 		clApr7d = float64(0)
 	}
 
-	elApr7d := incomeForApr.ElIncomeWei7d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(totalEBInEl, 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(7)).InexactFloat64()
+	elApr7d := income.ElIncomeWei7d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(decimal.NewFromInt(int64(totalDeposits)), 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(7)).InexactFloat64()
 	if elApr7d < float64(-1) {
 		elApr7d = float64(-1)
 	}
@@ -193,7 +155,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 		elApr7d = float64(0)
 	}
 
-	clApr31d := incomeForApr.ClIncomeWei31d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(totalEB, 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(31)).InexactFloat64()
+	clApr31d := income.ClIncomeWei31d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(decimal.NewFromInt(int64(totalDeposits)), 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(31)).InexactFloat64()
 	if clApr31d < float64(-1) {
 		clApr31d = float64(-1)
 	}
@@ -201,7 +163,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 		clApr31d = float64(0)
 	}
 
-	elApr31d := incomeForApr.ElIncomeWei31d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(totalEBInEl, 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(31)).InexactFloat64()
+	elApr31d := income.ElIncomeWei31d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(decimal.NewFromInt(int64(totalDeposits)), 18).Mul(decimal.NewFromInt(365)).Div(decimal.NewFromInt(31)).InexactFloat64()
 	if elApr31d < float64(-1) {
 		elApr31d = float64(-1)
 	}
@@ -209,7 +171,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 		elApr31d = float64(0)
 	}
 
-	clApr365d := incomeForApr.ClIncomeWei365d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(totalEB, 18).InexactFloat64()
+	clApr365d := income.ClIncomeWei365d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(decimal.NewFromInt(int64(totalDeposits)), 18).InexactFloat64()
 	if clApr365d < float64(-1) {
 		clApr365d = float64(-1)
 	}
@@ -217,7 +179,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 		clApr365d = float64(0)
 	}
 
-	elApr365d := incomeForApr.ElIncomeWei365d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(totalEBInEl, 18).InexactFloat64()
+	elApr365d := income.ElIncomeWei365d.DivRound(decimal.NewFromInt(1e9), 18).DivRound(decimal.NewFromInt(int64(totalDeposits)), 18).InexactFloat64()
 	if elApr365d < float64(-1) {
 		elApr365d = float64(-1)
 	}
@@ -267,9 +229,8 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 		}
 	}
 
-	ebEth := totalEB.DivRound(decimal.NewFromInt(1e9), 0).BigInt().Uint64()
-	validatorProposalData.ProposalLuck, _ = getProposalLuck(slots, ebEth, firstActivationEpoch)
-	avgSlotInterval := uint64(getAvgSlotInterval(ebEth))
+	validatorProposalData.ProposalLuck, _ = getProposalLuck(slots, len(validators), firstActivationEpoch)
+	avgSlotInterval := uint64(getAvgSlotInterval(len(validators)))
 	avgSlotIntervalAsDuration := time.Duration(utils.Config.Chain.ClConfig.SecondsPerSlot*avgSlotInterval) * time.Second
 	validatorProposalData.AvgSlotInterval = &avgSlotIntervalAsDuration
 	if len(slots) > 0 {
@@ -378,15 +339,15 @@ const year = utils.Year
 // given the blocks proposed by the validators and the number of validators
 //
 // precondition: slots is sorted by ascending block number
-func getProposalLuck(slots []uint64, validatorEbEth uint64, fromEpoch uint64) (float64, time.Duration) {
+func getProposalLuck(slots []uint64, validatorsCount int, fromEpoch uint64) (float64, time.Duration) {
 	// Return 0 if there are no proposed blocks or no validators
-	if len(slots) == 0 || validatorEbEth == 0 {
+	if len(slots) == 0 || validatorsCount == 0 {
 		return 0, 0
 	}
 
-	activeValidatorEbEth := *services.GetLatestStats().ActiveValidatorEbEth
+	activeValidatorsCount := *services.GetLatestStats().ActiveValidatorCount
 	// Calculate the expected number of slot proposals for 30 days
-	expectedSlotProposals := calcExpectedSlotProposals(oneMonth, validatorEbEth, activeValidatorEbEth)
+	expectedSlotProposals := calcExpectedSlotProposals(oneMonth, validatorsCount, activeValidatorsCount)
 
 	// Get the timeframe for which we should consider qualified proposals
 	var proposalTimeFrame time.Duration
@@ -422,7 +383,7 @@ func getProposalLuck(slots []uint64, validatorEbEth uint64, fromEpoch uint64) (f
 	}
 
 	// Recalculate expected slot proposals for the new timeframe
-	expectedSlotProposals = calcExpectedSlotProposals(proposalTimeFrame, validatorEbEth, activeValidatorEbEth)
+	expectedSlotProposals = calcExpectedSlotProposals(proposalTimeFrame, validatorsCount, activeValidatorsCount)
 	if expectedSlotProposals == 0 {
 		return 0, 0
 	}
@@ -468,25 +429,25 @@ func getProposalTimeframeName(proposalTimeframe time.Duration) string {
 }
 
 // calcExpectedSlotProposals calculates the expected number of slot proposals for a certain time frame and validator count
-func calcExpectedSlotProposals(timeframe time.Duration, validatorsEbEth uint64, activeValidatorsEbEth uint64) float64 {
-	if validatorsEbEth == 0 || activeValidatorsEbEth == 0 {
+func calcExpectedSlotProposals(timeframe time.Duration, validatorCount int, activeValidatorsCount uint64) float64 {
+	if validatorCount == 0 || activeValidatorsCount == 0 {
 		return 0
 	}
 	slotsInTimeframe := timeframe.Seconds() / float64(utils.Config.Chain.ClConfig.SecondsPerSlot)
-	return (slotsInTimeframe / float64(activeValidatorsEbEth)) * float64(validatorsEbEth)
+	return (slotsInTimeframe / float64(activeValidatorsCount)) * float64(validatorCount)
 }
 
 // getAvgSlotInterval will return the average block interval for a certain number of validators
 //
 // result of the function should be interpreted as "1 in every X slots will be proposed by this amount of validators on avg."
-func getAvgSlotInterval(validatorsEbEth uint64) float64 {
+func getAvgSlotInterval(validatorsCount int) float64 {
 	// don't estimate if there are no proposed blocks or no validators
-	activeValidatorsEbEth := *services.GetLatestStats().ActiveValidatorEbEth
-	if activeValidatorsEbEth == 0 {
+	activeValidatorsCount := *services.GetLatestStats().ActiveValidatorCount
+	if activeValidatorsCount == 0 {
 		return 0
 	}
 
-	probability := float64(validatorsEbEth) / float64(activeValidatorsEbEth)
+	probability := float64(validatorsCount) / float64(activeValidatorsCount)
 	// in a geometric distribution, the expected value of the number of trials needed until first success is 1/p
 	// you can think of this as the average interval of blocks until you get a proposal
 	return 1 / probability
@@ -495,13 +456,13 @@ func getAvgSlotInterval(validatorsEbEth uint64) float64 {
 // getAvgSyncCommitteeInterval will return the average sync committee interval for a certain number of validators
 //
 // result of the function should be interpreted as "there will be one validator included in every X committees, on average"
-func getAvgSyncCommitteeInterval(validatorsEbEth uint64) float64 {
-	activeValidatorsEbEth := *services.GetLatestStats().ActiveValidatorEbEth
-	if activeValidatorsEbEth == 0 {
+func getAvgSyncCommitteeInterval(validatorsCount int) float64 {
+	activeValidatorsCount := *services.GetLatestStats().ActiveValidatorCount
+	if activeValidatorsCount == 0 {
 		return 0
 	}
 
-	probability := (float64(utils.Config.Chain.ClConfig.SyncCommitteeSize) / float64(activeValidatorsEbEth)) * float64(validatorsEbEth)
+	probability := (float64(utils.Config.Chain.ClConfig.SyncCommitteeSize) / float64(activeValidatorsCount)) * float64(validatorsCount)
 	// in a geometric distribution, the expected value of the number of trials needed until first success is 1/p
 	// you can think of this as the average interval of sync committees until you expect to have been part of one
 	return 1 / probability

@@ -586,7 +586,7 @@ type ApiValidatorWithdrawalResponse struct {
 	Epoch          uint64 `json:"epoch,omitempty"`
 	Slot           uint64 `json:"slot,omitempty"`
 	BlockRoot      string `json:"blockroot,omitempty"`
-	Index          uint64 `json:"withdrawalindex"`
+	Index          int64  `json:"withdrawalindex"`
 	ValidatorIndex uint64 `json:"validatorindex"`
 	Address        string `json:"address"`
 	Amount         uint64 `json:"amount"`
