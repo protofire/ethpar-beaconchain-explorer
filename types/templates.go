@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -142,7 +141,6 @@ type Stats struct {
 	UniqueValidatorCount           *uint64 `db:"count"`
 	TotalValidatorCount            *uint64 `db:"count"`
 	ActiveValidatorCount           *uint64 `db:"count"`
-	ActiveValidatorEbEth           *uint64 `db:"count"`
 	PendingValidatorCount          *uint64 `db:"count"`
 	ValidatorChurnLimit            *uint64
 	ValidatorActivationChurnLimit  *uint64
@@ -175,10 +173,6 @@ type IndexPageData struct {
 	ActiveValidators          uint64                 `json:"active_validators"`
 	EnteringValidators        uint64                 `json:"entering_validators"`
 	ExitingValidators         uint64                 `json:"exiting_validators"`
-	EnteringValidatorsBalance string                 `json:"entering_validators_balance"`
-	EnteringBalance           string                 `json:"entering_balance"`
-	EnteringValidatorTopup    string                 `json:"entering_validator_topup_balance"`
-	ExitingValidatorsBalance  string                 `json:"exiting_validators_balance"`
 	StakedEther               string                 `json:"staked_ether"`
 	AverageBalance            string                 `json:"average_balance"`
 	DepositedTotal            float64                `json:"deposit_total"`
@@ -204,7 +198,6 @@ type IndexPageData struct {
 	ValidatorsPerEpoch        uint64
 	ValidatorsPerDay          uint64
 	NewDepositProcessAfter    string
-	ElectraHasHappened        bool
 }
 
 type SlotVizPageData struct {
@@ -231,7 +224,7 @@ type IndexPageDataBlocks struct {
 	Epoch                uint64        `json:"epoch"`
 	Slot                 uint64        `json:"slot"`
 	Ts                   time.Time     `json:"ts"`
-	Proposer             int64         `db:"proposer" json:"proposer"`
+	Proposer             uint64        `db:"proposer" json:"proposer"`
 	ProposerFormatted    template.HTML `json:"proposer_formatted"`
 	BlockRoot            []byte        `db:"blockroot" json:"block_root"`
 	BlockRootFormatted   string        `json:"block_root_formatted"`
@@ -266,7 +259,7 @@ type BlocksPageDataBlocks struct {
 	Epoch                uint64        `json:"epoch"`
 	Slot                 uint64        `json:"slot"`
 	Ts                   time.Time     `json:"ts"`
-	Proposer             int64         `db:"proposer" json:"proposer"`
+	Proposer             uint64        `db:"proposer" json:"proposer"`
 	ProposerFormatted    template.HTML `json:"proposer_formatted"`
 	BlockRoot            []byte        `db:"blockroot" json:"block_root"`
 	BlockRootFormatted   string        `json:"block_root_formatted"`
@@ -580,11 +573,11 @@ type VisPageData struct {
 
 // VisChartData is a struct to hold the visualizations chart data
 type VisChartData struct {
-	Slot       uint64   `db:"slot" json:"-"`
-	BlockRoot  []byte   `db:"blockroot" json:"-"`
-	ParentRoot []byte   `db:"parentroot" json:"-"`
+	Slot       uint64 `db:"slot" json:"-"`
+	BlockRoot  []byte `db:"blockroot" json:"-"`
+	ParentRoot []byte `db:"parentroot" json:"-"`
 
-	Proposer   int64    `db:"proposer" json:"proposer"`
+	Proposer uint64 `db:"proposer" json:"proposer"`
 
 	Number     uint64   `json:"number"`
 	Timestamp  uint64   `json:"timestamp"`
@@ -623,7 +616,7 @@ type BlockPageData struct {
 	Ts                     time.Time
 	NextSlot               uint64
 	PreviousSlot           uint64
-	Proposer               int64   `db:"proposer"`
+	Proposer               uint64  `db:"proposer"`
 	BlockRoot              []byte  `db:"blockroot"`
 	ParentRoot             []byte  `db:"parentroot"`
 	StateRoot              []byte  `db:"stateroot"`
@@ -670,17 +663,13 @@ type BlockPageData struct {
 
 	ExecutionData *Eth1BlockPageData
 
-	Attestations              []*BlockPageAttestation // Attestations included in this block
-	VoluntaryExits            []*BlockPageVoluntaryExits
-	Votes                     []*BlockVote // Attestations that voted for that block
-	AttesterSlashings         []*BlockPageAttesterSlashing
-	ProposerSlashings         []*BlockPageProposerSlashing
-	SyncCommittee             []uint64 // TODO: Setting it to contain the validator index
-	BlobSidecars              []*BlockPageBlobSidecar
-	ConsolidationRequests     []*FrontendConsolidationRequest
-	MoveToCompoundingRequests []*FrontendMoveToCompoundingRequest
-	WithdrawalRequests        []*FrontendWithdrawalRequest
-	DepositRequests           []*FrontendDepositRequest
+	Attestations      []*BlockPageAttestation // Attestations included in this block
+	VoluntaryExits    []*BlockPageVoluntaryExits
+	Votes             []*BlockVote // Attestations that voted for that block
+	AttesterSlashings []*BlockPageAttesterSlashing
+	ProposerSlashings []*BlockPageProposerSlashing
+	SyncCommittee     []uint64 // TODO: Setting it to contain the validator index
+	BlobSidecars      []*BlockPageBlobSidecar
 
 	Tags       TagMetadataSlice `db:"tags"`
 	IsValidMev bool             `db:"is_valid_mev"`
@@ -740,7 +729,6 @@ type BlockPageTransaction struct {
 type BlockPageAttestation struct {
 	BlockSlot       uint64        `db:"block_slot"`
 	BlockIndex      uint64        `db:"block_index"`
-	BlockRoot	[]byte        `db:"block_root"`
 	AggregationBits []byte        `db:"aggregationbits"`
 	Validators      pq.Int64Array `db:"validators"`
 	Signature       []byte        `db:"signature"`
@@ -764,9 +752,7 @@ type BlockPageDeposit struct {
 // BlockPageVoluntaryExits is a struct to hold data for voluntary exits on the block page
 type BlockPageVoluntaryExits struct {
 	ValidatorIndex uint64 `db:"validatorindex"`
-	Signature      []byte `db:"signature"` // only cl
-	TriggeredVia   string `db:"triggered_via"`
-	Status         string `db:"status"`
+	Signature      []byte `db:"signature"`
 }
 
 // BlockPageAttesterSlashing is a struct to hold data for attester slashings on the block page
@@ -810,83 +796,6 @@ type BlockPageProposerSlashing struct {
 	Header2StateRoot  []byte `db:"header2_stateroot"`
 	Header2BodyRoot   []byte `db:"header2_bodyroot"`
 	Header2Signature  []byte `db:"header2_signature"`
-}
-
-type FrontendConsolidationRequest struct {
-	BlockSlot          uint64 `db:"block_slot"`
-	BlockRoot          []byte `db:"block_root"`
-	Index              uint64 `db:"request_index"`
-	SourceIndex        int64  `db:"source_index"`
-	TargetIndex        int64  `db:"target_index"`
-	AmountConsolidated uint64 `db:"amount_consolidated"`
-}
-
-type FrontendExecutionConsolidationRequest struct {
-	SourceAddress               common.Address `db:"source_address"`
-	TxHash                      []byte         `db:"tx_hash"`
-	BlockNumber                 uint64         `db:"block_number"`
-	Ts                          int64          `db:"block_ts"`
-	SourceIndex                 int64          `db:"source_validator_index"`
-	TargetIndex                 int64          `db:"target_validator_index"`
-	SourceWithdrawalCredentials []byte         `db:"source_withdrawalcredentials"`
-	WrongSourceAddress          bool
-}
-
-func (t *FrontendExecutionConsolidationRequest) IsMoveToCompounding() bool {
-	return t.SourceIndex == t.TargetIndex
-}
-
-type FrontendMoveToCompoundingRequest struct {
-	BlockSlot      uint64         `db:"block_slot"`
-	BlockRoot      []byte         `db:"block_root"`
-	Index          uint64         `db:"request_index"`
-	ValidatorIndex int64          `db:"validator_index"`
-	Address        common.Address `db:"address"`
-}
-
-type FrontendExecutionWithdrawalRequest struct {
-	SourceAddress      common.Address `db:"source_address"`
-	TxHash             []byte         `db:"tx_hash"`
-	BlockNumber        uint64         `db:"block_number"`
-	Ts                 int64          `db:"block_ts"`
-	ValidatorIndex     int64          `db:"validator_index"`
-	Amount             uint64         `db:"amount"`
-	WrongSourceAddress bool
-}
-
-func (t *FrontendExecutionWithdrawalRequest) IsExitRequest() bool {
-	return t.Amount == 0
-}
-
-type FrontendWithdrawalRequest struct {
-	BlockSlot       uint64 `db:"block_slot"`
-	BlockRoot       []byte `db:"block_root"`
-	Index           uint64 `db:"request_index"`
-	SourceAddress   []byte `db:"source_address"`
-	ValidatorPubkey []byte `db:"validator_pubkey"`
-	ValidatorIndex  int64  `db:"validator_index"`
-	Amount          uint64 `db:"amount"`
-	Type            string
-}
-
-type FrontendConsensusELExitRequest struct {
-	BlockSlot       uint64 `db:"slot"`
-	BlockRoot       []byte `db:"block_root"`
-	Status          string `db:"status"`
-	RejectReason    string `db:"reject_reason"`
-	ValidatorPubkey []byte `db:"validator_pubkey"`
-	TriggeredVia    string `db:"triggered_via"`
-}
-
-type FrontendDepositRequest struct {
-	BlockSlot             uint64 `db:"block_slot"`
-	BlockRoot             []byte `db:"block_root"`
-	Index                 uint64 `db:"request_index"`
-	ValidatorPubkey       []byte `db:"pubkey"`
-	WithdrawalCredentials []byte `db:"withdrawal_credentials"`
-	ValidatorIndex        int64  `db:"validator_index"`
-	Amount                uint64 `db:"amount"`
-	Signature             []byte `db:"signature"`
 }
 
 // BlockPageBlobSidecar holds data of blob-sidecars of the corresponding block
@@ -1154,7 +1063,7 @@ type ValidatorEarnings struct {
 type ValidatorAttestationSlashing struct {
 	Epoch                  uint64        `db:"epoch" json:"epoch,omitempty"`
 	Slot                   uint64        `db:"slot" json:"slot,omitempty"`
-	Proposer               int64         `db:"proposer" json:"proposer,omitempty"`
+	Proposer               uint64        `db:"proposer" json:"proposer,omitempty"`
 	Attestestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
 	Attestestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
 }
@@ -1162,8 +1071,8 @@ type ValidatorAttestationSlashing struct {
 type ValidatorProposerSlashing struct {
 	Epoch         uint64 `db:"epoch" json:"epoch,omitempty"`
 	Slot          uint64 `db:"slot" json:"slot,omitempty"`
-	Proposer      int64  `db:"proposer" json:"proposer,omitempty"`
-	ProposerIndex int64  `db:"proposerindex" json:"proposer_index,omitempty"`
+	Proposer      uint64 `db:"proposer" json:"proposer,omitempty"`
+	ProposerIndex int64 `db:"proposerindex" json:"proposer_index,omitempty"`
 }
 
 type ValidatorHistory struct {
@@ -1182,8 +1091,8 @@ type ValidatorHistory struct {
 type ValidatorSlashing struct {
 	Epoch                  uint64        `db:"epoch" json:"epoch,omitempty"`
 	Slot                   uint64        `db:"slot" json:"slot,omitempty"`
-	Proposer               int64         `db:"proposer" json:"proposer,omitempty"`
-	SlashedValidator       *int64       `db:"slashedvalidator" json:"slashed_validator,omitempty"`
+	Proposer               int64        `db:"proposer" json:"proposer,omitempty"`
+	SlashedValidator       *int64        `db:"slashedvalidator" json:"slashed_validator,omitempty"`
 	Attestestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
 	Attestestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
 	Type                   string        `db:"type" json:"type"`
@@ -1247,10 +1156,9 @@ type EthTwoDepositData struct {
 }
 
 type ValidatorDeposits struct {
-	Eth1Deposits        []Eth1Deposit
-	LastEth1DepositTs   int64
-	Eth2Deposits        []Eth2Deposit
-	PendingEth2Deposits []Eth2Deposit
+	Eth1Deposits      []Eth1Deposit
+	LastEth1DepositTs int64
+	Eth2Deposits      []Eth2Deposit
 }
 
 type MyCryptoSignature struct {
@@ -1312,15 +1220,14 @@ type CsrfData struct {
 type UserSettingsPageData struct {
 	CsrfField template.HTML
 	AuthData
-	Subscription         UserSubscription
-	Premium              UserPremiumSubscription
-	PairedDevices        []PairedDevice
-	Sapphire             *string
-	Emerald              *string
-	Diamond              *string
-	ShareMonitoringData  bool
-	ApiStatistics        *ApiStatistics
-	IsUserDeleteDisabled bool
+	Subscription        UserSubscription
+	Premium             UserPremiumSubscription
+	PairedDevices       []PairedDevice
+	Sapphire            *string
+	Emerald             *string
+	Diamond             *string
+	ShareMonitoringData bool
+	ApiStatistics       *ApiStatistics
 }
 
 type PairedDevice struct {
@@ -1797,7 +1704,6 @@ type ITransaction struct {
 		// Usage    uint64
 		// UsedPerc float64
 	}
-	Reverted bool
 }
 
 type Transfer struct {
@@ -1811,27 +1717,6 @@ type DepositContractInteraction struct {
 	ValidatorPubkey []byte
 	WithdrawalCreds []byte
 	Amount          []byte
-}
-
-type ConsolidationRequestInteraction struct {
-	SourceAddress         common.Address
-	SourceValidatorPubkey []byte
-	TargetValidatorPubkey []byte
-	Amount                *big.Int
-}
-
-func (c ConsolidationRequestInteraction) IsMoveToCompounding() bool {
-	return bytes.Equal(c.SourceValidatorPubkey, c.TargetValidatorPubkey)
-}
-
-type WithdrawalRequestInteraction struct {
-	SourceAddress   common.Address
-	ValidatorPubkey []byte
-	Amount          *big.Int
-}
-
-func (w WithdrawalRequestInteraction) IsExitRequest() bool {
-	return w.Amount.Cmp(big.NewInt(0)) == 0
 }
 
 type EpochInfo struct {
@@ -1877,8 +1762,6 @@ type Eth1TxData struct {
 	Events                      []*Eth1EventData
 	Transfers                   []*Transfer
 	DepositContractInteractions []DepositContractInteraction
-	Consolidations              []ConsolidationRequestInteraction
-	Withdrawals                 []WithdrawalRequestInteraction
 	CurrentEtherPrice           template.HTML
 	HistoricalEtherPrice        template.HTML
 	BlobHashes                  [][]byte
@@ -2053,7 +1936,7 @@ type RelaysRespBlock struct {
 	Slot                 uint64           `db:"slot"`
 	Builder              []byte           `db:"builder_pubkey"`
 	ProposerFeeRecipient []byte           `db:"proposer_fee_recipient"`
-	Proposer             int64            `db:"proposer"`
+	Proposer             uint64           `db:"proposer"`
 	BlockExtraData       string           `db:"block_extra_data"`
 }
 
