@@ -39,7 +39,7 @@ func UserAuthMiddleware(next http.Handler) http.Handler {
 		user := getUser(r)
 		if !user.Authenticated {
 			utils.SetFlash(w, r, authSessionName, "Error: Please login first")
-			http.Redirect(w, r, "/login?redirect="+r.URL.Path, http.StatusSeeOther)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -114,16 +114,6 @@ func UserSettings(w http.ResponseWriter, r *http.Request) {
 			userSettingsData.ApiStatistics = apiStats
 		}
 	}
-
-	// disable delete button if user has active subscription
-	hasUserActiveSubscription, err := getHasUserActiveSubscription(user.UserID)
-	if err != nil {
-		logger.Errorf("Error retrieving the active subscription for user: %v %v", user.UserID, err)
-		utils.SetFlash(w, r, "", "Error: Something went wrong.")
-		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
-		return
-	}
-	userSettingsData.IsUserDeleteDisabled = hasUserActiveSubscription
 
 	userSettingsData.ApiStatistics.MaxDaily = &maxDaily
 	userSettingsData.ApiStatistics.MaxMonthly = &maxMonthly
@@ -985,68 +975,36 @@ func UserAuthorizeConfirmPost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getHasUserActiveSubscription(userId uint64) (bool, error) {
-	var hasUserActiveSubscription bool
-	err := db.FrontendReaderDB.Get(&hasUserActiveSubscription, `
-	SELECT EXISTS (
-		SELECT uss.price_id
-		FROM users_stripe_subscriptions uss
-		LEFT JOIN users u ON u.stripe_customer_id = uss.customer_id
-		WHERE uss.active = true AND u.id = $1
-
-		UNION
-
-		SELECT product_id
-		FROM users_app_subscriptions uas
-		LEFT JOIN users u ON u.id = uas.user_id
-		WHERE uas.active = true AND u.id = $1
-	)`, userId)
-	if err != nil {
-		return false, err
-	}
-	return hasUserActiveSubscription, nil
-}
-
 func UserDeletePost(w http.ResponseWriter, r *http.Request) {
 	logger := logger.WithField("route", r.URL.String())
-	user, _, err := getUserSession(r)
+	user, session, err := getUserSession(r)
 	if err != nil {
 		logger.Errorf("error retrieving session: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	if !user.Authenticated {
+	if user.Authenticated {
+		err := db.DeleteUserById(user.UserID)
+		if err != nil {
+			logger.Errorf("error deleting user by email for user: %v %v", user.UserID, err)
+			http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
+			utils.SetFlash(w, r, "", "Error: Could not delete user.")
+			session.Save(r, w)
+			http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
+			return
+		}
+
+		Logout(w, r)
+		err = purgeAllSessionsForUser(r.Context(), user.UserID)
+		if err != nil {
+			utils.LogError(err, "error purging sessions for user", 0, map[string]interface{}{"userID": user.UserID})
+			utils.SetFlash(w, r, authSessionName, authInternalServerErrorFlashMsg)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+	} else {
 		utils.LogError(nil, "Trying to delete an unauthenticated user", 0)
 		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
-		return
-	}
-	// don't allow user to delete account if they have an active subscription
-	hasUserActiveSubscription, err := getHasUserActiveSubscription(user.UserID)
-	if err != nil {
-		logger.Errorf("error checking if user has active subscription: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-	if hasUserActiveSubscription {
-		utils.SetFlash(w, r, authSessionName, "Error: You cannot delete your account while you have an active subscription.")
-		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
-		return
-	}
-
-	err = db.DeleteUserById(user.UserID)
-	if err != nil {
-		logger.Errorf("error deleting user by id for user: %v %v", user.UserID, err)
-		utils.SetFlash(w, r, authSessionName, "Error: Could not delete user.")
-		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
-		return
-	}
-
-	Logout(w, r)
-	err = purgeAllSessionsForUser(r.Context(), user.UserID)
-	if err != nil {
-		utils.LogError(err, "error purging sessions for user", 0, map[string]interface{}{"userID": user.UserID})
-		utils.SetFlash(w, r, authSessionName, authInternalServerErrorFlashMsg)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 }
@@ -1394,8 +1352,7 @@ func UserConfirmUpdateEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 // UserValidatorWatchlistAdd godoc
-// @Summary Add validator subscription
-// @Description Subscribes a user to get notifications from a specific validator
+// @Summary  subscribes a user to get notifications from a specific validator
 // @Tags User
 // @Produce  json
 // @Param pubKey query string true "Public Key of validator you want to subscribe to"
@@ -1509,8 +1466,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 // UserDashboardWatchlistAdd godoc
-// @Summary Save validator subscription
-// @Description Subscribes a user to get notifications from a specific validator via index
+// @Summary  subscribes a user to get notifications from a specific validator via index
 // @Tags User
 // @Produce  json
 // @Param pubKey body []string true "Index of validator you want to subscribe to"
@@ -1574,8 +1530,7 @@ func UserDashboardWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 // UserDashboardWatchlistRemove godoc
-// @Summary Remove validator subscription
-// @Description Unsubscribes a user from a specific validator via index from both watchlist and notification events
+// @Summary  unsubscribes a user from a specific validator via index from both watchlist and notification events
 // @Tags User
 // @Produce  json
 // @Param pubKey body []string true "Index of validator you want to unsubscribe from"
@@ -1631,8 +1586,7 @@ func UserDashboardWatchlistRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 // UserValidatorWatchlistRemove godoc
-// @Summary Remove validator subscription
-// @Description Unsubscribes a user from a specific validator
+// @Summary  unsubscribes a user from a specific validator
 // @Tags User
 // @Produce  json
 // @Param pubKey query string true "Public Key of validator you want to subscribe to"
@@ -2290,8 +2244,7 @@ type UsersNotificationsRequest struct {
 }
 
 // UserNotificationsSubscribed godoc
-// @Summary Get user subscriptions
-// @Description Get a set of events a user is subscribed to
+// @Summary Get a set of events a user is subscribed to
 // @Tags User
 // @Param requestFilter body types.UsersNotificationsRequest false "An object that filters through the active subscriptions"
 // @Produce json

@@ -215,7 +215,7 @@ func ApplyEmbeddedDbSchema(version int64) error {
 	return nil
 }
 
-func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderDir string, latestEpoch, validatorOnlineThresholdSlot uint64) ([]*types.EthOneDepositsData, uint64, error) {
+func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderBy, orderDir string, latestEpoch, validatorOnlineThresholdSlot uint64) ([]*types.EthOneDepositsData, uint64, error) {
 	// Initialize the return values
 	deposits := []*types.EthOneDepositsData{}
 	totalCount := uint64(0)
@@ -223,7 +223,17 @@ func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderDi
 	if orderDir != "desc" && orderDir != "asc" {
 		orderDir = "desc"
 	}
-	orderBy := "block_ts"
+	columns := []string{"tx_hash", "tx_input", "tx_index", "block_number", "block_ts", "from_address", "publickey", "withdrawal_credentials", "amount", "signature", "merkletree_index", "state", "valid_signature"}
+	hasColumn := false
+	for _, column := range columns {
+		if orderBy == column {
+			hasColumn = true
+			break
+		}
+	}
+	if !hasColumn {
+		orderBy = "block_ts"
+	}
 
 	var param interface{}
 	var searchQuery string
@@ -387,7 +397,7 @@ func GetEth1DepositsLeaderboard(query string, length, start uint64, orderBy, ord
 	return deposits, totalCount, nil
 }
 
-func GetEth2Deposits(query string, length, start uint64, orderDir string) ([]*types.EthTwoDepositData, uint64, error) {
+func GetEth2Deposits(query string, length, start uint64, orderBy, orderDir string) ([]*types.EthTwoDepositData, uint64, error) {
 	// Initialize the return values
 	deposits := []*types.EthTwoDepositData{}
 	totalCount := uint64(0)
@@ -395,16 +405,30 @@ func GetEth2Deposits(query string, length, start uint64, orderDir string) ([]*ty
 	if orderDir != "desc" && orderDir != "asc" {
 		orderDir = "desc"
 	}
-	orderBy := "block_slot"
+	columns := []string{"block_slot", "publickey", "amount", "withdrawalcredentials", "signature"}
+	hasColumn := false
+	for _, column := range columns {
+		if orderBy == column {
+			hasColumn = true
+			break
+		}
+	}
+	if !hasColumn {
+		orderBy = "block_slot"
+	}
 
 	var param interface{}
 	var searchQuery string
 	var err error
 
 	// Define the base queries
-	depositsCountQuery := `SELECT COALESCE(SUM(depositscount),0) FROM blocks WHERE status = '1' AND depositscount > 0`
+	deposistsCountQuery := `
+		SELECT COUNT(*)
+		FROM blocks_deposits
+		INNER JOIN blocks ON blocks_deposits.block_root = blocks.blockroot AND blocks.status = '1'
+		%s`
 
-	depositsQuery := `
+	deposistsQuery := `
 			SELECT 
 				blocks_deposits.block_slot,
 				blocks_deposits.block_index,
@@ -430,14 +454,14 @@ func GetEth2Deposits(query string, length, start uint64, orderDir string) ([]*ty
 		}
 	}
 	if trimmedQuery == "" {
-		err = ReaderDb.Get(&totalCount, depositsCountQuery)
+		err = ReaderDb.Get(&totalCount, fmt.Sprintf(deposistsCountQuery, ""))
 		if err != nil {
-			return nil, 0, fmt.Errorf("error getting totalCount without search: %w", err)
+			return nil, 0, err
 		}
 
-		err = ReaderDb.Select(&deposits, fmt.Sprintf(depositsQuery, "", orderBy, orderDir), length, start)
+		err = ReaderDb.Select(&deposits, fmt.Sprintf(deposistsQuery, "", orderBy, orderDir), length, start)
 		if err != nil && err != sql.ErrNoRows {
-			return nil, 0, fmt.Errorf("error selecting deposits without search: %w", err)
+			return nil, 0, err
 		}
 
 		return deposits, totalCount, nil
@@ -446,49 +470,33 @@ func GetEth2Deposits(query string, length, start uint64, orderDir string) ([]*ty
 	if utils.IsHash(trimmedQuery) {
 		param = hash
 		searchQuery = `WHERE blocks_deposits.publickey = $3`
-		depositsCountQuery = `
-			SELECT COALESCE(SUM(depositscount),0)
-			FROM blocks
-			INNER JOIN blocks_deposits ON blocks.blockroot = blocks_deposits.block_root AND blocks_deposits.publickey = $1
-			WHERE status = '1' AND depositscount > 0`
 	} else if utils.IsValidWithdrawalCredentials(trimmedQuery) {
 		param = hash
 		searchQuery = `WHERE blocks_deposits.withdrawalcredentials = $3`
-		depositsCountQuery = `
-			SELECT COALESCE(SUM(depositscount),0)
-			FROM blocks
-			INNER JOIN blocks_deposits ON blocks.blockroot = blocks_deposits.block_root AND blocks_deposits.withdrawalcredentials = $1
-			WHERE status = '1' AND depositscount > 0`
 	} else if utils.IsEth1Address(trimmedQuery) {
 		param = hash
 		searchQuery = `
-			LEFT JOIN eth1_deposits ON blocks_deposits.publickey = eth1_deposits.publickey
-			WHERE eth1_deposits.from_address = $3`
-		depositsCountQuery = `
-			SELECT COUNT(*) FROM blocks_deposits 
-			INNER JOIN blocks ON blocks_deposits.block_root = blocks.blockroot AND blocks.status = '1'
-			LEFT JOIN eth1_deposits ON blocks_deposits.publickey = eth1_deposits.publickey
-			WHERE eth1_deposits.from_address = $1`
+				LEFT JOIN eth1_deposits ON blocks_deposits.publickey = eth1_deposits.publickey
+				WHERE eth1_deposits.from_address = $3`
 	} else if uiQuery, parseErr := strconv.ParseUint(query, 10, 31); parseErr == nil { // Limit to 31 bits to stay within math.MaxInt32
 		param = uiQuery
 		searchQuery = `WHERE blocks_deposits.block_slot = $3`
-		depositsCountQuery = `
-			SELECT COALESCE(SUM(depositscount),0)
-			FROM blocks
-			WHERE status = '1' AND depositscount > 0 AND slot = $1`
 	} else {
 		// The query does not fulfill any of the requirements for a search
 		return deposits, totalCount, nil
 	}
 
-	err = ReaderDb.Get(&totalCount, depositsCountQuery, param)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, 0, fmt.Errorf("error getting totalCount: %w", err)
+	// The deposits count query only has one parameter for the search
+	countSearchQuery := strings.ReplaceAll(searchQuery, "$3", "$1")
+
+	err = ReaderDb.Get(&totalCount, fmt.Sprintf(deposistsCountQuery, countSearchQuery), param)
+	if err != nil {
+		return nil, 0, err
 	}
 
-	err = ReaderDb.Select(&deposits, fmt.Sprintf(depositsQuery, searchQuery, orderBy, orderDir), length, start, param)
+	err = ReaderDb.Select(&deposits, fmt.Sprintf(deposistsQuery, searchQuery, orderBy, orderDir), length, start, param)
 	if err != nil && err != sql.ErrNoRows {
-		return nil, 0, fmt.Errorf("error selecting deposits: %w", err)
+		return nil, 0, err
 	}
 
 	return deposits, totalCount, nil
@@ -1838,13 +1846,12 @@ func GetQueueAheadOfValidator(validatorIndex uint64) (uint64, error) {
 	return res, err
 }
 
-func GetValidatorNames(validators []int64) (map[int64]string, error) {
-	logger.Infof("getting validator names for %d validators", len(validators))
+func GetValidatorNames() (map[int64]string, error) {
 	rows, err := ReaderDb.Query(`
 		SELECT validatorindex, validator_names.name 
 		FROM validators 
 		LEFT JOIN validator_names ON validators.pubkey = validator_names.publickey
-		WHERE validators.validatorindex = ANY($1) AND validator_names.name IS NOT NULL`, pq.Array(validators))
+		WHERE validator_names.name IS NOT NULL`)
 
 	if err != nil {
 		return nil, err

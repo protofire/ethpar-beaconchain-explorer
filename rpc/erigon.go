@@ -95,7 +95,7 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 		metrics.TaskDuration.WithLabelValues("rpc_el_get_block").Observe(time.Since(startTime).Seconds())
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
 
 	start := time.Now()

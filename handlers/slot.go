@@ -314,6 +314,7 @@ func GetSlotPageData(blockSlot uint64) (*types.BlockPageData, error) {
 	}
 	slotPageData.VotingValidatorsCount = uint64(len(votesPerValidator))
 	slotPageData.VotesCount = uint64(votesCount)
+
 	err = db.ReaderDb.Select(&slotPageData.VoluntaryExits, "SELECT validatorindex, signature FROM blocks_voluntaryexits WHERE block_slot = $1", slotPageData.Slot)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving block deposit data: %v", err)
@@ -370,7 +371,7 @@ func GetSlotPageData(blockSlot uint64) (*types.BlockPageData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving sync-committee of block %v: %v", slotPageData.Slot, err)
 	}
-	
+
 	return &slotPageData, nil
 }
 
@@ -705,9 +706,7 @@ func BlockTransactionsData(w http.ResponseWriter, r *http.Request) {
 type attestationsData struct {
 	BlockIndex      uint64        `json:"BlockIndex"`
 	Slot            uint64        `json:"Slot"`
-	BlockRoot       string        `json:"BlockRoot"`
 	CommitteeIndex  uint64        `json:"CommitteeIndex"`
-	CommitteeBits   template.HTML `json:"CommitteeBits"`
 	AggregationBits template.HTML `json:"AggregationBits"`
 	Validators      template.HTML `json:"Validators"`
 	BeaconBlockRoot string        `json:"BeaconBlockRoot"`

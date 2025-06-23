@@ -75,23 +75,12 @@ func calculateStats() (*types.Stats, error) {
 
 	stats.ActiveValidatorCount = &activeValidatorCount
 
-	activeValidatorEbEth, err := db.GetTotalEligibleEther()
+	pendingValidatorCount, err := db.GetPendingValidatorCount()
 	if err != nil {
-		logger.WithError(err).Error("error getting active validator eligible eth")
+		logger.WithError(err).Error("error getting pending validator count")
 	}
 
-	stats.ActiveValidatorEbEth = &activeValidatorEbEth
-
-	epoch := LatestEpoch()
-
-	if !utils.ElectraHasHappened(epoch) {
-		pendingValidatorCount, err := db.GetPendingValidatorCount()
-		if err != nil {
-			logger.WithError(err).Error("error getting pending validator count")
-		}
-
-		stats.PendingValidatorCount = &pendingValidatorCount
-	}
+	stats.PendingValidatorCount = &pendingValidatorCount
 
 	validatorChurnLimit, err := getValidatorChurnLimit(activeValidatorCount)
 	if err != nil {
@@ -100,6 +89,7 @@ func calculateStats() (*types.Stats, error) {
 
 	stats.ValidatorChurnLimit = &validatorChurnLimit
 
+	epoch := LatestEpoch()
 	validatorActivationChurnLimit, err := getValidatorActivationChurnLimit(activeValidatorCount, epoch)
 	if err != nil {
 		logger.WithError(err).Error("error getting total validator churn limit")

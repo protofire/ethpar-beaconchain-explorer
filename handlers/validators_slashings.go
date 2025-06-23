@@ -101,24 +101,8 @@ func ValidatorsSlashingsData(w http.ResponseWriter, r *http.Request) {
 
 	tableData := make([][]interface{}, 0, len(slashings))
 
-	validatorsForNameSearch := []int64{}
-	for _, slashing := range slashings {
-		validatorsForNameSearch = append(validatorsForNameSearch, slashing.Proposer)
-		if slashing.Type == "Attestation Violation" {
-			inter := intersect.Hash(slashing.Attestestation1Indices, slashing.Attestestation2Indices)
-			if len(inter) == 0 {
-				logger.Warningf("No intersection found for attestation violation, proposer: %v, slot: %v", slashing.Proposer, slashing.Slot)
-			}
-			for _, v := range inter {
-				validatorsForNameSearch = append(validatorsForNameSearch, v.(int64))
-			}
-		}
-		if slashing.Type == "Proposer Violation" {
-			validatorsForNameSearch = append(validatorsForNameSearch, *slashing.SlashedValidator)
-		}
-	}
+	validatorNames, err := db.GetValidatorNames()
 
-	validatorNames, err := db.GetValidatorNames(validatorsForNameSearch)
 	if err != nil {
 		logger.Errorf("error retrieving validator names from the database: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -130,7 +114,7 @@ func ValidatorsSlashingsData(w http.ResponseWriter, r *http.Request) {
 		slashedValidators := []int64{}
 
 		if row.Type == "Attestation Violation" {
-			inter := intersect.Hash(row.Attestestation1Indices, row.Attestestation2Indices)
+			inter := intersect.Simple(row.Attestestation1Indices, row.Attestestation2Indices)
 			if len(inter) == 0 {
 				logger.Warningf("No intersection found for attestation violation, proposer: %v, slot: %v", row.Proposer, row.Slot)
 			}
