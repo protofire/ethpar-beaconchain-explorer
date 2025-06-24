@@ -2866,6 +2866,13 @@ func (bigtable *Bigtable) GetInternalTransfersForTransaction(transaction []byte,
 		utils.LogError(err, "error getting contract states", 0)
 	}
 
+	if len(parityTrace) < 1 {
+		// TODO: pruned node workaround: No internal transactions available from a pruned node.
+    		logger.Warnf("got parity trace with len < 1, len: %v", len(parityTrace))
+		return []types.ITransaction{}, nil
+	}
+	
+	logger.Infof("parityTrace len: %v", len(parityTrace))
 	data := make([]types.ITransaction, 0, len(parityTrace)-1)
 	for i := 1; i < len(parityTrace); i++ {
 		from, to, value, tx_type := parityTrace[i].ConvertFields()
