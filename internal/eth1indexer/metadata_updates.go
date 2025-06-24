@@ -5,7 +5,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 )
 
@@ -25,7 +25,7 @@ import (
 //   - batchSize: Number of entries to process per batch.
 //   - iterations: Max number of batches to process; -1 means no limit.
 //   - log: Logger used for diagnostic and error reporting.
-func ProcessMetadataUpdates(bt *db.Bigtable, client *rpc.ErigonClient, prefix string, batchSize, iterations int, log *logger.Logger) {
+func ProcessMetadataUpdates(bt *db.Bigtable, client execution.ExecutionClient, prefix string, batchSize, iterations int, log *logger.Logger) {
 	lastKey := prefix
 	iterationCount := 0
 
@@ -75,7 +75,7 @@ func ProcessMetadataUpdates(bt *db.Bigtable, client *rpc.ErigonClient, prefix st
 // Returns:
 //   - Slice of fetched balances (Eth1AddressBalance).
 //   - Error if any RPC call or decoding step fails.
-func fetchBalancesInChunks(client *rpc.ErigonClient, pairs []*types.Eth1AddressBalance, chunkSize int, log *logger.Logger) ([]*types.Eth1AddressBalance, error) {
+func fetchBalancesInChunks(client execution.ExecutionClient, pairs []*types.Eth1AddressBalance, chunkSize int, log *logger.Logger) ([]*types.Eth1AddressBalance, error) {
 	var result []*types.Eth1AddressBalance
 
 	for i := 0; i < len(pairs); i += chunkSize {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -12,7 +11,8 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/eth1indexer"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/erigon"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -28,7 +28,9 @@ import (
 var mainLogger = logger.New(nil)
 
 func main() {
-	erigonEndpoint := flag.String("erigon", "", "Erigon archive node enpoint")
+	executionClient := flag.String("execution.client", "", "Execution client, can be 'erigon', 'geth'")
+	executionEndpoint := flag.String("execution.endpoint", "", "Execution client JSON-RPC enpoint")
+	mode := flag.String("mode", "live", "Indexer mode, can be 'single', 'blockrange', 'datarange' or 'live'")
 	block := flag.Int64("block", 0, "Index a specific block")
 
 	reorgDepth := flag.Int("reorg.depth", 20, "Lookback to check and handle chain reorgs")
@@ -79,7 +81,11 @@ func main() {
 		mainLogger.Fatalf("error reading config file: %v", err)
 	}
 	utils.Config = cfg
-	mainLogger.WithField("config", *configPath).WithField("version", version.Version).WithField("chainName", utils.Config.Chain.ClConfig.ConfigName).Printf("starting")
+	mainLogger.WithFields(logger.Fields{
+		"config": *configPath,
+		"version": version.Version,
+		"chainName": utils.Config.Chain.ClConfig.ConfigName,
+	}).Info("starting")
 
 	if utils.Config.Metrics.Enabled {
 		go func(addr string) {
@@ -97,33 +103,26 @@ func main() {
 			mainLogger.Info(http.ListenAndServe(fmt.Sprintf("localhost:%s", utils.Config.Pprof.Port), nil))
 		}()
 	}
-
-	if erigonEndpoint == nil || *erigonEndpoint == "" {
-
-		if utils.Config.Eth1ErigonEndpoint == "" {
-
-			utils.LogFatal(nil, "no erigon node url provided", 0)
-		} else {
-			mainLogger.Info("applying erigon endpoint from config")
-			*erigonEndpoint = utils.Config.Eth1ErigonEndpoint
+	
+	var rpcClient execution.ExecutionClient
+	
+	switch *executionClient {
+	case "erigon":
+		rpcClient, err = erigon.NewErigonClient(*executionEndpoint)
+		if err != nil {
+			mainLogger.Fatalf("failed to create a new Erigon client: %v", err)
 		}
-
-	}
-
-	mainLogger.Infof("using erigon node at %v", *erigonEndpoint)
-	client, err := rpc.NewErigonClient(*erigonEndpoint)
-	if err != nil {
-		utils.LogFatal(err, "erigon client creation error", 0)
+	case "geth":
+		// TODO implement
+	default:
+		mainLogger.Fatalf("unsupported execution client: %s", *executionClient)
 	}
 
 	chainId := strconv.FormatUint(utils.Config.Chain.ClConfig.DepositChainID, 10)
 
 	balanceUpdaterPrefix := chainId + ":B:"
 
-	nodeChainId, err := client.GetNativeClient().ChainID(context.Background())
-	if err != nil {
-		utils.LogFatal(err, "node chain id error", 0)
-	}
+	nodeChainId := rpcClient.GetChainID()
 
 	if nodeChainId.String() != chainId {
 		mainLogger.Fatalf("node chain id mismatch, wanted %v got %v", chainId, nodeChainId.String())
@@ -138,47 +137,69 @@ func main() {
 
 	// Start token price export
 	if *tokenPriceExport {
-		go eth1indexer.StartTokenPriceUpdater(bt, client, *tokenPriceExportList, mainLogger, *&tokenPriceExportFrequency)
+		go eth1indexer.StartTokenPriceUpdater(bt, rpcClient, *tokenPriceExportList, mainLogger, *&tokenPriceExportFrequency)
 	}
 
 	// Start unlimited balance updater
 	if *enableFullBalanceUpdater {
-		eth1indexer.ProcessMetadataUpdates(bt, client, balanceUpdaterPrefix, *balanceUpdaterBatchSize, -1, mainLogger)
+		eth1indexer.ProcessMetadataUpdates(bt, rpcClient, balanceUpdaterPrefix, *balanceUpdaterBatchSize, -1, mainLogger)
 		return
 	}
-
-	// Indexing parameters
-	transforms := make([]func(blk *types.Eth1Block, cache *freecache.Cache) (*types.BulkMutations, *types.BulkMutations, error), 0)
-	transforms = append(transforms,
-		bt.TransformBlock,
-		bt.TransformTx,
-		bt.TransformItx,
-		bt.TransformBlobTx,
-		bt.TransformERC20,
-		bt.TransformERC721,
-		bt.TransformERC1155,
-		bt.TransformUncle,
-		bt.TransformWithdrawals,
-		bt.TransformEnsNameRegistered,
-		bt.TransformContract)
-
-	cache := freecache.NewCache(100 * 1024 * 1024) // 100 MB limit
 	
-	// Index a single block and exit
+	// Compose indexing parameters
 	indexingParams := eth1indexer.IndexingParams{
-		StartBlock: *block,
-		EndBlock: *block,
-		ConcurrencyBlocks:  *concurrencyBlocks,
-		ConcurrencyData: *concurrencyData,
-		TraceMode: *traceMode,
-		Cache: cache, 
-		Bigtable: bt,
-		Client: client,
-		Log: mainLogger,
+		StartBlock:        *startBlocks,
+		EndBlock:          *endBlocks,
+		StartData:         *startData,
+		EndData:           *endData,
+		ConcurrencyBlocks: *concurrencyBlocks,
+		ConcurrencyData:   *concurrencyData,
+		TraceMode:         *traceMode,
+		Cache:             freecache.NewCache(100 * 1024 * 1024), // 100MB
+		Bigtable:          bt,
+		Client:            rpcClient,
+		Log:               mainLogger,
 	}
 
-	if err := eth1indexer.IndexSingleBlock(indexingParams); err != nil {
-		mainLogger.Fatalf("failed to index block %v, error: %v", *block, err)
+	// Validate and adjust parameters based on mode
+	switch *mode {
+	case "single":
+		if block == nil {
+			mainLogger.Fatal("--block is required in single mode")
+		}
+		indexingParams.StartBlock = *block
+		indexingParams.EndBlock = *block
+		if err := eth1indexer.IndexSingleBlock(indexingParams); err != nil {
+			mainLogger.Fatalf("failed to index block %v, error: %v", *block, err)
+		}
+
+	case "blockrange":
+		if *startBlocks == 0 || *endBlocks == 0 {
+			mainLogger.Fatal("--blocks.start and --blocks.end are required in blockrange mode")
+		}
+		if *startBlocks > *endBlocks {
+			mainLogger.Fatalf("invalid blockrange: start (%d) > end (%d)", *startBlocks, *endBlocks)
+		}
+		if err := eth1indexer.IndexBlockRange(indexingParams); err != nil {
+			mainLogger.Fatalf("failed to index block range, start: %v, end: %v, error: %v", startBlocks, endBlocks, err)
+		}
+
+	case "datarange":
+		if *startData == 0 || *endData == 0 {
+			mainLogger.Fatal("--data.start and --data.end are required in datarange mode")
+		}
+		if *startData > *endData {
+			mainLogger.Fatalf("invalid datarange: start (%d) > end (%d)", *startData, *endData)
+		}
+		if err := eth1indexer.IndexDataRange(indexingParams); err != nil {
+			mainLogger.Fatalf("failed to index data range, start: %v, end: %v, error: %v", startData, endData, err)
+		}
+
+	case "live":
+		// No additional validation needed for live mode
+
+	default:
+		mainLogger.Fatalf("unknown mode: %s", *mode)
 	}
 
 	// TODO: close indexer if there are any gaps?
@@ -193,174 +214,7 @@ func main() {
 		return
 	}
 
-	// Save specified block range from node to bigtable and exit
-	if *endBlocks != 0 && *startBlocks < *endBlocks {
-		err = eth1indexer.IndexFromNode(bt, client, *startBlocks, *endBlocks, *concurrencyBlocks, *traceMode, mainLogger)
-		if err != nil {
-			mainLogger.WithError(err).Fatalf("error indexing from node, start: %v end: %v concurrency: %v", *startBlocks, *endBlocks, *concurrencyBlocks)
-		}
-		return
-	}
-
-	// Transform specified block range from blocks to data bigtable tables and exit
-	if *endData != 0 && *startData < *endData {
-		err = bt.IndexEventsWithTransformers(int64(*startData), int64(*endData), transforms, *concurrencyData, cache)
-		if err != nil {
-			mainLogger.WithError(err).Fatalf("error indexing from bigtable")
-		}
-		cache.Clear()
-		return
-	}
-
-	// Endless cycle if no ranges or single blocks specified
-	var lastBlockFromNodeOld uint64
-	var lastBlockFromNodeSameCount uint64
-	lastSuccessulBlockIndexingTs := time.Now()
-	for ; ; time.Sleep(time.Second * 14) {
-		err := eth1indexer.HandleChainReorgs(bt, client, *reorgDepth, mainLogger)
-		if err != nil {
-			mainLogger.Errorf("error handling chain reorgs: %v", err)
-			continue
-		}
-
-		lastBlockFromNode, err := client.GetLatestEth1BlockNumber()
-		if err != nil {
-			lastBlockFromNodeSameCount++
-			if lastBlockFromNodeSameCount > 20 { // nearly 5 minutes no new block
-				utils.LogFatal(err, "no new block in 20 tries", 0, map[string]interface{}{
-					"lastBlockFromNode": lastBlockFromNodeOld,
-				})
-			}
-			mainLogger.Errorf("error retrieving latest eth block number: %v", err)
-			continue
-		}
-		if lastBlockFromNode != lastBlockFromNodeOld {
-			lastBlockFromNodeOld = lastBlockFromNode
-			lastBlockFromNodeSameCount = 0
-		} else {
-			lastBlockFromNodeSameCount++
-			if lastBlockFromNodeSameCount > 20 { // nearly 5 minutes no new block
-				utils.LogFatal(nil, "no new block in 20 tries", 0, map[string]interface{}{
-					"lastBlockFromNode": lastBlockFromNodeOld,
-				})
-			}
-		}
-
-		lastBlockFromBlocksTable, err := bt.GetLastBlockInBlocksTable()
-		if err != nil {
-			mainLogger.Errorf("error retrieving last blocks from blocks table: %v", err)
-			continue
-		}
-
-		lastBlockFromDataTable, err := bt.GetLastBlockInDataTable()
-		if err != nil {
-			mainLogger.Errorf("error retrieving last blocks from data table: %v", err)
-			continue
-		}
-
-		mainLogger.WithFields(
-			logger.Fields{
-				"node":   lastBlockFromNode,
-				"blocks": lastBlockFromBlocksTable,
-				"data":   lastBlockFromDataTable,
-			},
-		).Infof("last blocks")
-
-		continueAfterError := false
-		if lastBlockFromNode > 0 {
-			if lastBlockFromBlocksTable < int(lastBlockFromNode) {
-				mainLogger.Infof("missing blocks %v to %v in blocks table, indexing ...", lastBlockFromBlocksTable+1, lastBlockFromNode)
-
-				startBlock := int64(lastBlockFromBlocksTable+1) - *offsetBlocks
-				if startBlock < 0 {
-					startBlock = 0
-				}
-
-				if *bulkBlocks <= 0 || *bulkBlocks > int64(lastBlockFromNode)-startBlock+1 {
-					*bulkBlocks = int64(lastBlockFromNode) - startBlock + 1
-				}
-
-				for startBlock <= int64(lastBlockFromNode) && !continueAfterError {
-					endBlock := startBlock + *bulkBlocks - 1
-					if endBlock > int64(lastBlockFromNode) {
-						endBlock = int64(lastBlockFromNode)
-					}
-
-					err = eth1indexer.IndexFromNode(bt, client, startBlock, endBlock, *concurrencyBlocks, *traceMode, mainLogger)
-					if err != nil {
-						errMsg := "error indexing from node"
-						errFields := map[string]interface{}{
-							"start":       startBlock,
-							"end":         endBlock,
-							"concurrency": *concurrencyBlocks}
-						if time.Since(lastSuccessulBlockIndexingTs) > time.Minute*30 {
-							utils.LogFatal(err, errMsg, 0, errFields)
-						} else {
-							utils.LogError(err, errMsg, 0, errFields)
-						}
-						continueAfterError = true
-						continue
-					} else {
-						lastSuccessulBlockIndexingTs = time.Now()
-					}
-
-					startBlock = endBlock + 1
-				}
-				if continueAfterError {
-					continue
-				}
-			}
-
-			if lastBlockFromDataTable < int(lastBlockFromNode) {
-				mainLogger.Infof("missing blocks %v to %v in data table, indexing ...", lastBlockFromDataTable+1, lastBlockFromNode)
-
-				startBlock := int64(lastBlockFromDataTable+1) - *offsetData
-				if startBlock < 0 {
-					startBlock = 0
-				}
-
-				if *bulkData <= 0 || *bulkData > int64(lastBlockFromNode)-startBlock+1 {
-					*bulkData = int64(lastBlockFromNode) - startBlock + 1
-				}
-
-				for startBlock <= int64(lastBlockFromNode) && !continueAfterError {
-					endBlock := startBlock + *bulkData - 1
-					if endBlock > int64(lastBlockFromNode) {
-						endBlock = int64(lastBlockFromNode)
-					}
-
-					err = bt.IndexEventsWithTransformers(startBlock, endBlock, transforms, *concurrencyData, cache)
-					if err != nil {
-						utils.LogError(err, "error indexing from bigtable", 0, map[string]interface{}{"start": startBlock, "end": endBlock, "concurrency": *concurrencyData})
-						cache.Clear()
-						continueAfterError = true
-						continue
-					}
-					cache.Clear()
-
-					startBlock = endBlock + 1
-				}
-				if continueAfterError {
-					continue
-				}
-			}
-		}
-
-		if *enableBalanceUpdater {
-			eth1indexer.ProcessMetadataUpdates(bt, client, balanceUpdaterPrefix, *balanceUpdaterBatchSize, 10, mainLogger)
-		}
-
-		if *enableEnsUpdater {
-			err := bt.ImportEnsUpdates(client.GetNativeClient(), *ensBatchSize)
-			if err != nil {
-				utils.LogError(err, "error importing ens updates", 0, nil)
-				continue
-			}
-		}
-
-		mainLogger.Infof("index run completed")
-		services.ReportStatus("eth1indexer", "Running", nil)
-	}
+	
 
 	// utils.WaitForCtrlC()
 }

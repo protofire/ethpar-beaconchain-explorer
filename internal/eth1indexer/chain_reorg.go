@@ -8,7 +8,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 )
 
 // HandleChainReorgs checks the latest blocks in the chain against what's stored
@@ -23,7 +23,7 @@ import (
 //
 // Returns:
 //   - error: if any unexpected issue occurs during validation or rollback.
-func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int, log *logger.Logger) error {
+func HandleChainReorgs(bt *db.Bigtable, client execution.ExecutionClient, depth int, log *logger.Logger) error {
 	ctx := context.Background()
 
 	latestNodeBlock, err := client.GetNativeClient().BlockByNumber(ctx, nil)
@@ -66,7 +66,7 @@ func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int, log
 // Returns:
 //   - bool:   true if a reorg is detected (hash mismatch), false otherwise.
 //   - error:  if any I/O or RPC error occurs.
-func fetchAndCompareBlock(ctx context.Context, bt *db.Bigtable, client *rpc.ErigonClient, height uint64, log *logger.Logger) (bool, error) {
+func fetchAndCompareBlock(ctx context.Context, bt *db.Bigtable, client execution.ExecutionClient, height uint64, log *logger.Logger) (bool, error) {
 	nodeHeader, err := client.GetNativeClient().HeaderByNumber(ctx, big.NewInt(int64(height)))
 	if err != nil {
 		log.Errorf("failed to fetch node block at height %d: %v", height, err)

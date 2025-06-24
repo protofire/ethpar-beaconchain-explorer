@@ -14,7 +14,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +33,7 @@ import (
 //   - tokenListPath: path to the JSON file containing the list of tokens to track.
 //   - log: logger for structured logging.
 //   - interval: interval between successive updates.
-func StartTokenPriceUpdater(bt *db.Bigtable, client *rpc.ErigonClient, tokenListPath string, log *logger.Logger, interval *time.Duration) () {
+func StartTokenPriceUpdater(bt *db.Bigtable, client execution.ExecutionClient, tokenListPath string, log *logger.Logger, interval *time.Duration) () {
 	for {
 		if err := updateTokenPrices(bt, client, tokenListPath, log); err != nil {
 			log.Errorf("error while updating token prices: %v", err)
@@ -46,7 +46,7 @@ func StartTokenPriceUpdater(bt *db.Bigtable, client *rpc.ErigonClient, tokenList
 // updateTokenPrices orchestrates a single run of the token price update pipeline.
 // It loads tokens from the local list, fetches their market prices, enriches them
 // with on-chain metadata, and saves the results in Bigtable.
-func updateTokenPrices(bt *db.Bigtable, client *rpc.ErigonClient, tokenListPath string, log *logger.Logger) error {
+func updateTokenPrices(bt *db.Bigtable, client execution.ExecutionClient, tokenListPath string, log *logger.Logger) error {
 	tokens, err := loadTokenList(tokenListPath)
 	if err != nil {
 		return fmt.Errorf("load token list: %w", err)
@@ -152,7 +152,7 @@ func buildDefiLlamaRequestBody(tokens *erc20.ERC20TokenList) ([]byte, error) {
 }
 
 // enrichTokenPrices queries on-chain metadata (total supply) for tokens.
-func enrichTokenPrices(client *rpc.ErigonClient, prices []*types.ERC20TokenPrice, log *logger.Logger) error {
+func enrichTokenPrices(client execution.ExecutionClient, prices []*types.ERC20TokenPrice, log *logger.Logger) error {
 	g := new(errgroup.Group)
 	g.SetLimit(10)
 

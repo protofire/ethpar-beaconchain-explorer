@@ -7,7 +7,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -27,7 +27,7 @@ import (
 //
 // Returns:
 //   - error: if any block retrieval or save operation fails.
-func IndexFromNode(bt *db.Bigtable, client *rpc.ErigonClient, start, end, concurrency int64, traceMode string, logger *logger.Logger) error {
+func IndexFromNode(bt *db.Bigtable, client execution.ExecutionClient, start, end, concurrency int64, traceMode string, logger *logger.Logger) error {
 	ctx := context.Background()
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(int(concurrency))
