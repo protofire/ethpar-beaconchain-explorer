@@ -1,21 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"math/big"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/eth1indexer"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
@@ -26,10 +19,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/version"
 
 	"github.com/coocood/freecache"
-	"github.com/ethereum/go-ethereum/common"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/shopspring/decimal"
-	"golang.org/x/sync/errgroup"
 
 	_ "net/http/pprof"
 )
@@ -108,28 +98,6 @@ func main() {
 		}()
 	}
 
-	db.MustInitDB(&types.DatabaseConfig{
-		Username:     cfg.WriterDatabase.Username,
-		Password:     cfg.WriterDatabase.Password,
-		Name:         cfg.WriterDatabase.Name,
-		Host:         cfg.WriterDatabase.Host,
-		Port:         cfg.WriterDatabase.Port,
-		MaxOpenConns: cfg.WriterDatabase.MaxOpenConns,
-		MaxIdleConns: cfg.WriterDatabase.MaxIdleConns,
-		SSL:          cfg.WriterDatabase.SSL,
-	}, &types.DatabaseConfig{
-		Username:     cfg.ReaderDatabase.Username,
-		Password:     cfg.ReaderDatabase.Password,
-		Name:         cfg.ReaderDatabase.Name,
-		Host:         cfg.ReaderDatabase.Host,
-		Port:         cfg.ReaderDatabase.Port,
-		MaxOpenConns: cfg.ReaderDatabase.MaxOpenConns,
-		MaxIdleConns: cfg.ReaderDatabase.MaxIdleConns,
-		SSL:          cfg.ReaderDatabase.SSL,
-	}, "pgx", "postgres")
-	defer db.ReaderDb.Close()
-	defer db.WriterDb.Close()
-
 	if erigonEndpoint == nil || *erigonEndpoint == "" {
 
 		if utils.Config.Eth1ErigonEndpoint == "" {
@@ -168,24 +136,18 @@ func main() {
 	}
 	defer bt.Close()
 
+	// Start token price export
 	if *tokenPriceExport {
-		go func() {
-			for {
-				err = UpdateTokenPrices(bt, client, *tokenPriceExportList)
-				if err != nil {
-					utils.LogError(err, "error while updating token prices", 0)
-					time.Sleep(*tokenPriceExportFrequency)
-				}
-				time.Sleep(*tokenPriceExportFrequency)
-			}
-		}()
+		go eth1indexer.StartTokenPriceUpdater(bt, client, *tokenPriceExportList, mainLogger, *&tokenPriceExportFrequency)
 	}
 
+	// Start unlimited balance updater
 	if *enableFullBalanceUpdater {
-		ProcessMetadataUpdates(bt, client, balanceUpdaterPrefix, *balanceUpdaterBatchSize, -1)
+		eth1indexer.ProcessMetadataUpdates(bt, client, balanceUpdaterPrefix, *balanceUpdaterBatchSize, -1, mainLogger)
 		return
 	}
 
+	// Indexing parameters
 	transforms := make([]func(blk *types.Eth1Block, cache *freecache.Cache) (*types.BulkMutations, *types.BulkMutations, error), 0)
 	transforms = append(transforms,
 		bt.TransformBlock,
@@ -201,32 +163,37 @@ func main() {
 		bt.TransformContract)
 
 	cache := freecache.NewCache(100 * 1024 * 1024) // 100 MB limit
-
-	if *block != 0 {
-		err = eth1indexer.IndexFromNode(bt, client, *block, *block, *concurrencyBlocks, *traceMode, mainLogger)
-		if err != nil {
-			mainLogger.WithError(err).Fatalf("error indexing from node, start: %v end: %v concurrency: %v", *block, *block, *concurrencyBlocks)
-		}
-		err = bt.IndexEventsWithTransformers(*block, *block, transforms, *concurrencyData, cache)
-		if err != nil {
-			mainLogger.WithError(err).Fatalf("error indexing from bigtable")
-		}
-		cache.Clear()
-
-		mainLogger.Infof("indexing of block %v completed", *block)
-		return
+	
+	// Index a single block and exit
+	indexingParams := eth1indexer.IndexingParams{
+		StartBlock: *block,
+		EndBlock: *block,
+		ConcurrencyBlocks:  *concurrencyBlocks,
+		ConcurrencyData: *concurrencyData,
+		TraceMode: *traceMode,
+		Cache: cache, 
+		Bigtable: bt,
+		Client: client,
+		Log: mainLogger,
 	}
 
+	if err := eth1indexer.IndexSingleBlock(indexingParams); err != nil {
+		mainLogger.Fatalf("failed to index block %v, error: %v", *block, err)
+	}
+
+	// TODO: close indexer if there are any gaps?
 	if *checkBlocksGaps {
 		bt.CheckForGapsInBlocksTable(*checkBlocksGapsLookback)
 		return
 	}
 
+	// TODO: close indexer if there are any gaps?
 	if *checkDataGaps {
 		bt.CheckForGapsInDataTable(*checkDataGapsLookback)
 		return
 	}
 
+	// Save specified block range from node to bigtable and exit
 	if *endBlocks != 0 && *startBlocks < *endBlocks {
 		err = eth1indexer.IndexFromNode(bt, client, *startBlocks, *endBlocks, *concurrencyBlocks, *traceMode, mainLogger)
 		if err != nil {
@@ -235,6 +202,7 @@ func main() {
 		return
 	}
 
+	// Transform specified block range from blocks to data bigtable tables and exit
 	if *endData != 0 && *startData < *endData {
 		err = bt.IndexEventsWithTransformers(int64(*startData), int64(*endData), transforms, *concurrencyData, cache)
 		if err != nil {
@@ -244,11 +212,12 @@ func main() {
 		return
 	}
 
+	// Endless cycle if no ranges or single blocks specified
 	var lastBlockFromNodeOld uint64
 	var lastBlockFromNodeSameCount uint64
 	lastSuccessulBlockIndexingTs := time.Now()
 	for ; ; time.Sleep(time.Second * 14) {
-		err := HandleChainReorgs(bt, client, *reorgDepth)
+		err := eth1indexer.HandleChainReorgs(bt, client, *reorgDepth, mainLogger)
 		if err != nil {
 			mainLogger.Errorf("error handling chain reorgs: %v", err)
 			continue
@@ -378,7 +347,7 @@ func main() {
 		}
 
 		if *enableBalanceUpdater {
-			ProcessMetadataUpdates(bt, client, balanceUpdaterPrefix, *balanceUpdaterBatchSize, 10)
+			eth1indexer.ProcessMetadataUpdates(bt, client, balanceUpdaterPrefix, *balanceUpdaterBatchSize, 10, mainLogger)
 		}
 
 		if *enableEnsUpdater {
@@ -394,220 +363,4 @@ func main() {
 	}
 
 	// utils.WaitForCtrlC()
-}
-
-func UpdateTokenPrices(bt *db.Bigtable, client *rpc.ErigonClient, tokenListPath string) error {
-
-	tokenListContent, err := os.ReadFile(tokenListPath)
-	if err != nil {
-		return err
-	}
-
-	tokenList := &erc20.ERC20TokenList{}
-
-	err = json.Unmarshal(tokenListContent, tokenList)
-	if err != nil {
-		return err
-	}
-
-	type defillamaPriceRequest struct {
-		Coins []string `json:"coins"`
-	}
-	coinsList := make([]string, 0, len(tokenList.Tokens))
-	for _, token := range tokenList.Tokens {
-		coinsList = append(coinsList, "ethereum:"+token.Address)
-	}
-
-	req := &defillamaPriceRequest{
-		Coins: coinsList,
-	}
-
-	reqEncoded, err := json.Marshal(req)
-	if err != nil {
-		return err
-	}
-
-	httpClient := &http.Client{Timeout: time.Second * 10}
-
-	resp, err := httpClient.Post("https://coins.llama.fi/prices", "application/json", bytes.NewReader(reqEncoded))
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error querying defillama api: %v", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	type defillamaCoin struct {
-		Decimals  int64            `json:"decimals"`
-		Price     *decimal.Decimal `json:"price"`
-		Symbol    string           `json:"symbol"`
-		Timestamp int64            `json:"timestamp"`
-	}
-
-	type defillamaResponse struct {
-		Coins map[string]defillamaCoin `json:"coins"`
-	}
-
-	respParsed := &defillamaResponse{}
-	err = json.Unmarshal(body, respParsed)
-	if err != nil {
-		return err
-	}
-
-	tokenPrices := make([]*types.ERC20TokenPrice, 0, len(respParsed.Coins))
-	for address, data := range respParsed.Coins {
-		tokenPrices = append(tokenPrices, &types.ERC20TokenPrice{
-			Token: common.FromHex(strings.TrimPrefix(address, "ethereum:0x")),
-			Price: []byte(data.Price.String()),
-		})
-	}
-
-	g := new(errgroup.Group)
-	g.SetLimit(20)
-	for i := range tokenPrices {
-		i := i
-		g.Go(func() error {
-
-			metadata, err := client.GetERC20TokenMetadata(tokenPrices[i].Token)
-			if err != nil {
-				return err
-			}
-			tokenPrices[i].TotalSupply = metadata.TotalSupply
-			// mainLogger.Infof("price for token %x is %s @ %v", tokenPrices[i].Token, tokenPrices[i].Price, new(big.Int).SetBytes(tokenPrices[i].TotalSupply))
-			return nil
-		})
-	}
-	err = g.Wait()
-	if err != nil {
-		return err
-	}
-
-	return bt.SaveERC20TokenPrices(tokenPrices)
-}
-
-func HandleChainReorgs(bt *db.Bigtable, client *rpc.ErigonClient, depth int) error {
-	ctx := context.Background()
-	// get latest block from the node
-	latestNodeBlock, err := client.GetNativeClient().BlockByNumber(ctx, nil)
-	if err != nil {
-		mainLogger.Debugf("error getting latest node block: %v", err)
-		return err
-	}
-	latestNodeBlockNumber := latestNodeBlock.NumberU64()
-
-	// for each block check if block node hash and block db hash match
-	if depth > int(latestNodeBlockNumber) {
-		depth = int(latestNodeBlockNumber)
-	}
-	for i := latestNodeBlockNumber - uint64(depth); i <= latestNodeBlockNumber; i++ {
-		nodeBlock, err := client.GetNativeClient().HeaderByNumber(ctx, big.NewInt(int64(i)))
-		if err != nil {
-			mainLogger.Debugf("error getting block header for block %s: %v", i, err)
-			return err
-		}
-
-		dbBlock, err := bt.GetBlockFromBlocksTable(i)
-		if err != nil {
-			if err == db.ErrBlockNotFound { // exit if we hit a block that is not yet in the db
-				return nil
-			}
-			return err
-		}
-
-		if !bytes.Equal(nodeBlock.Hash().Bytes(), dbBlock.Hash) {
-			mainLogger.Warnf("found incosistency at height %v, node block hash: %x, db block hash: %x", i, nodeBlock.Hash().Bytes(), dbBlock.Hash)
-
-			// first we set the cached marker of the last block in the blocks/data table to the block prior to the forked one
-			if i > 0 {
-				previousBlock := i - 1
-				err := bt.SetLastBlockInBlocksTable(int64(previousBlock))
-				if err != nil {
-					return fmt.Errorf("error setting last block [%v] in blocks table: %w", previousBlock, err)
-				}
-				err = bt.SetLastBlockInDataTable(int64(previousBlock))
-				if err != nil {
-					return fmt.Errorf("error setting last block [%v] in data table: %w", previousBlock, err)
-				}
-				// now we can proceed to delete all blocks including and after the forked block
-			}
-			// delete all blocks starting from the fork block up to the latest block in the db
-			for j := i; j <= latestNodeBlockNumber; j++ {
-				dbBlock, err := bt.GetBlockFromBlocksTable(j)
-				if err != nil {
-					if err == db.ErrBlockNotFound { // exit if we hit a block that is not yet in the db
-						return nil
-					}
-					return err
-				}
-				mainLogger.Infof("deleting block at height %v with hash %x", dbBlock.Number, dbBlock.Hash)
-
-				err = bt.DeleteBlock(dbBlock.Number, dbBlock.Hash)
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			mainLogger.Infof("height %v, node block hash: %x, db block hash: %x", i, nodeBlock.Hash().Bytes(), dbBlock.Hash)
-		}
-	}
-
-	return nil
-}
-
-func ProcessMetadataUpdates(bt *db.Bigtable, client *rpc.ErigonClient, prefix string, batchSize int, iterations int) {
-	lastKey := prefix
-
-	its := 0
-	for {
-		start := time.Now()
-		keys, pairs, err := bt.GetMetadataUpdates(prefix, lastKey, batchSize)
-		if err != nil {
-			mainLogger.Errorf("error retrieving metadata updates from bigtable: %v", err)
-			return
-		}
-
-		if len(keys) == 0 {
-			return
-		}
-
-		balances := make([]*types.Eth1AddressBalance, 0, len(pairs))
-		for b := 0; b < len(pairs); b += batchSize {
-			start := b
-			end := b + batchSize
-			if len(pairs) < end {
-				end = len(pairs)
-			}
-
-			mainLogger.Infof("processing batch %v with start %v and end %v", b, start, end)
-
-			b, err := client.GetBalances(pairs[start:end], 2, 4)
-
-			if err != nil {
-				mainLogger.Errorf("error retrieving balances from node: %v", err)
-				return
-			}
-			balances = append(balances, b...)
-		}
-
-		err = bt.SaveBalances(balances, keys)
-		if err != nil {
-			mainLogger.Errorf("error saving balances to bigtable: %v", err)
-			return
-		}
-
-		lastKey = keys[len(keys)-1]
-		mainLogger.Infof("retrieved %v balances in %v, currently at %v", len(balances), time.Since(start), lastKey)
-
-		its++
-
-		if iterations != -1 && its > iterations {
-			return
-		}
-	}
 }
