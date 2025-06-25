@@ -235,62 +235,65 @@ func createMenuItems(active string, isMain bool) []types.MainMenuItem {
 				},
 			},
 		},
-		{
-			Label:    "Validators",
-			IsActive: active == "validators",
-			Groups: []types.NavigationGroup{
-				{
-					Links: []types.NavigationLink{
-						{
-							Label: "Overview",
-							Path:  "/validators",
-							Icon:  "fa-table",
-						},
-						{
-							Label: "Slashings",
-							Path:  "/validators/slashings",
-							Icon:  "fa-user-slash",
-						},
-					},
-				}, {
-					Links: []types.NavigationLink{
-						{
-							Label: "Validator Leaderboard",
-							Path:  "/validators/leaderboard",
-							Icon:  "fa-medal",
-						},
-						{
-							Label: "Deposit Leaderboard",
-							Path:  "/validators/deposit-leaderboard",
-							Icon:  "fa-file-import",
-						},
-					},
-				}, {
-					Links: []types.NavigationLink{
-						{
-							Label: "Deposits",
-							Path:  "/validators/deposits",
-							Icon:  "fa-file-signature",
-						},
-						{
-							Label: "Withdrawals",
-							Path:  "/validators/withdrawals",
-							Icon:  "fa-money-bill",
-						},
-					},
-				},
-			},
-		},
-		{
-			Label:    "Dashboard",
-			IsActive: active == "dashboard",
-			Path:     "/dashboard",
-		},
-		{
-			Label:    "Notifications",
-			IsActive: false,
-			Path:     "/user/notifications",
-		},
+		// Validator navigation hidden - validators not supported yet
+		// {
+		// 	Label:    "Validators",
+		// 	IsActive: active == "validators",
+		// 	Groups: []types.NavigationGroup{
+		// 		{
+		// 			Links: []types.NavigationLink{
+		// 				{
+		// 					Label: "Overview",
+		// 					Path:  "/validators",
+		// 					Icon:  "fa-table",
+		// 				},
+		// 				{
+		// 					Label: "Slashings",
+		// 					Path:  "/validators/slashings",
+		// 					Icon:  "fa-user-slash",
+		// 				},
+		// 			},
+		// 		}, {
+		// 			Links: []types.NavigationLink{
+		// 				{
+		// 					Label: "Validator Leaderboard",
+		// 					Path:  "/validators/leaderboard",
+		// 					Icon:  "fa-medal",
+		// 				},
+		// 				{
+		// 					Label: "Deposit Leaderboard",
+		// 					Path:  "/validators/deposit-leaderboard",
+		// 					Icon:  "fa-file-import",
+		// 				},
+		// 			},
+		// 		}, {
+		// 			Links: []types.NavigationLink{
+		// 				{
+		// 					Label: "Deposits",
+		// 					Path:  "/validators/deposits",
+		// 					Icon:  "fa-file-signature",
+		// 				},
+		// 				{
+		// 					Label: "Withdrawals",
+		// 					Path:  "/validators/withdrawals",
+		// 					Icon:  "fa-money-bill",
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		// Dashboard hidden - validators not supported yet
+		// {
+		// 	Label:    "Dashboard",
+		// 	IsActive: active == "dashboard",
+		// 	Path:     "/dashboard",
+		// },
+		// Notifications hidden - validators not supported yet
+		// {
+		// 	Label:    "Notifications",
+		// 	IsActive: false,
+		// 	Path:     "/user/notifications",
+		// },
 		{
 			Label:        "More",
 			IsActive:     active == "more",
@@ -502,62 +505,65 @@ func createMenuItemsGnosis(active string, isMain bool) []types.MainMenuItem {
 				},
 			},
 		},
-		{
-			Label:    "Validators",
-			IsActive: active == "validators",
-			Groups: []types.NavigationGroup{
-				{
-					Links: []types.NavigationLink{
-						{
-							Label: "Overview",
-							Path:  "/validators",
-							Icon:  "fa-table",
-						},
-						{
-							Label: "Slashings",
-							Path:  "/validators/slashings",
-							Icon:  "fa-user-slash",
-						},
-					},
-				}, {
-					Links: []types.NavigationLink{
-						{
-							Label: "Validator Leaderboard",
-							Path:  "/validators/leaderboard",
-							Icon:  "fa-medal",
-						},
-						{
-							Label: "Deposit Leaderboard",
-							Path:  "/validators/deposit-leaderboard",
-							Icon:  "fa-file-import",
-						},
-					},
-				}, {
-					Links: []types.NavigationLink{
-						{
-							Label: "Deposits",
-							Path:  "/validators/deposits",
-							Icon:  "fa-file-signature",
-						},
-						{
-							Label: "Withdrawals",
-							Path:  "/validators/withdrawals",
-							Icon:  "fa-money-bill",
-						},
-					},
-				},
-			},
-		},
-		{
-			Label:    "Dashboard",
-			IsActive: active == "dashboard",
-			Path:     "/dashboard",
-		},
-		{
-			Label:    "Notifications",
-			IsActive: false,
-			Path:     "/user/notifications",
-		},
+		// Validator navigation hidden - validators not supported yet
+		// {
+		// 	Label:    "Validators",
+		// 	IsActive: active == "validators",
+		// 	Groups: []types.NavigationGroup{
+		// 		{
+		// 			Links: []types.NavigationLink{
+		// 				{
+		// 					Label: "Overview",
+		// 					Path:  "/validators",
+		// 					Icon:  "fa-table",
+		// 				},
+		// 				{
+		// 					Label: "Slashings",
+		// 					Path:  "/validators/slashings",
+		// 					Icon:  "fa-user-slash",
+		// 				},
+		// 			},
+		// 		}, {
+		// 			Links: []types.NavigationLink{
+		// 				{
+		// 					Label: "Validator Leaderboard",
+		// 					Path:  "/validators/leaderboard",
+		// 					Icon:  "fa-medal",
+		// 				},
+		// 				{
+		// 					Label: "Deposit Leaderboard",
+		// 					Path:  "/validators/deposit-leaderboard",
+		// 					Icon:  "fa-file-import",
+		// 				},
+		// 			},
+		// 		}, {
+		// 			Links: []types.NavigationLink{
+		// 				{
+		// 					Label: "Deposits",
+		// 					Path:  "/validators/deposits",
+		// 					Icon:  "fa-file-signature",
+		// 				},
+		// 				{
+		// 					Label: "Withdrawals",
+		// 					Path:  "/validators/withdrawals",
+		// 					Icon:  "fa-money-bill",
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		// Dashboard hidden - validators not supported yet
+		// {
+		// 	Label:    "Dashboard",
+		// 	IsActive: active == "dashboard",
+		// 	Path:     "/dashboard",
+		// },
+		// Notifications hidden - validators not supported yet
+		// {
+		// 	Label:    "Notifications",
+		// 	IsActive: false,
+		// 	Path:     "/user/notifications",
+		// },
 		{
 			Label:        "More",
 			IsActive:     active == "more",
