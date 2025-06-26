@@ -130,7 +130,7 @@ table.dataTable tbody td.selected {
 table.dataTable tbody tr.selected a, 
 table.dataTable tbody th.selected a, 
 table.dataTable tbody td.selected a {
-  color: var(--link-color, #2d5986) !important;
+  color: var(--link-color, #1d4ed8) !important;
 }
 table.dataTable tbody>tr.selected, 
 table.dataTable tbody>tr>.selected {
