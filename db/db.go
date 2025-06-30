@@ -626,7 +626,7 @@ func GetPendingDeposits(pubkey []byte, limit int) ([]types.PendingDeposit, error
 }
 
 // GetValidatorDeposits will return eth1- and eth2-deposits for a public key from the database
-func GetValidatorDeposits(publicKey []byte) (*types.ValidatorDeposits, error) {
+func GetValidatorDeposits(publicKey []byte, bt *Bigtable) (*types.ValidatorDeposits, error) {
 	deposits := &types.ValidatorDeposits{}
 	err := ReaderDb.Select(&deposits.Eth1Deposits, `
 		SELECT tx_hash, tx_input, tx_index, block_number, EXTRACT(epoch FROM block_ts)::INT as block_ts, from_address, publickey, withdrawal_credentials, amount, signature, merkletree_index, valid_signature
@@ -642,7 +642,7 @@ func GetValidatorDeposits(publicKey []byte) (*types.ValidatorDeposits, error) {
 		for _, v := range deposits.Eth1Deposits {
 			names[string(v.FromAddress)] = ""
 		}
-		names, _, err = BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+		names, _, err = bt.GetAddressesNamesArMetadata(&names, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -957,7 +957,7 @@ func saveGraffitiwall(block *types.Block, tx *sqlx.Tx) error {
 	return nil
 }
 
-func SaveValidators(epoch uint64, validators []*types.Validator, client consensus.ConsensusClient, activationBalanceBatchSize int, tx *sqlx.Tx) error {
+func SaveValidators(epoch uint64, validators []*types.Validator, client consensus.ConsensusClient, activationBalanceBatchSize int, tx *sqlx.Tx, bt *Bigtable) error {
 	start := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_save_validators").Observe(time.Since(start).Seconds())
@@ -977,7 +977,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 		for _, validator := range validators {
 			indices = append(indices, validator.Index)
 		}
-		genesisBalances, err = BigtableClient.GetValidatorBalanceHistory(indices, 0, 0)
+		genesisBalances, err = bt.GetValidatorBalanceHistory(indices, 0, 0)
 		if err != nil {
 			return fmt.Errorf("error retrieving genesis validator balances: %w", err)
 		}
@@ -996,25 +996,25 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 	}
 
 	for ; ; time.Sleep(time.Second) { // wait till the last attestation in memory cache has been populated by the exporter
-		BigtableClient.LastAttestationCacheMux.Lock()
-		if BigtableClient.LastAttestationCache != nil {
-			BigtableClient.LastAttestationCacheMux.Unlock()
+		bt.LastAttestationCacheMux.Lock()
+		if bt.LastAttestationCache != nil {
+			bt.LastAttestationCacheMux.Unlock()
 			break
 		}
-		BigtableClient.LastAttestationCacheMux.Unlock()
+		bt.LastAttestationCacheMux.Unlock()
 		dblog.Infof("waiting until LastAttestation in memory cache is available")
 	}
 
 	currentStateMap := make(map[uint64]*types.Validator, len(currentState))
 	latestBlock := uint64(0)
-	BigtableClient.LastAttestationCacheMux.Lock()
+	bt.LastAttestationCacheMux.Lock()
 	for _, v := range currentState {
-		if BigtableClient.LastAttestationCache[v.Index] > latestBlock {
-			latestBlock = BigtableClient.LastAttestationCache[v.Index]
+		if bt.LastAttestationCache[v.Index] > latestBlock {
+			latestBlock = bt.LastAttestationCache[v.Index]
 		}
 		currentStateMap[v.Index] = v
 	}
-	BigtableClient.LastAttestationCacheMux.Unlock()
+	bt.LastAttestationCacheMux.Unlock()
 
 	thresholdSlot := uint64(0)
 	if latestBlock >= 64 {
@@ -1103,9 +1103,9 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 			// WHEN EXCLUDED.activationepoch < %[1]d AND GREATEST(EXCLUDED.lastattestationslot, validators.lastattestationslot) < %[2]d THEN 'active_offline'
 			// ELSE 'active_online'
 			// END
-			BigtableClient.LastAttestationCacheMux.Lock()
-			offline := BigtableClient.LastAttestationCache[v.Index] < thresholdSlot
-			BigtableClient.LastAttestationCacheMux.Unlock()
+			bt.LastAttestationCacheMux.Lock()
+			offline := bt.LastAttestationCache[v.Index] < thresholdSlot
+			bt.LastAttestationCacheMux.Unlock()
 
 			if v.ExitEpoch <= latestEpoch && v.Slashed {
 				v.Status = "slashed"
@@ -1226,7 +1226,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 		if newValidator.ActivationEpoch == 0 {
 			balance = genesisBalances
 		} else {
-			balance, err = BigtableClient.GetValidatorBalanceHistory([]uint64{newValidator.Validatorindex}, newValidator.ActivationEpoch, newValidator.ActivationEpoch)
+			balance, err = bt.GetValidatorBalanceHistory([]uint64{newValidator.Validatorindex}, newValidator.ActivationEpoch, newValidator.ActivationEpoch)
 			if err != nil {
 				return fmt.Errorf("error retreiving validator balance history: %w", err)
 			}

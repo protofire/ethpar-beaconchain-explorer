@@ -53,10 +53,18 @@ func main() {
 
 	metrics.StartMetrics(utils.Config.Metrics.Enabled, utils.Config.Metrics.Address)
 
-	_, err = db.InitBigtable(cfg.Bigtable.Project, cfg.Bigtable.Instance, fmt.Sprintf("%d", utils.Config.Chain.ClConfig.DepositChainID), utils.Config.RedisCacheEndpoint)
-	if err != nil {
-		logrus.Fatalf("error initializing bigtable %v", err)
-	}
+	// Initialize BigTable client
+	bt := db.MustInitBigtable(&db.BigtableConfig{
+		Project:      utils.Config.Bigtable.Project,
+		Instance:     utils.Config.Bigtable.Project,
+		ChainId:      utils.Config.Chain.ClConfig.DepositChainID,
+		CacheAddr:    utils.Config.RedisCacheEndpoint,
+		Emulated:     utils.Config.Bigtable.Emulator,
+		EmulatorHost: utils.Config.Bigtable.EmulatorHost,
+		EmulatorPort: uint16(utils.Config.Bigtable.EmulatorPort),
+		Rpc:          nil,
+	})
+	defer bt.Close()
 
 	db.MustInitDB(&types.DatabaseConfig{
 		Username:     cfg.WriterDatabase.Username,
@@ -109,7 +117,7 @@ func main() {
 	}
 
 	logrus.Infof("initializing frontend services")
-	services.Init(consClient) // Init frontend services
+	services.Init(consClient, bt) // Init frontend services
 	logrus.Infof("frontend services initiated")
 
 	utils.WaitForCtrlC()

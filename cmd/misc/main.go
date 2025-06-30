@@ -118,19 +118,23 @@ func main() {
 	}
 	utils.Config = cfg
 
-	chainIdString := strconv.FormatUint(utils.Config.Chain.ClConfig.DepositChainID, 10)
+	//chainIdString := strconv.FormatUint(utils.Config.Chain.ClConfig.DepositChainID, 10)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(5)
 
-	go func() {
-		defer wg.Done()
-		var err error
-		bt, err = db.InitBigtable(utils.Config.Bigtable.Project, utils.Config.Bigtable.Instance, chainIdString, utils.Config.RedisCacheEndpoint)
-		if err != nil {
-			utils.LogFatal(err, "error initializing bigtable", 0)
-		}
-	}()
+	// Initialize BigTable client
+	bt := db.MustInitBigtable(&db.BigtableConfig{
+		Project:      utils.Config.Bigtable.Project,
+		Instance:     utils.Config.Bigtable.Project,
+		ChainId:      utils.Config.Chain.ClConfig.DepositChainID,
+		CacheAddr:    utils.Config.RedisCacheEndpoint,
+		Emulated:     utils.Config.Bigtable.Emulator,
+		EmulatorHost: utils.Config.Bigtable.EmulatorHost,
+		EmulatorPort: uint16(utils.Config.Bigtable.EmulatorPort),
+		Rpc:          nil,
+	})
+	defer bt.Close()
 
 	go func() {
 		defer wg.Done()
@@ -248,7 +252,7 @@ func main() {
 				logrus.Fatalf("error starting tx: %v", err)
 			}
 			for slot := epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch; slot < (epoch+1)*utils.Config.Chain.ClConfig.SlotsPerEpoch; slot++ {
-				err = exporter.ExportSlot(consClient, slot, false, tx)
+				err = exporter.ExportSlot(consClient, slot, false, tx, bt)
 
 				if err != nil {
 					tx.Rollback()
@@ -297,7 +301,7 @@ func main() {
 				logrus.Fatalf("error starting tx: %v", err)
 			}
 			for slot := epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch; slot < (epoch+1)*utils.Config.Chain.ClConfig.SlotsPerEpoch; slot++ {
-				err = exporter.ExportSlot(consClient, slot, false, tx)
+				err = exporter.ExportSlot(consClient, slot, false, tx, bt)
 
 				if err != nil {
 					tx.Rollback()
@@ -388,7 +392,7 @@ func main() {
 
 			logrus.Infof("saving validators %v-%v", data.Validators[0].Index, data.Validators[len(data.Validators)-1].Index)
 
-			err = db.SaveValidators(0, data.Validators, consClient, len(data.Validators), tx)
+			err = db.SaveValidators(0, data.Validators, consClient, len(data.Validators), tx, bt)
 			if err != nil {
 				logrus.Fatal(err)
 			}
@@ -418,7 +422,7 @@ func main() {
 			logrus.Fatal(err)
 		}
 
-		err = db.BigtableClient.SaveValidatorBalances(0, validatorsArr)
+		err = bt.SaveValidatorBalances(0, validatorsArr)
 		if err != nil {
 			logrus.Fatal(err)
 		}
@@ -955,7 +959,7 @@ func fixExecTransactionsCount() error {
 				low = firstBlock
 			}
 
-			err := db.BigtableClient.GetFullBlocksDescending(stream, uint64(high), uint64(low))
+			err := bt.GetFullBlocksDescending(stream, uint64(high), uint64(low))
 			if err != nil {
 				logrus.Errorf("error getting blocks descending high: %v low: %v err: %v", high, low, err)
 			}
@@ -1075,7 +1079,7 @@ func debugBlocks() error {
 	}
 
 	for i := opts.StartBlock; i <= opts.EndBlock; i++ {
-		btBlock, err := db.BigtableClient.GetBlockFromBlocksTable(i)
+		btBlock, err := bt.GetBlockFromBlocksTable(i)
 		if err != nil {
 			return err
 		}
@@ -1203,7 +1207,7 @@ func migrateLastAttestationSlotToBigtable() {
 	for _, validator := range validators {
 		logrus.Infof("setting last attestation slot %v for validator %v", validator.LastAttestationSlot, validator.Index)
 
-		err := db.BigtableClient.SetLastAttestationSlot(validator.Index, uint64(validator.LastAttestationSlot.Int64))
+		err := bt.SetLastAttestationSlot(validator.Index, uint64(validator.LastAttestationSlot.Int64))
 		if err != nil {
 			utils.LogFatal(err, "error setting last attestation slot", 0)
 		}
@@ -1546,7 +1550,7 @@ func indexMissingBlocks(start uint64, end uint64, bt *db.Bigtable, client *rpc.E
 			}
 
 			logrus.Infof("block [%v] not found, will index it", block)
-			if _, err := db.BigtableClient.GetBlockFromBlocksTable(block); err != nil {
+			if _, err := bt.GetBlockFromBlocksTable(block); err != nil {
 				logrus.Infof("could not load [%v] from blocks table, will try to fetch it from the node and save it", block)
 
 				bc, _, err := client.GetBlock(int64(block), "parity/geth")

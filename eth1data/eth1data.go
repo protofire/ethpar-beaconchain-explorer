@@ -29,7 +29,7 @@ import (
 var logger = logrus.New().WithField("module", "eth1data")
 var ErrTxIsPending = errors.New("error retrieving data for tx: tx is still pending")
 
-func GetEth1Transaction(hash common.Hash, currency string, rpc execution.ExecutionClient) (*types.Eth1TxData, error) {
+func GetEth1Transaction(hash common.Hash, currency string, rpc execution.ExecutionClient, bt *db.Bigtable) (*types.Eth1TxData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -146,21 +146,21 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 			txPageData.ErrorMsg = errorMsg
 		}
 	} else {
-		txPageData.Transfers, err = db.BigtableClient.GetArbitraryTokenTransfersForTransaction(tx.Hash().Bytes())
+		txPageData.Transfers, err = bt.GetArbitraryTokenTransfersForTransaction(tx.Hash().Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("error loading token transfers from tx: %w", err)
 		}
 	}
-	txPageData.InternalTxns, err = db.BigtableClient.GetInternalTransfersForTransaction(tx.Hash().Bytes(), msg.From.Bytes(), data, currency)
+	txPageData.InternalTxns, err = bt.GetInternalTransfersForTransaction(tx.Hash().Bytes(), msg.From.Bytes(), data, currency)
 	if err != nil {
 		return nil, fmt.Errorf("error loading internal transfers from tx: %w", err)
 	}
-	txPageData.FromName, err = db.BigtableClient.GetAddressName(msg.From.Bytes())
+	txPageData.FromName, err = bt.GetAddressName(msg.From.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveing from name for tx: %w", err)
 	}
 	if msg.To != nil {
-		txPageData.ToName, err = db.BigtableClient.GetAddressName(msg.To.Bytes())
+		txPageData.ToName, err = bt.GetAddressName(msg.To.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("error retrieveing to name for tx: %w", err)
 		}
@@ -177,13 +177,13 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 
 		for _, log := range receipt.Logs {
 			if cmEntry, wasContractMetadataCached = contractMetadataCache[log.Address]; !wasContractMetadataCached {
-				cmEntry.meta, cmEntry.err = db.BigtableClient.GetContractMetadata(log.Address.Bytes())
+				cmEntry.meta, cmEntry.err = bt.GetContractMetadata(log.Address.Bytes())
 				contractMetadataCache[log.Address] = cmEntry
 			}
 			if cmEntry.err != nil || cmEntry.meta == nil || cmEntry.meta.ABI == nil {
 				name := ""
 				if len(log.Topics) > 0 {
-					name = db.BigtableClient.GetEventLabel(log.Topics[0][:])
+					name = bt.GetEventLabel(log.Topics[0][:])
 				}
 				eth1Event := &types.Eth1EventData{
 					Address: log.Address,

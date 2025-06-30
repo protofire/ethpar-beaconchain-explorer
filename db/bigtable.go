@@ -25,8 +25,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var BigtableClient *Bigtable
-
 const (
 	DEFAULT_FAMILY                        = "f"
 	VALIDATOR_BALANCES_FAMILY             = "vb"
@@ -224,7 +222,6 @@ func InitBigtable(project, instance, chainId, redisAddress string) (*Bigtable, e
 		go bt.commitQueuedMachineMetricWrites()
 	}
 
-	BigtableClient = bt
 	return bt, nil
 }
 
@@ -2770,7 +2767,7 @@ func (bigtable *Bigtable) validatorKeyToIndex(key string) (uint64, error) {
 	return indexKey, nil
 }
 
-func GetCurrentDayClIncome(validator_indices []uint64) (map[uint64]int64, error) {
+func GetCurrentDayClIncome(validator_indices []uint64, bt *Bigtable) (map[uint64]int64, error) {
 	dayIncome := make(map[uint64]int64)
 	lastDay, err := GetLastExportedStatisticDay()
 	if err != nil {
@@ -2783,7 +2780,7 @@ func GetCurrentDayClIncome(validator_indices []uint64) (map[uint64]int64, error)
 	currentDay := uint64(lastDay + 1)
 	startEpoch := currentDay * utils.EpochsPerDay()
 	endEpoch := startEpoch + utils.EpochsPerDay() - 1
-	income, err := BigtableClient.GetValidatorIncomeDetailsHistory(validator_indices, startEpoch, endEpoch)
+	income, err := bt.GetValidatorIncomeDetailsHistory(validator_indices, startEpoch, endEpoch)
 	if err != nil {
 		return dayIncome, err
 	}

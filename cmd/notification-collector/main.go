@@ -108,15 +108,18 @@ func main() {
 		}, "pgx", "postgres")
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		bt, err := db.InitBigtable(utils.Config.Bigtable.Project, utils.Config.Bigtable.Instance, fmt.Sprintf("%d", utils.Config.Chain.ClConfig.DepositChainID), utils.Config.RedisCacheEndpoint)
-		if err != nil {
-			logrus.Fatalf("error connecting to bigtable: %v", err)
-		}
-		db.BigtableClient = bt
-	}()
+	// Initialize BigTable client
+	bt := db.MustInitBigtable(&db.BigtableConfig{
+		Project:      utils.Config.Bigtable.Project,
+		Instance:     utils.Config.Bigtable.Project,
+		ChainId:      utils.Config.Chain.ClConfig.DepositChainID,
+		CacheAddr:    utils.Config.RedisCacheEndpoint,
+		Emulated:     utils.Config.Bigtable.Emulator,
+		EmulatorHost: utils.Config.Bigtable.EmulatorHost,
+		EmulatorPort: uint16(utils.Config.Bigtable.EmulatorPort),
+		Rpc:          nil,
+	})
+	defer bt.Close()
 
 	if utils.Config.TieredCacheProvider != "redis" {
 		logrus.Fatalf("no cache provider set, please set TierdCacheProvider (redis)")
@@ -140,11 +143,10 @@ func main() {
 	defer db.WriterDb.Close()
 	defer db.FrontendReaderDB.Close()
 	defer db.FrontendWriterDB.Close()
-	defer db.BigtableClient.Close()
 
 	logrus.Infof("database connection established")
 
-	services.InitNotificationCollector(utils.Config.Notifications.PubkeyCachePath)
+	services.InitNotificationCollector(utils.Config.Notifications.PubkeyCachePath, bt)
 
 	utils.WaitForCtrlC()
 

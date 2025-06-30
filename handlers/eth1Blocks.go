@@ -33,47 +33,49 @@ func Eth1Blocks(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Eth1BlocksData(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func Eth1BlocksData(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	q := r.URL.Query()
+		q := r.URL.Query()
 
-	recordsTotal, err := strconv.ParseUint(q.Get("recordsTotal"), 10, 64)
-	if err != nil {
-		recordsTotal = 0
-	}
-	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int for route %v: %v", r.URL.String(), err)
-		http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
-		return
-	}
-	start, err := strconv.ParseUint(q.Get("start"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables start parameter from string to int for route %v: %v", r.URL.String(), err)
-		http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
-		return
-	}
-	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables length parameter from string to int for route %v: %v", r.URL.String(), err)
-		http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
-		return
-	}
-	if length > 100 {
-		length = 100
-	}
+		recordsTotal, err := strconv.ParseUint(q.Get("recordsTotal"), 10, 64)
+		if err != nil {
+			recordsTotal = 0
+		}
+		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables draw parameter from string to int for route %v: %v", r.URL.String(), err)
+			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
+			return
+		}
+		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables start parameter from string to int for route %v: %v", r.URL.String(), err)
+			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
+			return
+		}
+		length, err := strconv.ParseUint(q.Get("length"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables length parameter from string to int for route %v: %v", r.URL.String(), err)
+			http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
+			return
+		}
+		if length > 100 {
+			length = 100
+		}
 
-	data, err := getEth1BlocksTableData(draw, start, length, recordsTotal)
-	if err != nil {
-		utils.LogError(err, "error getting eth1 block table data", 0)
-	}
+		data, err := getEth1BlocksTableData(draw, start, length, recordsTotal, bt)
+		if err != nil {
+			utils.LogError(err, "error getting eth1 block table data", 0)
+		}
 
-	err = json.NewEncoder(w).Encode(data)
-	if err != nil {
-		logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		err = json.NewEncoder(w).Encode(data)
+		if err != nil {
+			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -129,7 +131,7 @@ func Eth1BlocksHighest(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("%d", services.LatestEth1BlockNumber())))
 }
 
-func getEth1BlocksTableData(draw, start, length, recordsTotal uint64) (*types.DataTableResponse, error) {
+func getEth1BlocksTableData(draw, start, length, recordsTotal uint64, bt *db.Bigtable) (*types.DataTableResponse, error) {
 	if recordsTotal == 0 {
 		recordsTotal = services.LatestEth1BlockNumber() + 1 // +1 to include block 0
 	}
@@ -145,7 +147,7 @@ func getEth1BlocksTableData(draw, start, length, recordsTotal uint64) (*types.Da
 		length = start + 1
 	}
 
-	blocks, err := db.BigtableClient.GetBlocksDescending(start, length)
+	blocks, err := bt.GetBlocksDescending(start, length)
 	if err != nil {
 		return nil, err
 	}

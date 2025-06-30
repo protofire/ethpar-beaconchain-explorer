@@ -522,7 +522,7 @@ func (bigtable *Bigtable) GetFullBlocksDescending(stream chan<- *types.Eth1Block
 
 	if low == 0 {
 		// special handling for block 0 which is padded incorrectly
-		b, err := BigtableClient.GetBlockFromBlocksTable(0)
+		b, err := bigtable.GetBlockFromBlocksTable(0)
 		if err != nil {
 			return fmt.Errorf("could not retreive block 0:  %v", err)
 		}
@@ -680,7 +680,7 @@ func (bigtable *Bigtable) IndexEventsWithTransformers(start, end int64, transfor
 					low = firstBlock
 				}
 
-				err := BigtableClient.GetFullBlocksDescending(stream, uint64(high), uint64(low))
+				err := bigtable.GetFullBlocksDescending(stream, uint64(high), uint64(low))
 				if err != nil {
 					log.Errorf("error getting blocks descending high: %v low: %v err: %v", high, low, err)
 				}
@@ -2295,7 +2295,7 @@ func (bigtable *Bigtable) GetAddressTransactionsTableData(address []byte, pageTo
 		return nil, fmt.Errorf("invalid pageToken for function GetAddressTransactionsTableData: %s", pageToken)
 	}
 
-	transactions, keys, err := BigtableClient.GetEth1TxsForAddress(pageToken, DefaultInfScrollRows)
+	transactions, keys, err := bigtable.GetEth1TxsForAddress(pageToken, DefaultInfScrollRows)
 	if err != nil {
 		return nil, err
 	}
@@ -2314,7 +2314,7 @@ func (bigtable *Bigtable) GetAddressTransactionsTableData(address []byte, pageTo
 		idxs[i] = int64(tx_idx)
 	}
 
-	contractInteractionTypes, err := BigtableClient.GetAddressContractInteractionsAtTransactions(transactions, idxs)
+	contractInteractionTypes, err := bigtable.GetAddressContractInteractionsAtTransactions(transactions, idxs)
 	if err != nil {
 		utils.LogError(err, "error getting contract states", 0)
 	}
@@ -2325,7 +2325,7 @@ func (bigtable *Bigtable) GetAddressTransactionsTableData(address []byte, pageTo
 		names[string(t.From)] = ""
 		names[string(t.To)] = ""
 	}
-	names, _, err = BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bigtable.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2345,7 +2345,7 @@ func (bigtable *Bigtable) GetAddressTransactionsTableData(address []byte, pageTo
 			utils.FormatTimestamp(t.Time.AsTime().Unix()),
 			utils.FormatAddressWithLimitsInAddressPageTable(address, t.From, fromName, false, digitLimitInAddressPagesTable, nameLimitInAddressPagesTable, true),
 			utils.FormatInOutSelf(address, t.From, t.To),
-			utils.FormatAddressWithLimitsInAddressPageTable(address, t.To, BigtableClient.GetAddressLabel(names[string(t.To)], contractInteraction), contractInteraction != types.CONTRACT_NONE, digitLimitInAddressPagesTable, nameLimitInAddressPagesTable, true),
+			utils.FormatAddressWithLimitsInAddressPageTable(address, t.To, bigtable.GetAddressLabel(names[string(t.To)], contractInteraction), contractInteraction != types.CONTRACT_NONE, digitLimitInAddressPagesTable, nameLimitInAddressPagesTable, true),
 			utils.FormatAmount(new(big.Int).SetBytes(t.Value), utils.Config.Frontend.ElCurrency, 6),
 		}
 	}
@@ -2438,7 +2438,7 @@ func (bigtable *Bigtable) GetAddressBlocksMinedTableData(address string, pageTok
 		return nil, fmt.Errorf("invalid pageToken for function GetAddressBlocksMinedTableData: %s", pageToken)
 	}
 
-	blocks, lastKey, err := BigtableClient.GetEth1BlocksForAddress(pageToken, DefaultInfScrollRows)
+	blocks, lastKey, err := bigtable.GetEth1BlocksForAddress(pageToken, DefaultInfScrollRows)
 	if err != nil {
 		return nil, err
 	}
@@ -2538,7 +2538,7 @@ func (bigtable *Bigtable) GetAddressUnclesMinedTableData(address string, pageTok
 		return nil, fmt.Errorf("invalid pageToken for function GetAddressUnclesMinedTableData: %s", pageToken)
 	}
 
-	uncles, lastKey, err := BigtableClient.GetEth1UnclesForAddress(pageToken, DefaultInfScrollRows)
+	uncles, lastKey, err := bigtable.GetEth1UnclesForAddress(pageToken, DefaultInfScrollRows)
 	if err != nil {
 		return nil, err
 	}
@@ -2646,7 +2646,7 @@ func (bigtable *Bigtable) GetAddressBlobTableData(address []byte, pageToken stri
 		names[string(t.From)] = ""
 		names[string(t.To)] = ""
 	}
-	names, _, err = BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bigtable.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2769,7 +2769,7 @@ func (bigtable *Bigtable) GetAddressInternalTableData(address []byte, pageToken 
 		names[string(t.From)] = ""
 		names[string(t.To)] = ""
 	}
-	names, _, err = BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bigtable.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2795,7 +2795,7 @@ func (bigtable *Bigtable) GetAddressInternalTableData(address []byte, pageToken 
 		}
 		idxs[i] = [2]int64{int64(tx_idx), int64(trace_idx)}
 	}
-	contractInteractionTypes, err := BigtableClient.GetAddressContractInteractionsAtITransactions(itransactions, idxs)
+	contractInteractionTypes, err := bigtable.GetAddressContractInteractionsAtITransactions(itransactions, idxs)
 	if err != nil {
 		utils.LogError(err, "error getting contract states", 0)
 	}
@@ -2821,9 +2821,9 @@ func (bigtable *Bigtable) GetAddressInternalTableData(address []byte, pageToken 
 			utils.FormatTransactionHash(t.ParentHash, true),
 			utils.FormatBlockNumber(t.BlockNumber),
 			utils.FormatTimestamp(t.Time.AsTime().Unix()),
-			utils.FormatAddressWithLimitsInAddressPageTable(address, t.From, BigtableClient.GetAddressLabel(fromName, from_contractInteraction), from_contractInteraction != types.CONTRACT_NONE, digitLimitInAddressPagesTable, nameLimitInAddressPagesTable, true),
+			utils.FormatAddressWithLimitsInAddressPageTable(address, t.From, bigtable.GetAddressLabel(fromName, from_contractInteraction), from_contractInteraction != types.CONTRACT_NONE, digitLimitInAddressPagesTable, nameLimitInAddressPagesTable, true),
 			utils.FormatInOutSelf(address, t.From, t.To),
-			utils.FormatAddressWithLimitsInAddressPageTable(address, t.To, BigtableClient.GetAddressLabel(toName, to_contractInteraction), to_contractInteraction != types.CONTRACT_NONE, digitLimitInAddressPagesTable, nameLimitInAddressPagesTable, true),
+			utils.FormatAddressWithLimitsInAddressPageTable(address, t.To, bigtable.GetAddressLabel(toName, to_contractInteraction), to_contractInteraction != types.CONTRACT_NONE, digitLimitInAddressPagesTable, nameLimitInAddressPagesTable, true),
 			utils.FormatAmount(new(big.Int).SetBytes(t.Value), utils.Config.Frontend.ElCurrency, 6),
 			t.Type,
 		}
@@ -2856,7 +2856,7 @@ func (bigtable *Bigtable) GetInternalTransfersForTransaction(transaction []byte,
 		return nil, err
 	}
 
-	contractInteractionTypes, err := BigtableClient.GetAddressContractInteractionsAtParityTraces(parityTrace)
+	contractInteractionTypes, err := bigtable.GetAddressContractInteractionsAtParityTraces(parityTrace)
 	if err != nil {
 		utils.LogError(err, "error getting contract states", 0)
 	}
@@ -2882,8 +2882,8 @@ func (bigtable *Bigtable) GetInternalTransfersForTransaction(transaction []byte,
 			to_contractInteraction = contractInteractionTypes[i][1]
 		}
 
-		fromName := BigtableClient.GetAddressLabel(names[string(from)], from_contractInteraction)
-		toName := BigtableClient.GetAddressLabel(names[string(to)], to_contractInteraction)
+		fromName := bigtable.GetAddressLabel(names[string(from)], from_contractInteraction)
+		toName := bigtable.GetAddressLabel(names[string(to)], to_contractInteraction)
 
 		itx := types.ITransaction{
 			From:      utils.FormatAddress(from, nil, fromName, false, from_contractInteraction != types.CONTRACT_NONE, true),
@@ -3112,7 +3112,7 @@ func (bigtable *Bigtable) GetAddressErc20TableData(address []byte, pageToken str
 		names[string(t.To)] = ""
 		tokens[string(t.TokenAddress)] = nil
 	}
-	names, tokens, err = BigtableClient.GetAddressesNamesArMetadata(&names, &tokens)
+	names, tokens, err = bigtable.GetAddressesNamesArMetadata(&names, &tokens)
 	if err != nil {
 		return nil, err
 	}
@@ -3241,7 +3241,7 @@ func (bigtable *Bigtable) GetAddressErc721TableData(address []byte, pageToken st
 		names[string(t.From)] = ""
 		names[string(t.To)] = ""
 	}
-	names, _, err = BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bigtable.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -3358,7 +3358,7 @@ func (bigtable *Bigtable) GetAddressErc1155TableData(address []byte, pageToken s
 		names[string(t.From)] = ""
 		names[string(t.To)] = ""
 	}
-	names, _, err = BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bigtable.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -4467,7 +4467,7 @@ func (bigtable *Bigtable) GetTokenTransactionsTableData(token []byte, address []
 		}
 	}
 
-	transactions, lastKey, err := BigtableClient.GetEth1TxForToken(pageToken, DefaultInfScrollRows)
+	transactions, lastKey, err := bigtable.GetEth1TxForToken(pageToken, DefaultInfScrollRows)
 	if err != nil {
 		return nil, err
 	}
@@ -4479,7 +4479,7 @@ func (bigtable *Bigtable) GetTokenTransactionsTableData(token []byte, address []
 		names[string(t.To)] = ""
 		tokens[string(t.TokenAddress)] = nil
 	}
-	names, tokens, err = BigtableClient.GetAddressesNamesArMetadata(&names, &tokens)
+	names, tokens, err = bigtable.GetAddressesNamesArMetadata(&names, &tokens)
 	if err != nil {
 		return nil, err
 	}

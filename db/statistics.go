@@ -27,7 +27,7 @@ import (
 	pgxdecimal "github.com/jackc/pgx-shopspring-decimal"
 )
 
-func WriteValidatorStatisticsForDay(day uint64, client consensus.ConsensusClient) error {
+func WriteValidatorStatisticsForDay(day uint64, client consensus.ConsensusClient, bt *Bigtable) error {
 	exportStart := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_update_validator_stats").Observe(time.Since(exportStart).Seconds())
@@ -131,7 +131,7 @@ func WriteValidatorStatisticsForDay(day uint64, client consensus.ConsensusClient
 		return nil
 	})
 	g.Go(func() error {
-		if err := gatherValidatorElIcome(day, validatorData, validatorDataMux); err != nil {
+		if err := gatherValidatorElIcome(day, validatorData, validatorDataMux, bt); err != nil {
 			return fmt.Errorf("error in GatherValidatorElIcome: %w", err)
 		}
 		return nil
@@ -701,7 +701,7 @@ func gatherValidatorBlockStats(day uint64, data []*types.ValidatorStatsTableDbRo
 	return nil
 }
 
-func gatherValidatorElIcome(day uint64, data []*types.ValidatorStatsTableDbRow, mux *sync.Mutex) error {
+func gatherValidatorElIcome(day uint64, data []*types.ValidatorStatsTableDbRow, mux *sync.Mutex, bt *Bigtable) error {
 	exportStart := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_update_validator_el_income_stats").Observe(time.Since(exportStart).Seconds())
@@ -739,7 +739,7 @@ func gatherValidatorElIcome(day uint64, data []*types.ValidatorStatsTableDbRow, 
 		blocksMap[b.ExecBlockNumber] = b
 	}
 
-	blocksData, err := BigtableClient.GetBlocksIndexedMultiple(numbers, uint64(len(numbers)))
+	blocksData, err := bt.GetBlocksIndexedMultiple(numbers, uint64(len(numbers)))
 	if err != nil {
 		return fmt.Errorf("error in GetBlocksIndexedMultiple: %w", err)
 	}
@@ -1162,8 +1162,8 @@ func GatherStatisticsForDay(day int64) ([]*types.ValidatorStatsTableDbRow, error
 	return ret, nil
 }
 
-func GetValidatorIncomeHistoryChart(validatorIndices []uint64, currency string, lastFinalizedEpoch uint64, lowerBoundDay uint64) ([]*types.ChartDataPoint, error) {
-	incomeHistory, err := GetValidatorIncomeHistory(validatorIndices, lowerBoundDay, 0, lastFinalizedEpoch)
+func GetValidatorIncomeHistoryChart(validatorIndices []uint64, currency string, lastFinalizedEpoch uint64, lowerBoundDay uint64, bt *Bigtable) ([]*types.ChartDataPoint, error) {
+	incomeHistory, err := GetValidatorIncomeHistory(validatorIndices, lowerBoundDay, 0, lastFinalizedEpoch, bt)
 	if err != nil {
 		return nil, err
 	}
@@ -1182,7 +1182,7 @@ func GetValidatorIncomeHistoryChart(validatorIndices []uint64, currency string, 
 	return clRewardsSeries, err
 }
 
-func GetValidatorIncomeHistory(validatorIndices []uint64, lowerBoundDay uint64, upperBoundDay uint64, lastFinalizedEpoch uint64) ([]types.ValidatorIncomeHistory, error) {
+func GetValidatorIncomeHistory(validatorIndices []uint64, lowerBoundDay uint64, upperBoundDay uint64, lastFinalizedEpoch uint64, bt *Bigtable) ([]types.ValidatorIncomeHistory, error) {
 	if len(validatorIndices) == 0 {
 		return []types.ValidatorIncomeHistory{}, nil
 	}
@@ -1248,7 +1248,7 @@ func GetValidatorIncomeHistory(validatorIndices []uint64, lowerBoundDay uint64, 
 
 		g := errgroup.Group{}
 		g.Go(func() error {
-			latestBalances, err := BigtableClient.GetValidatorBalanceHistory(validatorIndices, lastFinalizedEpoch, lastFinalizedEpoch)
+			latestBalances, err := bt.GetValidatorBalanceHistory(validatorIndices, lastFinalizedEpoch, lastFinalizedEpoch)
 			if err != nil {
 				dblog.Errorf("error in GetValidatorIncomeHistory calling BigtableClient.GetValidatorBalanceHistory: %v", err)
 				return err
@@ -1313,7 +1313,7 @@ func GetValidatorIncomeHistory(validatorIndices []uint64, lowerBoundDay uint64, 
 	return result, nil
 }
 
-func WriteChartSeriesForDay(day int64) error {
+func WriteChartSeriesForDay(day int64, bt *Bigtable) error {
 	startTs := time.Now()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -1326,7 +1326,7 @@ func WriteChartSeriesForDay(day int64) error {
 			return gCtx.Err()
 		default:
 		}
-		err := WriteExecutionChartSeriesForDay(day)
+		err := WriteExecutionChartSeriesForDay(day, bt)
 		if err != nil {
 			return err
 		}
@@ -1450,7 +1450,7 @@ func WriteConsensusChartSeriesForDay(day int64) error {
 	return nil
 }
 
-func WriteExecutionChartSeriesForDay(day int64) error {
+func WriteExecutionChartSeriesForDay(day int64, bt *Bigtable) error {
 	if utils.Config.Chain.ClConfig.DepositChainID != 1 {
 		// logger.Warnf("not writing chart_series for execution: chainId != 1: %v", utils.Config.Chain.ClConfig.DepositChainID)
 		return nil
@@ -1515,7 +1515,7 @@ func WriteExecutionChartSeriesForDay(day int64) error {
 				low = int64(firstBlock)
 			}
 
-			err := BigtableClient.GetFullBlocksDescending(stream, uint64(high), uint64(low))
+			err := bt.GetFullBlocksDescending(stream, uint64(high), uint64(low))
 			if err != nil {
 				dblog.Errorf("error getting blocks descending high: %v low: %v err: %v", high, low, err)
 			}

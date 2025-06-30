@@ -69,11 +69,18 @@ func main() {
 	defer db.ReaderDb.Close()
 	defer db.WriterDb.Close()
 
-	bt, err := db.InitBigtable(utils.Config.Bigtable.Project, utils.Config.Bigtable.Instance, "1", utils.Config.RedisCacheEndpoint)
-	if err != nil {
-		logrus.Errorf("error initializing bigtable: %v", err)
-		return
-	}
+	// Initialize BigTable client
+	bt := db.MustInitBigtable(&db.BigtableConfig{
+		Project:      utils.Config.Bigtable.Project,
+		Instance:     utils.Config.Bigtable.Project,
+		ChainId:      utils.Config.Chain.ClConfig.DepositChainID,
+		CacheAddr:    utils.Config.RedisCacheEndpoint,
+		Emulated:     utils.Config.Bigtable.Emulator,
+		EmulatorHost: utils.Config.Bigtable.EmulatorHost,
+		EmulatorPort: uint16(utils.Config.Bigtable.EmulatorPort),
+		Rpc:          nil,
+	})
+	defer bt.Close()
 
 	go ImportSignatures(bt, types.MethodSignature)
 	time.Sleep(time.Second * 2) // we need a little delay, as the api does not like two requests at the same time
@@ -139,7 +146,7 @@ func ImportSignatures(bt *db.Bigtable, st types.SignatureType) {
 			}
 		}
 
-		err = db.BigtableClient.SaveSignatures(sigs, st)
+		err = bt.SaveSignatures(sigs, st)
 		if err != nil {
 			metrics.Errors.WithLabelValues(fmt.Sprintf("%v_signatures_save_to_bt_failed", st)).Inc()
 			logrus.Errorf("error saving %v signatures into bigtable: %v", st, err)

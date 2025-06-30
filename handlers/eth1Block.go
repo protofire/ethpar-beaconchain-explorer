@@ -19,112 +19,114 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func Eth1Block(w http.ResponseWriter, r *http.Request) {
-	blockTemplateFiles := append(layoutTemplateFiles,
-		"slot/slot.html",
-		"slot/transactions.html",
-		"slot/attestations.html",
-		"slot/deposits.html",
-		"slot/votes.html",
-		"slot/attesterSlashing.html",
-		"slot/proposerSlashing.html",
-		"slot/exits.html",
-		"components/timestamp.html",
-		"slot/overview.html",
-		"slot/execTransactions.html",
-		"slot/blobs.html",
-		"slot/withdrawals.html")
-	var blockTemplate = templates.GetTemplate(
-		blockTemplateFiles...,
-	)
-	preMergeTemplateFiles := append(layoutTemplateFiles,
-		"execution/block.html",
-		"slot/execTransactions.html",
-		"components/timestamp.html")
-	notFountTemplateFiles := append(layoutTemplateFiles, "slotnotfound.html")
-	var blockNotFoundTemplate = templates.GetTemplate(notFountTemplateFiles...)
-	var preMergeBlockTemplate = templates.GetTemplate(preMergeTemplateFiles...)
+func Eth1Block(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		blockTemplateFiles := append(layoutTemplateFiles,
+			"slot/slot.html",
+			"slot/transactions.html",
+			"slot/attestations.html",
+			"slot/deposits.html",
+			"slot/votes.html",
+			"slot/attesterSlashing.html",
+			"slot/proposerSlashing.html",
+			"slot/exits.html",
+			"components/timestamp.html",
+			"slot/overview.html",
+			"slot/execTransactions.html",
+			"slot/blobs.html",
+			"slot/withdrawals.html")
+		var blockTemplate = templates.GetTemplate(
+			blockTemplateFiles...,
+		)
+		preMergeTemplateFiles := append(layoutTemplateFiles,
+			"execution/block.html",
+			"slot/execTransactions.html",
+			"components/timestamp.html")
+		notFountTemplateFiles := append(layoutTemplateFiles, "slotnotfound.html")
+		var blockNotFoundTemplate = templates.GetTemplate(notFountTemplateFiles...)
+		var preMergeBlockTemplate = templates.GetTemplate(preMergeTemplateFiles...)
 
-	w.Header().Set("Content-Type", "text/html")
-	vars := mux.Vars(r)
+		w.Header().Set("Content-Type", "text/html")
+		vars := mux.Vars(r)
 
-	// parse block number from url
-	numberString := strings.Replace(vars["block"], "0x", "", -1)
-	var number uint64
-	var err error
-	if len(numberString) == 64 {
-		number, err = rpc.CurrentErigonClient.GetBlockNumberByHash(numberString)
-	} else {
-		number, err = strconv.ParseUint(numberString, 10, 64)
-	}
-
-	if err != nil {
-		data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", 0), notFountTemplateFiles)
-		data.Data = "block"
-
-		if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "number", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-			return // an error has occurred and was processed
-		}
-		return
-	}
-
-	eth1BlockPageData, err := GetExecutionBlockPageData(number, 10)
-	if err != nil {
-		data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", 0), notFountTemplateFiles)
-		data.Data = "block"
-		if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "GetExecutionBlockPageData", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-			return // an error has occurred and was processed
-		}
-		return
-	}
-
-	// special handling for networks that launch with PoS on block 0
-	isPosBlock0 := utils.IsPoSBlock0(number, eth1BlockPageData.Ts.Unix())
-
-	// execute template based on whether block is PoW or PoS
-	if eth1BlockPageData.Difficulty.Cmp(big.NewInt(0)) == 0 || isPosBlock0 {
-		// Post Merge PoS Block
-		data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", number), blockTemplateFiles)
-
-		blockSlot := uint64(0)
-		if !isPosBlock0 {
-			blockSlot = utils.TimeToSlot(uint64(eth1BlockPageData.Ts.Unix()))
+		// parse block number from url
+		numberString := strings.Replace(vars["block"], "0x", "", -1)
+		var number uint64
+		var err error
+		if len(numberString) == 64 {
+			number, err = rpc.CurrentErigonClient.GetBlockNumberByHash(numberString)
+		} else {
+			number, err = strconv.ParseUint(numberString, 10, 64)
 		}
 
-		// retrieve consensus data
-		blockPageData, err := GetSlotPageData(blockSlot)
 		if err != nil {
-			if err != sql.ErrNoRows {
-				logger.Errorf("error retrieving slot page data: %v", err)
-			}
-
+			data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", 0), notFountTemplateFiles)
 			data.Data = "block"
-			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "GetSlotPageData", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+
+			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "number", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
 				return // an error has occurred and was processed
 			}
 			return
 		}
-		blockPageData.ExecutionData = eth1BlockPageData
-		blockPageData.ExecutionData.IsValidMev = blockPageData.IsValidMev
 
-		data.Data = blockPageData
-
-		if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "Done (Post Merge)", blockTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-			return // an error has occurred and was processed
+		eth1BlockPageData, err := GetExecutionBlockPageData(number, 10, bt)
+		if err != nil {
+			data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", 0), notFountTemplateFiles)
+			data.Data = "block"
+			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "GetExecutionBlockPageData", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+				return // an error has occurred and was processed
+			}
+			return
 		}
-	} else {
-		// Pre Merge PoW Block
-		data := InitPageData(w, r, "block", "/block", fmt.Sprintf("Block %d", eth1BlockPageData.Number), preMergeTemplateFiles)
-		data.Data = eth1BlockPageData
 
-		if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "Done (Pre Merge)", preMergeBlockTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-			return // an error has occurred and was processed
+		// special handling for networks that launch with PoS on block 0
+		isPosBlock0 := utils.IsPoSBlock0(number, eth1BlockPageData.Ts.Unix())
+
+		// execute template based on whether block is PoW or PoS
+		if eth1BlockPageData.Difficulty.Cmp(big.NewInt(0)) == 0 || isPosBlock0 {
+			// Post Merge PoS Block
+			data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", number), blockTemplateFiles)
+
+			blockSlot := uint64(0)
+			if !isPosBlock0 {
+				blockSlot = utils.TimeToSlot(uint64(eth1BlockPageData.Ts.Unix()))
+			}
+
+			// retrieve consensus data
+			blockPageData, err := GetSlotPageData(blockSlot)
+			if err != nil {
+				if err != sql.ErrNoRows {
+					logger.Errorf("error retrieving slot page data: %v", err)
+				}
+
+				data.Data = "block"
+				if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "GetSlotPageData", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+					return // an error has occurred and was processed
+				}
+				return
+			}
+			blockPageData.ExecutionData = eth1BlockPageData
+			blockPageData.ExecutionData.IsValidMev = blockPageData.IsValidMev
+
+			data.Data = blockPageData
+
+			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "Done (Post Merge)", blockTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+				return // an error has occurred and was processed
+			}
+		} else {
+			// Pre Merge PoW Block
+			data := InitPageData(w, r, "block", "/block", fmt.Sprintf("Block %d", eth1BlockPageData.Number), preMergeTemplateFiles)
+			data.Data = eth1BlockPageData
+
+			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "Done (Pre Merge)", preMergeBlockTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+				return // an error has occurred and was processed
+			}
 		}
 	}
 }
 
-func GetExecutionBlockPageData(number uint64, limit int) (*types.Eth1BlockPageData, error) {
-	block, err := db.BigtableClient.GetBlockFromBlocksTable(number)
+func GetExecutionBlockPageData(number uint64, limit int, bt *db.Bigtable) (*types.Eth1BlockPageData, error) {
+	block, err := bt.GetBlockFromBlocksTable(number)
 	if diffToHead := int64(services.LatestEth1BlockNumber()) - int64(number); err != nil && diffToHead < 0 && diffToHead >= -5 {
 		block, _, err = rpc.CurrentErigonClient.GetBlock(int64(number), "parity/geth")
 	}
@@ -142,7 +144,7 @@ func GetExecutionBlockPageData(number uint64, limit int) (*types.Eth1BlockPageDa
 	for _, uncle := range block.Uncles {
 		names[string(uncle.Coinbase)] = ""
 	}
-	names, _, err = db.BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bt.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +156,7 @@ func GetExecutionBlockPageData(number uint64, limit int) (*types.Eth1BlockPageDa
 	blobTxCount := 0
 	blobCount := 0
 
-	contractInteractionTypes, err := db.BigtableClient.GetAddressContractInteractionsAtBlock(block)
+	contractInteractionTypes, err := bt.GetAddressContractInteractionsAtBlock(block)
 	if err != nil {
 		utils.LogError(err, "error getting contract states", 0)
 	}
@@ -195,11 +197,11 @@ func GetExecutionBlockPageData(number uint64, limit int) (*types.Eth1BlockPageDa
 			From:          fmt.Sprintf("%#x", tx.From),
 			FromFormatted: utils.FormatAddressWithLimits(tx.From, names[string(tx.From)], false, "address", 15, 20, true),
 			To:            fmt.Sprintf("%#x", tx.To),
-			ToFormatted:   utils.FormatAddressWithLimits(tx.To, db.BigtableClient.GetAddressLabel(names[string(tx.To)], contractInteraction), contractInteraction != types.CONTRACT_NONE, "address", 15, 20, true),
+			ToFormatted:   utils.FormatAddressWithLimits(tx.To, bt.GetAddressLabel(names[string(tx.To)], contractInteraction), contractInteraction != types.CONTRACT_NONE, "address", 15, 20, true),
 			Value:         new(big.Int).SetBytes(tx.Value),
 			Fee:           txFee,
 			GasPrice:      effectiveGasPrice,
-			Method:        db.BigtableClient.GetMethodLabel(tx.GetData(), contractInteraction),
+			Method:        bt.GetMethodLabel(tx.GetData(), contractInteraction),
 		})
 	}
 
