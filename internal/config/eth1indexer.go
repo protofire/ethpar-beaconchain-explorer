@@ -37,7 +37,7 @@ type Range struct {
 type Eth1IndexerConfig struct {
 	JsonRpc struct {
 		Client   string `mapstructure:"client" validate:"required,oneof=erigon geth"`
-		Endpoint string `mapstructure:"endpoint" validate:"required,hostname_port"`
+		Endpoint string `mapstructure:"endpoint" validate:"required,url"`
 		ChainId  uint64 `mapstructure:"chainid" validate:"required,gte=1"`
 	} `mapstructure:"jsonrpc"`
 	Indexing struct {
