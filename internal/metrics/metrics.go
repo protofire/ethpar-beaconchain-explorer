@@ -248,8 +248,6 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 
 func StartMetrics(enabled bool, address string) {
 	if enabled {
-		Init(nil)
-
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 

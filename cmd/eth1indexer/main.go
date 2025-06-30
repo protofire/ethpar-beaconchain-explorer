@@ -22,6 +22,9 @@ const cacheSize = 100 * 1024 * 1024
 var log = logger.New(nil)
 
 func main() {
+	// TODO: make metrics conditional in all imported packages
+	metrics.Init(nil)
+
 	cfg, err := config.LoadEth1IndexerConfig(os.Args[1:])
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
