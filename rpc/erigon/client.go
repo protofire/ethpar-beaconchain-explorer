@@ -11,7 +11,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/contracts/oneinchoracle"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/balance"
 	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	ensContracts "github.com/protofire/ethpar-beaconchain-explorer/contracts/ens"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
