@@ -162,11 +162,6 @@ func MustInitBigtable(cfg *BigtableConfig) *Bigtable {
 		log:                            btLog,
 	}
 
-	// Background writer only on API/frontend nodes.
-	if utils.Config.Frontend.Enabled {
-		go bt.commitQueuedMachineMetricWrites()
-	}
-
 	return bt
 }
 
