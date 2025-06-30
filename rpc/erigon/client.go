@@ -192,7 +192,9 @@ func (ec *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth1Blo
 	for _, tx := range txs {
 
 		var from []byte
-		sender, err := geth_types.Sender(geth_types.NewCancunSigner(tx.ChainId()), tx)
+		signer := geth_types.LatestSignerForChainID(tx.ChainId())
+		sender, err := geth_types.Sender(signer, tx)
+		//sender, err := geth_types.Sender(geth_types.NewCancunSigner(tx.ChainId()), tx)
 		if err != nil {
 			from, _ = hex.DecodeString("abababababababababababababababababababab")
 			logrus.Errorf("error converting tx %v to msg: %v", tx.Hash(), err)
