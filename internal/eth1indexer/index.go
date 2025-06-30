@@ -8,27 +8,33 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
+	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 )
 
 // IndexingParams holds common parameters for any Eth1 indexing operation.
 type IndexingParams struct {
-	StartBlock         int64
-	EndBlock           int64
-	BulkBlock          int64
-	OffsetBlock        int64
-	StartData	   int64
-	EndData            int64
-	BulkData           int64
-	OffsetData         int64
-	ConcurrencyBlocks  int64
-	ConcurrencyData    int64
-	ReorgDepth         int
-	TraceMode          string
-	Cache              *freecache.Cache
-	Bigtable           *db.Bigtable
-	Client             execution.ExecutionClient
-	Log                *logger.Logger
+	StartBlock        int64
+	EndBlock          int64
+	BulkBlock         int64
+	OffsetBlock       int64
+	StartData         int64
+	EndData           int64
+	BulkData          int64
+	OffsetData        int64
+	ConcurrencyBlocks int64
+	ConcurrencyData   int64
+	ReorgDepth        int
+	TraceMode         string
+	EnsUpdate         bool
+	EnsBatch          int64
+	BalanceUpdate     bool
+	BalanceBatch      int
+	BalancePrefix     string
+	Cache             *freecache.Cache
+	Bigtable          *db.Bigtable
+	Client            execution.ExecutionClient
+	Log               *logger.Logger
 }
 
 // transforms returns the static, canonical list of transformation functions
@@ -59,7 +65,7 @@ func (p *IndexingParams) transforms() []func(*types.Eth1Block, *freecache.Cache)
 func IndexSingleBlock(p IndexingParams) error {
 	blockTransforms := p.transforms()
 	block := p.StartBlock
-	p.Log.Infof("indexing single block %v", block)
+	p.Log.Infof("indexing single block %d", block)
 
 	if err := IndexFromNode(p.Bigtable, p.Client, block, block, p.ConcurrencyBlocks, p.TraceMode, p.Log); err != nil {
 		return err
@@ -70,14 +76,14 @@ func IndexSingleBlock(p IndexingParams) error {
 	}
 
 	p.Cache.Clear()
-	p.Log.Infof("indexing of block %v completed", block)
+	p.Log.Infof("indexing of block %d completed", block)
 	return nil
 }
 
 func IndexBlockRange(p IndexingParams) error {
 	// Save specified block range from node to bigtable and exit
 	if p.EndBlock != 0 && p.StartBlock < p.EndBlock {
-		p.Log.Infof("saving block range from %v to %v to BigTable", p.StartBlock, p.EndBlock)
+		p.Log.Infof("saving block range from %d to %d to BigTable", p.StartBlock, p.EndBlock)
 		if err := IndexFromNode(p.Bigtable, p.Client, p.StartBlock, p.EndBlock, p.ConcurrencyBlocks, p.TraceMode, p.Log); err != nil {
 			return fmt.Errorf("index from node [%d - %d]: %w", p.StartBlock, p.EndBlock, err)
 		}
@@ -89,22 +95,22 @@ func IndexDataRange(p IndexingParams) error {
 	// Transform specified block range from blocks to data bigtable tables and exit
 	blockTransforms := p.transforms()
 	if p.EndData != 0 && p.StartData < p.EndData {
-		p.Log.Infof("transforming data for a block range from %v to %v in BigTable", p.StartData, p.EndData)
+		p.Log.Infof("transforming data for a block range from %d to %d in BigTable", p.StartData, p.EndData)
 		if err := p.Bigtable.IndexEventsWithTransformers(int64(p.StartData), int64(p.EndData), blockTransforms, p.ConcurrencyData, p.Cache); err != nil {
-			return fmt.Errorf("error indexing from bigtable: %v", err)
+			return fmt.Errorf("error indexing from bigtable: %w", err)
 		}
 		p.Cache.Clear()
 	}
 	return nil
 }
 
-func IndexLive(p IndexingParams, reorgDepth int) error {
+func IndexLive(p IndexingParams) error {
 	// Endless cycle if no ranges or single blocks specified
 	var lastBlockFromNodeOld uint64
 	var lastBlockFromNodeSameCount uint64
 	lastSuccessulBlockIndexingTs := time.Now()
 	for ; ; time.Sleep(time.Second * 14) {
-		err := HandleChainReorgs(p.Bigtable, p.Client, reorgDepth, p.Log)
+		err := HandleChainReorgs(p.Bigtable, p.Client, p.ReorgDepth, p.Log)
 		if err != nil {
 			p.Log.Errorf("error handling chain reorgs: %v", err)
 			continue
@@ -147,12 +153,12 @@ func IndexLive(p IndexingParams, reorgDepth int) error {
 				"blocks": lastBlockFromBlocksTable,
 				"data":   lastBlockFromDataTable,
 			},
-		).Infof("last blocks")
+		).Info("last blocks")
 
 		continueAfterError := false
 		if lastBlockFromNode > 0 {
 			if lastBlockFromBlocksTable < int(lastBlockFromNode) {
-				p.Log.Infof("missing blocks %v to %v in blocks table, indexing ...", lastBlockFromBlocksTable+1, lastBlockFromNode)
+				p.Log.Infof("missing blocks %d to %d in blocks table, indexing ...", lastBlockFromBlocksTable+1, lastBlockFromNode)
 
 				startBlock := int64(lastBlockFromBlocksTable+1) - p.OffsetBlock
 				if startBlock < 0 {
@@ -169,17 +175,17 @@ func IndexLive(p IndexingParams, reorgDepth int) error {
 						endBlock = int64(lastBlockFromNode)
 					}
 
-					err = IndexFromNode(bt, rpcClient, startBlock, endBlock, *concurrencyBlocks, *traceMode, mainLogger)
+					err = IndexFromNode(p.Bigtable, p.Client, startBlock, endBlock, p.ConcurrencyBlocks, p.TraceMode, p.Log)
 					if err != nil {
-						errMsg := "error indexing from node"
-						errFields := map[string]interface{}{
+						fields := logger.Fields{
 							"start":       startBlock,
 							"end":         endBlock,
-							"concurrency": *concurrencyBlocks}
+							"concurrency": p.ConcurrencyBlocks,
+						}
 						if time.Since(lastSuccessulBlockIndexingTs) > time.Minute*30 {
-							utils.LogFatal(err, errMsg, 0, errFields)
+							p.Log.WithFields(fields).Fatalf("error indexing from node: %v", err)
 						} else {
-							utils.LogError(err, errMsg, 0, errFields)
+							p.Log.WithFields(fields).Errorf("error indexing from node: %v", err)
 						}
 						continueAfterError = true
 						continue
@@ -195,31 +201,37 @@ func IndexLive(p IndexingParams, reorgDepth int) error {
 			}
 
 			if lastBlockFromDataTable < int(lastBlockFromNode) {
-				mainLogger.Infof("missing blocks %v to %v in data table, indexing ...", lastBlockFromDataTable+1, lastBlockFromNode)
+				p.Log.Infof("missing blocks %d to %d in data table, indexing ...", lastBlockFromDataTable+1, lastBlockFromNode)
 
-				startBlock := int64(lastBlockFromDataTable+1) - *offsetData
+				startBlock := int64(lastBlockFromDataTable+1) - p.OffsetData
 				if startBlock < 0 {
 					startBlock = 0
 				}
 
-				if *bulkData <= 0 || *bulkData > int64(lastBlockFromNode)-startBlock+1 {
-					*bulkData = int64(lastBlockFromNode) - startBlock + 1
+				if p.BulkData <= 0 || p.BulkData > int64(lastBlockFromNode)-startBlock+1 {
+					p.BulkData = int64(lastBlockFromNode) - startBlock + 1
 				}
 
 				for startBlock <= int64(lastBlockFromNode) && !continueAfterError {
-					endBlock := startBlock + *bulkData - 1
+					endBlock := startBlock + p.BulkData - 1
 					if endBlock > int64(lastBlockFromNode) {
 						endBlock = int64(lastBlockFromNode)
 					}
 
-					err = bt.IndexEventsWithTransformers(startBlock, endBlock, transforms, *concurrencyData, cache)
+					blockTransforms := p.transforms()
+					err = p.Bigtable.IndexEventsWithTransformers(startBlock, endBlock, blockTransforms, p.ConcurrencyData, p.Cache)
 					if err != nil {
-						utils.LogError(err, "error indexing from bigtable", 0, map[string]interface{}{"start": startBlock, "end": endBlock, "concurrency": *concurrencyData})
-						cache.Clear()
+						fields := logger.Fields{
+							"start":       startBlock,
+							"end":         endBlock,
+							"concurrency": p.ConcurrencyData,
+						}
+						p.Log.WithFields(fields).Errorf("error indexing from bigtable: %v", err)
+						p.Cache.Clear()
 						continueAfterError = true
 						continue
 					}
-					cache.Clear()
+					p.Cache.Clear()
 
 					startBlock = endBlock + 1
 				}
@@ -229,19 +241,19 @@ func IndexLive(p IndexingParams, reorgDepth int) error {
 			}
 		}
 
-		if *enableBalanceUpdater {
-			eth1indexer.ProcessMetadataUpdates(bt, rpcClient, balanceUpdaterPrefix, *balanceUpdaterBatchSize, 10, mainLogger)
+		if p.BalanceUpdate {
+			ProcessMetadataUpdates(p.Bigtable, p.Client, p.BalancePrefix, p.BalanceBatch, 10, p.Log)
 		}
 
-		if *enableEnsUpdater {
-			err := bt.ImportEnsUpdates(rpcClient.GetNativeClient(), *ensBatchSize)
+		if p.EnsUpdate {
+			err := p.Bigtable.ImportEnsUpdates(p.Client.GetNativeClient(), p.EnsBatch)
 			if err != nil {
-				utils.LogError(err, "error importing ens updates", 0, nil)
+				p.Log.Errorf("error importing ens updates: %v", err)
 				continue
 			}
 		}
 
-		mainLogger.Infof("index run completed")
+		p.Log.Info("index run completed")
 		services.ReportStatus("eth1indexer", "Running", nil)
 	}
 }

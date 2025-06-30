@@ -50,7 +50,7 @@ func IndexFromNode(bt *db.Bigtable, client execution.ExecutionClient, start, end
 			// Fetch full block from Execution layer JSON-RPC
 			bc, timings, err := client.GetBlock(blockNumber, traceMode)
 			if err != nil {
-				return fmt.Errorf("error getting block: %v from ethereum node err: %w", blockNumber, err)
+				return fmt.Errorf("error getting block: %d from ethereum node err: %w", blockNumber, err)
 			}
 
 			// Record RPC and processing durations
@@ -58,7 +58,7 @@ func IndexFromNode(bt *db.Bigtable, client execution.ExecutionClient, start, end
 
 			// Save block to Bigtable
 			if err := bt.SaveBlock(bc); err != nil {
-				return fmt.Errorf("error saving block: %v to bigtable: %w", blockNumber, err)
+				return fmt.Errorf("error saving block: %d to bigtable: %w", blockNumber, err)
 
 			}
 

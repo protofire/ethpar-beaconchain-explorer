@@ -1,13 +1,13 @@
 package erigon
 
 import (
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/ethereum/go-ethereum"
 )
 
-func extractCalls(r *execution.GethTraceCallResult, d *[]*execution.GethTraceCallResult) {
+func extractCalls(r *types.GethTraceCallResult, d *[]*types.GethTraceCallResult) {
 	if r == nil {
 		return
 	}

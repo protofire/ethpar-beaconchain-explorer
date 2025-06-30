@@ -12,7 +12,8 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/balance"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 
 	"github.com/davecgh/go-spew/spew"
@@ -34,7 +35,7 @@ type ErigonClient struct {
 	rpcClient    *geth_rpc.Client
 	client       *ethclient.Client
 	chainID      *big.Int
-	multiChecker *execution.Balance
+	multiChecker *balance.Balance
 	logger       *logger.Logger
 }
 
@@ -56,7 +57,7 @@ func NewErigonClient(endpoint string) (*ErigonClient, error) {
 	client.rpcClient = ethClient.Client()
 	
 	// TODO: what is this address for?
-	client.multiChecker, err = execution.NewBalance(common.HexToAddress("0xb1F8e55c7f64D203C1400B9D8555d050F94aDF39"), client.client)
+	client.multiChecker, err = balance.NewBalance(common.HexToAddress("0xb1F8e55c7f64D203C1400B9D8555d050F94aDF39"), client.client)
 	if err != nil {
 		return nil, fmt.Errorf("error initiation balance checker contract: %w", err)
 	}
@@ -79,6 +80,13 @@ func (ec *ErigonClient) Close() {
 
 func (ec *ErigonClient) GetChainID() *big.Int {
 	return ec.chainID
+}
+
+func (ec *ErigonClient) ValidateChainIdFromConfig(cfgId uint64) bool {
+	clientChainId := ec.GetChainID()
+	configChainId := new(big.Int).SetUint64(cfgId)
+
+	return clientChainId.Cmp(configChainId) == 0
 }
 
 func (ec *ErigonClient) GetNativeClient() *ethclient.Client {
@@ -405,8 +413,8 @@ func (ec *ErigonClient) GetLatestEth1BlockNumber() (uint64, error) {
 	return latestBlock.NumberU64(), nil
 }
 
-func (ec *ErigonClient) TraceGeth(blockHash common.Hash) ([]*execution.GethTraceCallResult, error) {
-	var res []*execution.GethTraceCallResultWrapper
+func (ec *ErigonClient) TraceGeth(blockHash common.Hash) ([]*rpc_types.GethTraceCallResult, error) {
+	var res []*rpc_types.GethTraceCallResultWrapper
 
 	var gethTracerArg = map[string]string{
 		"tracer": "callTracer",
@@ -417,7 +425,7 @@ func (ec *ErigonClient) TraceGeth(blockHash common.Hash) ([]*execution.GethTrace
 		return nil, err
 	}
 
-	data := make([]*execution.GethTraceCallResult, 0, 20)
+	data := make([]*rpc_types.GethTraceCallResult, 0, 20)
 	for i, r := range res {
 		r.Result.TransactionPosition = i
 		extractCalls(r.Result, &data)
@@ -426,8 +434,8 @@ func (ec *ErigonClient) TraceGeth(blockHash common.Hash) ([]*execution.GethTrace
 	return data, nil
 }
 
-func (ec *ErigonClient) TraceParity(blockNumber uint64) ([]*execution.ParityTraceResult, error) {
-	var res []*execution.ParityTraceResult
+func (ec *ErigonClient) TraceParity(blockNumber uint64) ([]*rpc_types.ParityTraceResult, error) {
+	var res []*rpc_types.ParityTraceResult
 
 	err := ec.rpcClient.Call(&res, "trace_block", blockNumber)
 	if err != nil {
@@ -437,8 +445,8 @@ func (ec *ErigonClient) TraceParity(blockNumber uint64) ([]*execution.ParityTrac
 	return res, nil
 }
 
-func (ec *ErigonClient) TraceParityTx(txHash string) ([]*execution.ParityTraceResult, error) {
-	var res []*execution.ParityTraceResult
+func (ec *ErigonClient) TraceParityTx(txHash string) ([]*rpc_types.ParityTraceResult, error) {
+	var res []*rpc_types.ParityTraceResult
 
 	err := ec.rpcClient.Call(&res, "trace_transaction", txHash)
 	if err != nil {

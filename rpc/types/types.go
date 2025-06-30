@@ -1,4 +1,4 @@
-package execution
+package types
 
 import (
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"

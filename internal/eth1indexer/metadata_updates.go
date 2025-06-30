@@ -58,7 +58,7 @@ func ProcessMetadataUpdates(bt *db.Bigtable, client execution.ExecutionClient, p
 		}
 
 		lastKey = keys[len(keys)-1]
-		log.Infof("retrieved %v balances in %v, currently at %v", len(balances), time.Since(start), lastKey)
+		log.Infof("retrieved %d balances in %v, currently at %v", len(balances), time.Since(start), lastKey)
 
 		iterationCount++
 	}

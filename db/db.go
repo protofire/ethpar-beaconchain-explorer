@@ -19,6 +19,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/pressly/goose/v3"
 	prysm_deposit "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/sirupsen/logrus"
 )
 
 //go:embed migrations/*.sql
@@ -54,7 +54,7 @@ var ReaderDb SQLReaderDb
 
 var ClickhouseReaderDb *sqlx.DB
 
-var logger = logrus.StandardLogger().WithField("module", "db")
+var dblog = logger.New(nil).WithField("module", "db")
 
 var farFutureEpoch = uint64(18446744073709551615)
 var maxSqlNumber = uint64(9223372036854775807)
@@ -74,12 +74,12 @@ func dbTestConnection(dbConn *sqlx.DB, dataBaseName string) {
 
 	go func() {
 		<-dbConnectionTimeout.C
-		logger.Fatalf("timeout while connecting to %s", dataBaseName)
+		dblog.Fatalf("timeout while connecting to %s", dataBaseName)
 	}()
 
 	err := dbConn.Ping()
 	if err != nil {
-		logger.Fatalf("unable to Ping %s: %s", dataBaseName, err)
+		dblog.Fatalf("unable to Ping %s: %s", dataBaseName, err)
 	}
 
 	dbConnectionTimeout.Stop()
@@ -87,7 +87,7 @@ func dbTestConnection(dbConn *sqlx.DB, dataBaseName string) {
 
 func mustInitDB(writer *types.DatabaseConfig, reader *types.DatabaseConfig, driverName string, databaseBrand string) (*sqlx.DB, *sqlx.DB) {
 	if writer == nil && reader == nil {
-		logger.Fatal("no database configuration provided", 0)
+		dblog.Fatal("no database configuration provided", 0)
 	}
 
 	var dbConnWriter, dbConnReader *sqlx.DB
@@ -117,7 +117,7 @@ func mustInitDB(writer *types.DatabaseConfig, reader *types.DatabaseConfig, driv
 			writer.MaxIdleConns = writer.MaxOpenConns
 		}
 
-		logger.Infof("connecting to %s database %s:%s/%s as writer with %d/%d max open/idle connections", databaseBrand, writer.Host, writer.Port, writer.Name, writer.MaxOpenConns, writer.MaxIdleConns)
+		dblog.Infof("connecting to %s database %s:%s/%s as writer with %d/%d max open/idle connections", databaseBrand, writer.Host, writer.Port, writer.Name, writer.MaxOpenConns, writer.MaxIdleConns)
 		dsn := fmt.Sprintf("%s://%s:%s@%s/%s?%s",
 			databaseBrand,
 			writer.Username,
@@ -126,10 +126,10 @@ func mustInitDB(writer *types.DatabaseConfig, reader *types.DatabaseConfig, driv
 			writer.Name,
 			sslParam,
 		)
-		logger.Infof("Writer DSN: %s", dsn)
+		dblog.Infof("Writer DSN: %s", dsn)
 		dbConnWriter, err = sqlx.Open(driverName, fmt.Sprintf("%s://%s:%s@%s/%s?%s", databaseBrand, writer.Username, writer.Password, net.JoinHostPort(writer.Host, writer.Port), writer.Name, sslParam))
 		if err != nil {
-			logger.Fatal(err, "error getting Connection Writer database", 0)
+			dblog.Fatal(err, "error getting Connection Writer database", 0)
 		}
 
 		dbTestConnection(dbConnWriter, fmt.Sprintf("database %v:%v/%v", writer.Host, writer.Port, writer.Name))
@@ -168,10 +168,10 @@ func mustInitDB(writer *types.DatabaseConfig, reader *types.DatabaseConfig, driv
 			reader.MaxIdleConns = reader.MaxOpenConns
 		}
 
-		logger.Infof("connecting to %s database %s:%s/%s as reader with %d/%d max open/idle connections", databaseBrand, reader.Host, reader.Port, reader.Name, reader.MaxOpenConns, reader.MaxIdleConns)
+		dblog.Infof("connecting to %s database %s:%s/%s as reader with %d/%d max open/idle connections", databaseBrand, reader.Host, reader.Port, reader.Name, reader.MaxOpenConns, reader.MaxIdleConns)
 		dbConnReader, err = sqlx.Open(driverName, fmt.Sprintf("%s://%s:%s@%s/%s?%s", databaseBrand, reader.Username, reader.Password, net.JoinHostPort(reader.Host, reader.Port), reader.Name, sslParam))
 		if err != nil {
-			logger.Fatal(err, "error getting Connection Reader database", 0)
+			dblog.Fatal(err, "error getting Connection Reader database", 0)
 		}
 
 		dbTestConnection(dbConnReader, fmt.Sprintf("database %v:%v/%v", reader.Host, reader.Port, reader.Name))
@@ -701,7 +701,7 @@ func UpdateCanonicalBlocks(startEpoch, endEpoch uint64, blocks []*types.MinimalB
 
 	for _, block := range blocks {
 		if block.Canonical {
-			logger.Printf("marking block %x at slot %v as canonical", block.BlockRoot, block.Slot)
+			dblog.Infof("marking block %x at slot %v as canonical", block.BlockRoot, block.Slot)
 			_, err = tx.Exec("UPDATE blocks SET status = '1' WHERE blockroot = $1", block.BlockRoot)
 			if err != nil {
 				return err
@@ -726,10 +726,10 @@ func SetBlockStatus(blocks []*types.CanonBlock) error {
 	orphanedBlocks := make(pq.ByteaArray, 0)
 	for _, block := range blocks {
 		if !block.Canonical {
-			logger.Printf("marking block %x at slot %v as orphaned", block.BlockRoot, block.Slot)
+			dblog.Infof("marking block %x at slot %v as orphaned", block.BlockRoot, block.Slot)
 			orphanedBlocks = append(orphanedBlocks, block.BlockRoot)
 		} else {
-			logger.Printf("marking block %x at slot %v as canonical", block.BlockRoot, block.Slot)
+			dblog.Infof("marking block %x at slot %v as canonical", block.BlockRoot, block.Slot)
 			canonBlocks = append(canonBlocks, block.BlockRoot)
 		}
 
@@ -770,7 +770,7 @@ func SaveBlock(block *types.Block, forceSlotUpdate bool, tx *sqlx.Tx) error {
 
 	err := saveBlocks(blocksMap, tx, forceSlotUpdate)
 	if err != nil {
-		logger.Errorf("error saving blocks to db: %v", err)
+		dblog.Errorf("error saving blocks to db: %v", err)
 		return fmt.Errorf("error saving blocks to db: %w", err)
 	}
 
@@ -782,12 +782,12 @@ func SaveEpoch(epoch uint64, validators []*types.Validator, client consensus.Con
 	start := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_save_epoch").Observe(time.Since(start).Seconds())
-		logger.WithFields(logrus.Fields{"epoch": epoch, "duration": time.Since(start)}).Info("completed saving epoch")
+		dblog.WithFields(logger.Fields{"epoch": epoch, "duration": time.Since(start)}).Info("completed saving epoch")
 	}()
 
-	logger.WithFields(logrus.Fields{"chainEpoch": utils.TimeToEpoch(time.Now()), "exportEpoch": epoch}).Infof("starting export of epoch %v", epoch)
+	dblog.WithFields(logger.Fields{"chainEpoch": utils.TimeToEpoch(time.Now()), "exportEpoch": epoch}).Infof("starting export of epoch %v", epoch)
 
-	logger.Infof("exporting epoch statistics data")
+	dblog.Infof("exporting epoch statistics data")
 	proposerSlashingsCount := 0
 	attesterSlashingsCount := 0
 	attestationsCount := 0
@@ -947,7 +947,7 @@ func saveGraffitiwall(block *types.Block, tx *sqlx.Tx) error {
 		}
 		color := matches[3]
 
-		logger.Infof("set graffiti at %v - %v with color %v for slot %v by validator %v", x, y, color, block.Slot, block.Proposer)
+		dblog.Infof("set graffiti at %v - %v with color %v for slot %v by validator %v", x, y, color, block.Slot, block.Proposer)
 		_, err = stmtGraffitiwall.Exec(x, y, color, block.Slot, block.Proposer)
 
 		if err != nil {
@@ -1002,7 +1002,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 			break
 		}
 		BigtableClient.LastAttestationCacheMux.Unlock()
-		logger.Infof("waiting until LastAttestation in memory cache is available")
+		dblog.Infof("waiting until LastAttestation in memory cache is available")
 	}
 
 	currentStateMap := make(map[uint64]*types.Validator, len(currentState))
@@ -1067,7 +1067,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 
 		if c == nil {
 			if v.Index%1000 == 0 {
-				logger.Infof("validator %v is new", v.Index)
+				dblog.Infof("validator %v is new", v.Index)
 			}
 
 			_, err = insertStmt.Exec(
@@ -1086,7 +1086,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 			)
 
 			if err != nil {
-				logger.Errorf("error saving new validator %v: %v", v.Index, err)
+				dblog.Errorf("error saving new validator %v: %v", v.Index, err)
 			}
 			validatorStatusCounts[v.Status]++
 		} else {
@@ -1131,48 +1131,48 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 
 			validatorStatusCounts[v.Status]++
 			if c.Status != v.Status {
-				logger.Tracef("Status changed for validator %v from %v to %v", v.Index, c.Status, v.Status)
-				// logger.Tracef("v.ActivationEpoch %v, latestEpoch %v, lastAttestationSlots[v.Index] %v, thresholdSlot %v", v.ActivationEpoch, latestEpoch, lastAttestationSlots[v.Index], thresholdSlot)
+				dblog.Tracef("Status changed for validator %v from %v to %v", v.Index, c.Status, v.Status)
+				// dblog.Tracef("v.ActivationEpoch %v, latestEpoch %v, lastAttestationSlots[v.Index] %v, thresholdSlot %v", v.ActivationEpoch, latestEpoch, lastAttestationSlots[v.Index], thresholdSlot)
 				queries.WriteString(fmt.Sprintf("UPDATE validators SET status = '%s' WHERE validatorindex = %d;\n", v.Status, c.Index))
 				updates++
 			}
 			// if c.Balance != v.Balance {
-			// 	// logger.Infof("Balance changed for validator %v from %v to %v", v.Index, c.Balance, v.Balance)
+			// 	// dblog.Infof("Balance changed for validator %v from %v to %v", v.Index, c.Balance, v.Balance)
 			// 	queries.WriteString(fmt.Sprintf("UPDATE validators SET balance = %d WHERE validatorindex = %d;\n", v.Balance, c.Index))
 			// 	updates++
 			// }
 			// if c.EffectiveBalance != v.EffectiveBalance {
-			// 	// logger.Infof("EffectiveBalance changed for validator %v from %v to %v", v.Index, c.EffectiveBalance, v.EffectiveBalance)
+			// 	// dblog.Infof("EffectiveBalance changed for validator %v from %v to %v", v.Index, c.EffectiveBalance, v.EffectiveBalance)
 			// 	queries.WriteString(fmt.Sprintf("UPDATE validators SET effectivebalance = %d WHERE validatorindex = %d;\n", v.EffectiveBalance, c.Index))
 			// 	updates++
 			// }
 			if c.Slashed != v.Slashed {
-				logger.Infof("Slashed changed for validator %v from %v to %v", v.Index, c.Slashed, v.Slashed)
+				dblog.Infof("Slashed changed for validator %v from %v to %v", v.Index, c.Slashed, v.Slashed)
 				queries.WriteString(fmt.Sprintf("UPDATE validators SET slashed = %v WHERE validatorindex = %d;\n", v.Slashed, c.Index))
 				updates++
 			}
 			if c.ActivationEligibilityEpoch != v.ActivationEligibilityEpoch {
-				logger.Infof("ActivationEligibilityEpoch changed for validator %v from %v to %v", v.Index, c.ActivationEligibilityEpoch, v.ActivationEligibilityEpoch)
+				dblog.Infof("ActivationEligibilityEpoch changed for validator %v from %v to %v", v.Index, c.ActivationEligibilityEpoch, v.ActivationEligibilityEpoch)
 				queries.WriteString(fmt.Sprintf("UPDATE validators SET activationeligibilityepoch = %d WHERE validatorindex = %d;\n", v.ActivationEligibilityEpoch, c.Index))
 				updates++
 			}
 			if c.ActivationEpoch != v.ActivationEpoch {
-				logger.Infof("ActivationEpoch changed for validator %v from %v to %v", v.Index, c.ActivationEpoch, v.ActivationEpoch)
+				dblog.Infof("ActivationEpoch changed for validator %v from %v to %v", v.Index, c.ActivationEpoch, v.ActivationEpoch)
 				queries.WriteString(fmt.Sprintf("UPDATE validators SET activationepoch = %d WHERE validatorindex = %d;\n", v.ActivationEpoch, c.Index))
 				updates++
 			}
 			if c.ExitEpoch != v.ExitEpoch {
-				logger.Infof("ExitEpoch changed for validator %v from %v to %v", v.Index, c.ExitEpoch, v.ExitEpoch)
+				dblog.Infof("ExitEpoch changed for validator %v from %v to %v", v.Index, c.ExitEpoch, v.ExitEpoch)
 				queries.WriteString(fmt.Sprintf("UPDATE validators SET exitepoch = %d WHERE validatorindex = %d;\n", v.ExitEpoch, c.Index))
 				updates++
 			}
 			if c.WithdrawableEpoch != v.WithdrawableEpoch {
-				logger.Infof("WithdrawableEpoch changed for validator %v from %v to %v", v.Index, c.WithdrawableEpoch, v.WithdrawableEpoch)
+				dblog.Infof("WithdrawableEpoch changed for validator %v from %v to %v", v.Index, c.WithdrawableEpoch, v.WithdrawableEpoch)
 				queries.WriteString(fmt.Sprintf("UPDATE validators SET withdrawableepoch = %d WHERE validatorindex = %d;\n", v.WithdrawableEpoch, c.Index))
 				updates++
 			}
 			if !bytes.Equal(c.WithdrawalCredentials, v.WithdrawalCredentials) {
-				logger.Infof("WithdrawalCredentials changed for validator %v from %x to %x", v.Index, c.WithdrawalCredentials, v.WithdrawalCredentials)
+				dblog.Infof("WithdrawalCredentials changed for validator %v from %x to %x", v.Index, c.WithdrawalCredentials, v.WithdrawalCredentials)
 				queries.WriteString(fmt.Sprintf("UPDATE validators SET withdrawalcredentials = '\\x%x' WHERE validatorindex = %d;\n", v.WithdrawalCredentials, c.Index))
 				updates++
 			}
@@ -1186,13 +1186,13 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 
 	if updates > 0 {
 		updateStart := time.Now()
-		logger.Infof("applying %v validator table update queries", updates)
+		dblog.Infof("applying %v validator table update queries", updates)
 		_, err = tx.Exec(queries.String())
 		if err != nil {
-			logger.Errorf("error executing validator update query: %v", err)
+			dblog.Errorf("error executing validator update query: %v", err)
 			return err
 		}
-		logger.Infof("validator table update completed, took %v", time.Since(updateStart))
+		dblog.Infof("validator table update completed, took %v", time.Since(updateStart))
 	}
 
 	s := time.Now()
@@ -1217,7 +1217,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 		}
 
 		if newValidator.ActivationEpoch != currentActivationEpoch {
-			logger.Infof("removing epoch %v from the activation epoch balance cache", currentActivationEpoch)
+			dblog.Infof("removing epoch %v from the activation epoch balance cache", currentActivationEpoch)
 			delete(balanceCache, currentActivationEpoch) // remove old items from the map
 			currentActivationEpoch = newValidator.ActivationEpoch
 		}
@@ -1234,7 +1234,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 
 		foundBalance := uint64(0)
 		if balance[newValidator.Validatorindex] == nil || len(balance[newValidator.Validatorindex]) == 0 {
-			logger.Warnf("no activation epoch balance found for validator %v for epoch %v in bigtable, trying node", newValidator.Validatorindex, newValidator.ActivationEpoch)
+			dblog.Warnf("no activation epoch balance found for validator %v for epoch %v in bigtable, trying node", newValidator.Validatorindex, newValidator.ActivationEpoch)
 
 			if balanceCache[newValidator.ActivationEpoch] == nil {
 				balances, err := client.GetBalancesForEpoch(int64(newValidator.ActivationEpoch))
@@ -1248,7 +1248,7 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 			foundBalance = balance[newValidator.Validatorindex][0].Balance
 		}
 
-		logger.Infof("retrieved activation epoch balance of %v for validator %v", foundBalance, newValidator.Validatorindex)
+		dblog.Infof("retrieved activation epoch balance of %v for validator %v", foundBalance, newValidator.Validatorindex)
 
 		_, err = tx.Exec("update validators set balanceactivation = $1 WHERE validatorindex = $2 AND balanceactivation IS NULL;", foundBalance, newValidator.Validatorindex)
 		if err != nil {
@@ -1256,9 +1256,9 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 		}
 	}
 
-	logger.Infof("updating validator activation epoch balance completed, took %v", time.Since(s))
+	dblog.Infof("updating validator activation epoch balance completed, took %v", time.Since(s))
 
-	logger.Infof("updating validator status counts")
+	dblog.Infof("updating validator status counts")
 	s = time.Now()
 	_, err = tx.Exec("TRUNCATE TABLE validators_status_counts;")
 	if err != nil {
@@ -1270,14 +1270,14 @@ func SaveValidators(epoch uint64, validators []*types.Validator, client consensu
 			return fmt.Errorf("error updating validator status counts: %w", err)
 		}
 	}
-	logger.Infof("updating validator status counts completed, took %v", time.Since(s))
+	dblog.Infof("updating validator status counts completed, took %v", time.Since(s))
 
 	s = time.Now()
 	_, err = tx.Exec("ANALYZE (SKIP_LOCKED) validators;")
 	if err != nil {
 		return fmt.Errorf("analyzing validators table: %w", err)
 	}
-	logger.Infof("analyze of validators table completed, took %v", time.Since(s))
+	dblog.Infof("analyze of validators table completed, took %v", time.Since(s))
 
 	return nil
 }
@@ -1426,7 +1426,7 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 	for _, slot := range slots {
 		for _, b := range blocks[slot] {
 			start := time.Now()
-			blockLog := logger.WithFields(logrus.Fields{"slot": b.Slot, "blockRoot": fmt.Sprintf("%x", b.BlockRoot)})
+			blockLog := dblog.WithFields(logger.Fields{"slot": b.Slot, "blockRoot": fmt.Sprintf("%x", b.BlockRoot)})
 
 			if !forceSlotUpdate {
 				var dbBlockRootHash []byte
@@ -1565,25 +1565,25 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 				return fmt.Errorf("error executing stmtBlocks for block %v: %w", b.Slot, err)
 			}
 			rows, _ := res.RowsAffected()
-			logger.WithFields(logrus.Fields{
+			dblog.WithFields(logger.Fields{
 				"slot":         b.Slot,
 				"blockRoot":    fmt.Sprintf("%x", b.BlockRoot),
 				"rowsInserted": rows,
 			}).Info("stmtBlock insert")
 			blockLog.WithField("duration", time.Since(t)).Tracef("stmtBlock")
-			logger.Tracef("done, took %v", time.Since(t))
+			dblog.Tracef("done, took %v", time.Since(t))
 
 			t = time.Now()
-			logger.Tracef("writing BlobKZGCommitments data")
+			dblog.Tracef("writing BlobKZGCommitments data")
 			for i, c := range b.BlobKZGCommitments {
 				_, err := stmtBlobs.Exec(b.Slot, b.BlockRoot, i, c, b.BlobKZGProofs[i], utils.VersionedBlobHash(c).Bytes())
 				if err != nil {
 					return fmt.Errorf("error executing stmtBlobs for block at slot %v index %v: %w", b.Slot, i, err)
 				}
 			}
-			logger.Tracef("done, took %v", time.Since(t))
+			dblog.Tracef("done, took %v", time.Since(t))
 			t = time.Now()
-			logger.Tracef("writing transactions and withdrawal data")
+			dblog.Tracef("writing transactions and withdrawal data")
 			if payload := b.ExecutionPayload; payload != nil {
 				for i, w := range payload.Withdrawals {
 					_, err := stmtWithdrawals.Exec(b.Slot, b.BlockRoot, w.Index, w.ValidatorIndex, w.Address, w.Amount)
@@ -1592,9 +1592,9 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 					}
 				}
 			}
-			logger.Tracef("done, took %v", time.Since(t))
+			dblog.Tracef("done, took %v", time.Since(t))
 			t = time.Now()
-			logger.Tracef("writing proposer slashings data")
+			dblog.Tracef("writing proposer slashings data")
 			for i, ps := range b.ProposerSlashings {
 				_, err := stmtProposerSlashing.Exec(b.Slot, i, b.BlockRoot, ps.ProposerIndex, ps.Header1.Slot, ps.Header1.ParentRoot, ps.Header1.StateRoot, ps.Header1.BodyRoot, ps.Header1.Signature, ps.Header2.Slot, ps.Header2.ParentRoot, ps.Header2.StateRoot, ps.Header2.BodyRoot, ps.Header2.Signature)
 				if err != nil {
@@ -1603,7 +1603,7 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sqlx.Tx, forceSlo
 			}
 			blockLog.WithField("duration", time.Since(t)).Tracef("stmtProposerSlashing")
 			t = time.Now()
-			logger.Tracef("writing bls change data")
+			dblog.Tracef("writing bls change data")
 			for i, bls := range b.SignedBLSToExecutionChange {
 				_, err := stmtBLSChange.Exec(b.Slot, b.BlockRoot, bls.Message.Validatorindex, bls.Signature, bls.Message.BlsPubkey, bls.Message.Address)
 				if err != nil {
@@ -1727,7 +1727,7 @@ func GetActiveValidatorCount() (uint64, error) {
 func UpdateQueueDeposits(tx *sqlx.Tx) error {
 	start := time.Now()
 	defer func() {
-		logger.Infof("took %v seconds to update queue deposits", time.Since(start).Seconds())
+		dblog.Infof("took %v seconds to update queue deposits", time.Since(start).Seconds())
 		metrics.TaskDuration.WithLabelValues("update_queue_deposits").Observe(time.Since(start).Seconds())
 	}()
 
@@ -1739,7 +1739,7 @@ func UpdateQueueDeposits(tx *sqlx.Tx) error {
 			FROM validators 
 			WHERE activationepoch=9223372036854775807 and status='pending')`)
 	if err != nil {
-		logger.Errorf("error removing queued publickeys from validator_queue_deposits: %v", err)
+		dblog.Errorf("error removing queued publickeys from validator_queue_deposits: %v", err)
 		return err
 	}
 
@@ -1749,7 +1749,7 @@ func UpdateQueueDeposits(tx *sqlx.Tx) error {
 		SELECT validatorindex FROM validators WHERE activationepoch=$1 and status='pending' ON CONFLICT DO NOTHING
 	`, maxSqlNumber)
 	if err != nil {
-		logger.Errorf("error adding queued publickeys to validator_queue_deposits: %v", err)
+		dblog.Errorf("error adding queued publickeys to validator_queue_deposits: %v", err)
 		return err
 	}
 
@@ -1764,7 +1764,7 @@ func UpdateQueueDeposits(tx *sqlx.Tx) error {
 			validator_queue_deposits.validatorindex = validators.validatorindex
 	`)
 	if err != nil {
-		logger.Errorf("error updating activationeligibilityepoch on validator_queue_deposits: %v", err)
+		dblog.Errorf("error updating activationeligibilityepoch on validator_queue_deposits: %v", err)
 		return err
 	}
 
@@ -1801,7 +1801,7 @@ func UpdateQueueDeposits(tx *sqlx.Tx) error {
 		) AS data
 		WHERE validator_queue_deposits.validatorindex=data.validatorindex`)
 	if err != nil {
-		logger.Errorf("error updating validator_queue_deposits: %v", err)
+		dblog.Errorf("error updating validator_queue_deposits: %v", err)
 		return err
 	}
 	return nil
@@ -2033,7 +2033,7 @@ func GetSlotVizData(latestEpoch uint64) ([]*types.SlotVizEpochs, error) {
 		slotIndex := b.Slot - (b.Epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch)
 
 		// if epochMap[b.Epoch].Slots[slotIndex] != nil && len(b.BlockRoot) > len(epochMap[b.Epoch].Slots[slotIndex].BlockRoot) {
-		// 	logger.Infof("CONFLICTING block found for slotindex %v", slotIndex)
+		// 	dblog.Infof("CONFLICTING block found for slotindex %v", slotIndex)
 		// }
 
 		if epochMap[b.Epoch].Slots[slotIndex] == nil || len(b.BlockRoot) > len(epochMap[b.Epoch].Slots[slotIndex].BlockRoot) {
@@ -2056,7 +2056,7 @@ func GetSlotVizData(latestEpoch uint64) ([]*types.SlotVizEpochs, error) {
 				if slot < currentSlot {
 					status = "scheduled-missed"
 				}
-				// logger.Infof("FILLING MISSING SLOT: %v", slot)
+				// dblog.Infof("FILLING MISSING SLOT: %v", slot)
 				epoch.Slots[i] = &types.SlotVizSlots{
 					Epoch:  epoch.Epoch,
 					Slot:   slot,
@@ -2156,7 +2156,7 @@ func GetTotalWithdrawals() (total uint64, err error) {
 func GetWithdrawalsCountForQuery(query string) (uint64, error) {
 	t0 := time.Now()
 	defer func() {
-		logger.WithFields(logrus.Fields{"duration": time.Since(t0)}).Infof("finished GetWithdrawalsCountForQuery")
+		dblog.WithFields(logger.Fields{"duration": time.Since(t0)}).Infof("finished GetWithdrawalsCountForQuery")
 	}()
 	count := uint64(0)
 
@@ -2200,7 +2200,7 @@ func GetWithdrawalsCountForQuery(query string) (uint64, error) {
 func GetWithdrawals(query string, length, start uint64, orderBy, orderDir string) ([]*types.Withdrawals, error) {
 	t0 := time.Now()
 	defer func() {
-		logger.WithFields(logrus.Fields{"duration": time.Since(t0)}).Infof("finished GetWithdrawals")
+		dblog.WithFields(logger.Fields{"duration": time.Since(t0)}).Infof("finished GetWithdrawals")
 	}()
 	withdrawals := []*types.Withdrawals{}
 
@@ -2351,7 +2351,7 @@ func GetAddressWithdrawalTableData(address []byte, pageToken string, currency st
 	}
 
 	tmr := time.AfterFunc(REPORT_TIMEOUT, func() {
-		logger.WithFields(logrus.Fields{
+		dblog.WithFields(logger.Fields{
 			"address":   address,
 			"pageToken": pageToken,
 		}).Warnf("%s call took longer than %v", utils.GetCurrentFuncName(), REPORT_TIMEOUT)
@@ -3504,7 +3504,7 @@ func GetValidatorAttestationHistoryForNotifications(startEpoch uint64, endEpoch 
 		return nil, fmt.Errorf("error retrieving activation & exit epoch for validators: %w", err)
 	}
 
-	logger.Info("retrieved activation & exit epochs")
+	dblog.Info("retrieved activation & exit epochs")
 
 	// next retrieve all attestation data from the db (need to retrieve data for the endEpoch+1 epoch as that could still contain attestations for the endEpoch)
 	firstSlot := startEpoch * utils.Config.Chain.ClConfig.SlotsPerEpoch
@@ -3522,7 +3522,7 @@ func GetValidatorAttestationHistoryForNotifications(startEpoch uint64, endEpoch 
 	}
 	defer rows.Close()
 
-	logger.Info("retrieved attestation raw data")
+	dblog.Info("retrieved attestation raw data")
 
 	// next process the data and fill up the epoch participation
 	// validators that participated in an epoch will have the flag set to true
@@ -3548,7 +3548,7 @@ func GetValidatorAttestationHistoryForNotifications(startEpoch uint64, endEpoch 
 		if participation == nil {
 			epochParticipation[epoch] = make(map[types.ValidatorIndex]bool)
 
-			// logger.Infof("seeding validator duties for epoch %v", epoch)
+			// dblog.Infof("seeding validator duties for epoch %v", epoch)
 			for _, data := range activityData {
 				if data.ActivationEpoch <= epoch && epoch < data.ExitEpoch {
 					epochParticipation[epoch][types.ValidatorIndex(data.ValidatorIndex)] = false

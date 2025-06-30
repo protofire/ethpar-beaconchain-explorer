@@ -33,7 +33,7 @@ import (
 //   - tokenListPath: path to the JSON file containing the list of tokens to track.
 //   - log: logger for structured logging.
 //   - interval: interval between successive updates.
-func StartTokenPriceUpdater(bt *db.Bigtable, client execution.ExecutionClient, tokenListPath string, log *logger.Logger, interval *time.Duration) () {
+func StartTokenPriceUpdater(bt *db.Bigtable, client execution.ExecutionClient, tokenListPath string, log *logger.Logger, interval *time.Duration) {
 	for {
 		if err := updateTokenPrices(bt, client, tokenListPath, log); err != nil {
 			log.Errorf("error while updating token prices: %v", err)

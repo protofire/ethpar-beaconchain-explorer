@@ -43,7 +43,7 @@ func (p *progressTracker) Tick(currentBlock int64) {
 
 	elapsed := time.Since(p.startTime).Seconds()
 	speed := float64(total) / elapsed
-	progress := float64(currentBlock - p.start) / float64(p.end - p.start) * 100
+	progress := float64(currentBlock-p.start) / float64(p.end-p.start) * 100
 	eta := time.Duration(float64(p.end-currentBlock)/speed) * time.Second
 
 	p.logger.Infof("Indexed block %d of %d (%.1f%%) — %.2f blk/sec — ETA: %s",

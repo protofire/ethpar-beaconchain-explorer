@@ -7,15 +7,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+	
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/version"
-
+	
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -70,7 +70,7 @@ var (
 	}, []string{"name"})
 )
 
-var logger = logrus.New().WithField("module", "metrics")
+var log = logger.New(nil).WithField("module", "metrics")
 
 func init() {
 	Version.WithLabelValues(version.Version).Set(1)
@@ -88,7 +88,7 @@ func MonitorDB(db *sqlx.DB) {
 		}{}
 		err := db.Select(&longRunningQueries, `select datname, extract(epoch from clock_timestamp()) - extract(epoch from query_start) as duration, query from pg_stat_activity where query != '<IDLE>' and query not ilike '%pg_stat_activity%' and query_start is not null and state = 'active' and age(clock_timestamp(), query_start) >= interval '1 minutes'`)
 		if err != nil {
-			logger.WithError(err).Errorf("error when monitoring db")
+			log.WithError(err).Errorf("error when monitoring db")
 			continue
 		}
 		for _, q := range longRunningQueries {
@@ -140,6 +140,17 @@ func (r *responseWriterDelegator) Write(b []byte) (int, error) {
 	n, err := r.ResponseWriter.Write(b)
 	r.written += int64(n)
 	return n, err
+}
+
+func StartMetrics(enabled bool, address string) {
+	if enabled {
+		go func(addr string) {
+			log.Infof("serving metrics on %v", addr)
+			if err := Serve(addr); err != nil {
+				log.WithError(err).Fatal("Error serving metrics")
+			}
+		}(address)
+	}
 }
 
 // Serve serves prometheus metrics on the given address under /metrics
