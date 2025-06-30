@@ -17,6 +17,7 @@
           <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Represents the aggregated attestation of all participating validators in this attestation">Aggregation Bits:</span></div>
           <div class="col-md-10">{{ formatBitlist $attestation.AggregationBits }}</div>
         </div>
+        <!-- 
         <div class="row border-bottom p-1 mx-0">
           <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Validators who have submitted their attestation and have been included by the block proposer">Validators:</span></div>
           <div class="col-md-10">
@@ -25,6 +26,7 @@
             {{ end }}
           </div>
         </div>
+        -->
         <div class="row border-bottom p-1 mx-0">
           <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Points to the block to which validators are attesting">Beacon Block Root:</span></div>
           <div class="col-md-10 text-monospace text-break"><a href="/slot/{{ printf "%x" $attestation.BeaconBlockRoot }}">0x{{ printf "%x" $attestation.BeaconBlockRoot }}</a></div>
