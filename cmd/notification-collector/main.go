@@ -8,7 +8,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
@@ -49,14 +49,7 @@ func main() {
 		utils.LogFatal(err, "invalid chain configuration specified, you must specify the slots per epoch, seconds per slot and genesis timestamp in the config file", 0)
 	}
 
-	if utils.Config.Metrics.Enabled {
-		go func(addr string) {
-			logrus.Infof("serving metrics on %v", addr)
-			if err := metrics.Serve(addr); err != nil {
-				logrus.WithError(err).Fatal("Error serving metrics")
-			}
-		}(utils.Config.Metrics.Address)
-	}
+	metrics.StartMetrics(utils.Config.Metrics.Enabled, utils.Config.Metrics.Address)
 
 	if utils.Config.Pprof.Enabled {
 		go func() {

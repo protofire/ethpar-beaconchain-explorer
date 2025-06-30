@@ -60,6 +60,7 @@ func main() {
 		Emulated:     cfg.BigTable.Emulated,
 		EmulatorHost: cfg.BigTable.EmulatorHost,
 		EmulatorPort: cfg.BigTable.EmulatorPort,
+		Rpc:          rpcClient,
 	})
 	defer bt.Close()
 

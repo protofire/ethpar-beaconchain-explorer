@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -27,8 +27,6 @@ import (
 **/
 func main() {
 	configPath := flag.String("config", "", "Path to the config file, if empty string defaults will be used")
-	metricsAddr := flag.String("metrics.address", "localhost:9090", "serve metrics on that addr")
-	metricsEnabled := flag.Bool("metrics.enabled", false, "enable serving metrics")
 
 	versionFlag := flag.Bool("version", false, "Show version and exit")
 	flag.Parse()
@@ -47,14 +45,7 @@ func main() {
 	utils.Config = cfg
 	logrus.WithField("config", *configPath).WithField("chainName", utils.Config.Chain.ClConfig.ConfigName).Printf("starting")
 
-	if utils.Config.Metrics.Enabled {
-		go func(addr string) {
-			logrus.Infof("serving metrics on %v", addr)
-			if err := metrics.Serve(addr); err != nil {
-				logrus.WithError(err).Fatal("Error serving metrics")
-			}
-		}(utils.Config.Metrics.Address)
-	}
+	metrics.StartMetrics(utils.Config.Metrics.Enabled, utils.Config.Metrics.Address)
 
 	db.MustInitDB(&types.DatabaseConfig{
 		Username:     cfg.WriterDatabase.Username,
@@ -77,15 +68,6 @@ func main() {
 	}, "pgx", "postgres")
 	defer db.ReaderDb.Close()
 	defer db.WriterDb.Close()
-
-	if *metricsEnabled {
-		go func() {
-			logrus.WithFields(logrus.Fields{"addr": *metricsAddr}).Infof("Serving metrics")
-			if err := metrics.Serve(*metricsAddr); err != nil {
-				logrus.WithError(err).Fatal("Error serving metrics")
-			}
-		}()
-	}
 
 	bt, err := db.InitBigtable(utils.Config.Bigtable.Project, utils.Config.Bigtable.Instance, "1", utils.Config.RedisCacheEndpoint)
 	if err != nil {

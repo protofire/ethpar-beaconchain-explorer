@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	gcp_bigtable "cloud.google.com/go/bigtable"
@@ -61,6 +62,7 @@ type BigtableConfig struct {
 	Emulated     bool
 	EmulatorHost string
 	EmulatorPort uint16
+	Rpc          execution.ExecutionClient
 }
 
 type Bigtable struct {
@@ -80,6 +82,7 @@ type Bigtable struct {
 	v2SchemaCutOffEpoch            uint64
 	machineMetricsQueuedWritesChan chan (types.BulkMutation)
 	log                            *logger.Logger
+	rpc                            execution.ExecutionClient
 }
 
 var log = logger.New(nil).WithField("module", "bigtable")
@@ -160,6 +163,7 @@ func MustInitBigtable(cfg *BigtableConfig) *Bigtable {
 		LastAttestationCacheMux:        &sync.Mutex{},
 		machineMetricsQueuedWritesChan: make(chan types.BulkMutation, MAX_BATCH_MUTATIONS),
 		log:                            btLog,
+		rpc:                            cfg.Rpc,
 	}
 
 	return bt

@@ -11,6 +11,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/contracts/oneinchoracle"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -246,8 +247,8 @@ func (client *GethClient) GetLatestEth1BlockNumber() (uint64, error) {
 	return latestBlock.NumberU64(), nil
 }
 
-func (client *GethClient) TraceGeth(blockHash common.Hash) ([]*GethTraceCallResult, error) {
-	var res []*GethTraceCallResult
+func (client *GethClient) TraceGeth(blockHash common.Hash) ([]*rpc_types.GethTraceCallResult, error) {
+	var res []*rpc_types.GethTraceCallResult
 
 	err := client.rpcClient.Call(&res, "debug_traceBlockByHash", blockHash, gethTracerArg)
 	if err != nil {

@@ -3,7 +3,7 @@ package eth1indexer
 import (
 	"time"
 
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 )
 

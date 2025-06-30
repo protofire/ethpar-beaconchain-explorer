@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 	"github.com/protofire/ethpar-beaconchain-explorer/version"
 

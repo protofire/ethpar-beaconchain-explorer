@@ -21,7 +21,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/erc721"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -2842,7 +2842,7 @@ func (bigtable *Bigtable) GetAddressInternalTableData(address []byte, pageToken 
 	return data, nil
 }
 
-func (bigtable *Bigtable) GetInternalTransfersForTransaction(transaction []byte, from []byte, parityTrace []*rpc.ParityTraceResult, currency string) ([]types.ITransaction, error) {
+func (bigtable *Bigtable) GetInternalTransfersForTransaction(transaction []byte, from []byte, parityTrace []*rpc_types.ParityTraceResult, currency string) ([]types.ITransaction, error) {
 
 	names := make(map[string]string)
 	for _, trace := range parityTrace {
@@ -3666,7 +3666,7 @@ func (bigtable *Bigtable) GetERC20MetadataForAddress(address []byte) (*types.ERC
 	if row == nil { // Retrieve token metadata from Ethplorer and store it for later usage
 		log.Infof("retrieving metadata for token %x via rpc", address)
 
-		metadata, err := rpc.CurrentGethClient.GetERC20TokenMetadata(address)
+		metadata, err := bigtable.rpc.GetERC20TokenMetadata(address)
 		if err != nil {
 			log.Warnf("error retrieving metadata for token %x: %v", address, err)
 			metadata = &types.ERC20Metadata{
@@ -4027,7 +4027,7 @@ func (bigtable *Bigtable) GetAddressContractInteractionsAtITransactions(itransac
 }
 
 // convenience function to get contract interaction status per parity trace
-func (bigtable *Bigtable) GetAddressContractInteractionsAtParityTraces(traces []*rpc.ParityTraceResult) ([][2]types.ContractInteractionType, error) {
+func (bigtable *Bigtable) GetAddressContractInteractionsAtParityTraces(traces []*rpc_types.ParityTraceResult) ([][2]types.ContractInteractionType, error) {
 	requests := make([]contractInteractionAtRequest, 0, len(traces)*2)
 	for i, itx := range traces {
 		from, to, _, _ := itx.ConvertFields()

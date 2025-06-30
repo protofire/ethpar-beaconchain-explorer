@@ -19,7 +19,7 @@ import (
 	ethclients "github.com/protofire/ethpar-beaconchain-explorer/ethClients"
 	"github.com/protofire/ethpar-beaconchain-explorer/exporter"
 	"github.com/protofire/ethpar-beaconchain-explorer/handlers"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/ratelimit"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
@@ -226,8 +226,11 @@ func main() {
 	defer db.FrontendWriterDB.Close()
 	defer db.BigtableClient.Close()
 
+	
 	if utils.Config.Metrics.Enabled {
-		go metrics.MonitorDB(db.WriterDb)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		go metrics.MonitorDB(ctx, db.WriterDb)
 		DBInfo := []string{
 			cfg.WriterDatabase.Username,
 			cfg.WriterDatabase.Password,
@@ -243,7 +246,7 @@ func main() {
 			cfg.Frontend.WriterDatabase.Name}
 		frontendDBStr := strings.Join(frontendDBInfo, "-")
 		if DBStr != frontendDBStr {
-			go metrics.MonitorDB(db.FrontendWriterDB)
+			go metrics.MonitorDB(ctx, db.FrontendWriterDB)
 		}
 	}
 
@@ -645,7 +648,7 @@ func main() {
 		}
 
 		if utils.Config.Metrics.Enabled {
-			router.Use(metrics.HttpMiddleware)
+			router.Use(metrics.Middleware)
 		}
 
 		ratelimit.Init()
@@ -685,14 +688,7 @@ func main() {
 		}()
 	}
 
-	if utils.Config.Metrics.Enabled {
-		go func(addr string) {
-			logrus.Infof("serving metrics on %v", addr)
-			if err := metrics.Serve(addr); err != nil {
-				logrus.WithError(err).Fatal("Error serving metrics")
-			}
-		}(utils.Config.Metrics.Address)
-	}
+	metrics.StartMetrics(utils.Config.Metrics.Enabled, utils.Config.Metrics.Address)
 
 	if utils.Config.Frontend.ShowDonors.Enabled {
 		services.InitGitCoinFeed()
