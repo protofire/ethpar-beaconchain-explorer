@@ -38,8 +38,12 @@ type Eth1IndexerConfig struct {
 	JsonRpc struct {
 		Client   string `mapstructure:"client" validate:"required,oneof=erigon geth"`
 		Endpoint string `mapstructure:"endpoint" validate:"required,url"`
-		ChainId  uint64 `mapstructure:"chainid" validate:"required,gte=1"`
 	} `mapstructure:"jsonrpc"`
+	Chain struct {
+		Id                       uint64 `mapstructure:"id" validate:"required,gte=1"`
+		MaxWithdrawalsPerPayload uint64 `mapstructure:"maxwithdrawalsperpayload" validate:"required,gte=1"`
+		// Currency 		 string `mapstructure:"currency"`
+	} `mapstructure:"chain"`
 	Indexing struct {
 		Mode   string `mapstructure:"mode" validate:"required,oneof=single blockrange datarange live"`
 		Block  int64  `mapstructure:"block,omitempty"`
@@ -144,8 +148,10 @@ func LoadEth1IndexerConfig(args []string) (*Eth1IndexerConfig, error) {
 	// Parse CLI flags
 	flags.String("jsonrpc.client", "", "Execution client, can be 'erigon', 'geth'")
 	flags.String("jsonrpc.endpoint", "", "Execution client JSON-RPC enpoint")
-	flags.Uint64("jsonrpc.chainid", 0, "Indexed chain ID")
 
+	flags.Uint64("chain.id", 0, "Indexed chain ID")
+	flags.Uint64("chain.maxwithdrawalsperpayload", 0, "Max withdrawals per payload")
+	
 	flags.String("indexing.mode", "live", "Indexer mode, can be 'single', 'blockrange', 'datarange' or 'live'")
 
 	flags.Int64("indexing.block", 0, "Index a specific block")

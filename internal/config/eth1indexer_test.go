@@ -15,7 +15,8 @@ func validBaseCfg() *Eth1IndexerConfig {
 	// JSON-RPC section
 	cfg.JsonRpc.Client   = "erigon"
 	cfg.JsonRpc.Endpoint = "localhost:8545"
-	cfg.JsonRpc.ChainId  = 1
+	
+	cfg.Chain.Id  = 1
 
 	// Indexing (default live mode)
 	cfg.Indexing.Mode       = "live"
@@ -66,10 +67,10 @@ func TestValidateEndpointFormat(t *testing.T) {
 
 func TestValidateChainId(t *testing.T) {
 	cfg := validBaseCfg()
-	cfg.JsonRpc.ChainId = 0            // gte=1 should fail
+	cfg.Chain.Id = 0            // gte=1 should fail
 	require.Error(t, cfg.Validate())
 
-	cfg.JsonRpc.ChainId = 10_000       // valid
+	cfg.Chain.Id = 10_000       // valid
 	require.NoError(t, cfg.Validate())
 }
 

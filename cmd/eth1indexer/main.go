@@ -30,6 +30,9 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	// TODO: legacy chain parameters via global vars
+	db.MaxWithdrawalsPerPayload = cfg.Chain.MaxWithdrawalsPerPayload
+
 	if cfg.Version {
 		fmt.Println(version.Version)
 		fmt.Println(version.GoVersion)
@@ -47,15 +50,15 @@ func main() {
 	rpcClient := execution.MustInitNewClient(cfg.JsonRpc.Client, cfg.JsonRpc.Endpoint)
 	defer rpcClient.Close()
 
-	if !rpcClient.ValidateChainIdFromConfig(cfg.JsonRpc.ChainId) {
-		log.Fatalf("chain ID mismatch: expected %v, got %v", cfg.JsonRpc.ChainId, rpcClient.GetChainID())
+	if !rpcClient.ValidateChainIdFromConfig(cfg.Chain.Id) {
+		log.Fatalf("chain ID mismatch: expected %v, got %v", cfg.Chain.Id, rpcClient.GetChainID())
 	}
 
 	// Initialize BigTable client
 	bt := db.MustInitBigtable(&db.BigtableConfig{
 		Project:      cfg.BigTable.Project,
 		Instance:     cfg.BigTable.Instance,
-		ChainId:      cfg.JsonRpc.ChainId,
+		ChainId:      cfg.Chain.Id,
 		CacheAddr:    cfg.Cache.Endpoint,
 		Emulated:     cfg.BigTable.Emulated,
 		EmulatorHost: cfg.BigTable.EmulatorHost,
@@ -84,7 +87,7 @@ func main() {
 		EnsBatch:          cfg.Indexing.EnsUpdater.Batch,
 		BalanceUpdate:     cfg.Indexing.BalanceUpdater.Enabled,
 		BalanceBatch:      cfg.Indexing.BalanceUpdater.Batch,
-		BalancePrefix:     fmt.Sprintf("%d:B:", cfg.JsonRpc.ChainId),
+		BalancePrefix:     fmt.Sprintf("%d:B:", cfg.Chain.Id),
 		Cache:             freecache.NewCache(cacheSize),
 		Bigtable:          bt,
 		Client:            rpcClient,
@@ -121,7 +124,7 @@ func main() {
 }
 
 func startAuxiliaryServices(cfg *config.Eth1IndexerConfig, rpcClient execution.ExecutionClient, bt *db.Bigtable) {
-	balanceUpdaterPrefix := fmt.Sprintf("%d:B:", cfg.JsonRpc.ChainId)
+	balanceUpdaterPrefix := fmt.Sprintf("%d:B:", cfg.Chain.Id)
 
 	// Start token price export
 	if cfg.Indexing.TokenPriceExporter.Enabled {

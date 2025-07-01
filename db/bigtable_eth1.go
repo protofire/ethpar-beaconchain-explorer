@@ -38,6 +38,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Legacy chain configuration global variables
+var (
+	MaxWithdrawalsPerPayload uint64
+)
+
 const (
 	ECR20TokensPerAddressLimit    = uint64(200) // when changing this, you will have to update the swagger docu for func ApiEth1Address too
 	digitLimitInAddressPagesTable = 17
@@ -1959,8 +1964,8 @@ func (bigtable *Bigtable) TransformWithdrawals(block *types.Eth1Block, cache *fr
 	bulkData = &types.BulkMutations{}
 	bulkMetadataUpdates = &types.BulkMutations{}
 
-	if len(block.Withdrawals) > int(utils.Config.Chain.ClConfig.MaxWithdrawalsPerPayload) {
-		return nil, nil, fmt.Errorf("unexpected number of withdrawals in block expected at most %v but got: %v", utils.Config.Chain.ClConfig.MaxWithdrawalsPerPayload, len(block.Withdrawals))
+	if len(block.Withdrawals) > int(MaxWithdrawalsPerPayload) {
+		return nil, nil, fmt.Errorf("unexpected number of withdrawals in block expected at most %v but got: %v", MaxWithdrawalsPerPayload, len(block.Withdrawals))
 	}
 
 	for _, withdrawal := range block.Withdrawals {
