@@ -18,8 +18,10 @@
               <th>Attestations</th>
               <th>Deposits</th>
               {{ if .Data.Slots }}
-                {{ if gt (index .Data.Slots 0).ParallelBlocksCount 0 }}
-                  <th>Parallel Blocks</th>
+                {{ if gt (len .Data.Slots) 0 }}
+                  {{ if gt (index .Data.Slots 0).ParallelBlocksCount 0 }}
+                    <th>Parallel Blocks</th>
+                  {{ end }}
                 {{ end }}
               {{ end }}
             </tr>
@@ -57,7 +59,7 @@
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
               <td v-if="slot.parallel_blocks_count && slot.parallel_blocks_count > 0">
-                <span class="badge rounded-pill text-bg-info">{{ slot.parallel_blocks_count }}</span>
+                <span class="badge rounded-pill text-bg-info">{{ '{{' }} slot.parallel_blocks_count {{ '}}' }}</span>
               </td>
             </tr>
           </tbody>
@@ -105,10 +107,6 @@
             {{ end }}
           </tbody>
         </table>
-      </div>
-    </div>
-  </div>
-{{ end }}
       </div>
     </div>
   </div>
