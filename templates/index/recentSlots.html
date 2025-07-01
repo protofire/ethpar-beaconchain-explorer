@@ -17,9 +17,9 @@
               <th>Proposer</th>
               <th>Attestations</th>
               <th>Deposits</th>
-              {{ if .Data.Slots }}
-                {{ if gt (len .Data.Slots) 0 }}
-                  {{ if gt (index .Data.Slots 0).ParallelBlocksCount 0 }}
+              {{ if .Slots }}
+                {{ if gt (len .Slots) 0 }}
+                  {{ if gt (index .Slots 0).ParallelBlocksCount 0 }}
                     <th>Parallel Blocks</th>
                   {{ end }}
                 {{ end }}
@@ -64,7 +64,7 @@
             </tr>
           </tbody>
           <tbody v-else>
-            {{ range $i, $slot := .Data.Slots }}
+            {{ range $i, $slot := .Slots }}
               <tr>
                 <td>
                   {{ if eq $slot.Status 2 }}
