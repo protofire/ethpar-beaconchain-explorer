@@ -87,7 +87,7 @@
                   {{ end }}
                 </td>
                 <td>
-                  <span data-toggle="tooltip" data-placement="top" title="{{ $slot.Ts.Format "2006-01-02 15:04:05" }}">{{ formatRecentTimeShort $slot.Ts }}</span>
+                  <span aria-ethereum-date="{{ $slot.Ts.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $slot.Ts.Format "2006-01-02T15:04:05" }}</span>
                 </td>
                 <td>
                   {{ if ne $slot.Slot 0 }}
@@ -110,4 +110,11 @@
       </div>
     </div>
   </div>
+  
+  <script>
+    // Format timestamps after DOM is ready
+    $(document).ready(function() {
+      formatTimestamps();
+    });
+  </script>
 {{ end }}

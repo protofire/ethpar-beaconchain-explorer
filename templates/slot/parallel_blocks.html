@@ -77,8 +77,8 @@
             <span data-toggle="tooltip" data-placement="top" title="Timestamp">Timestamp:</span>
           </div>
           <div class="col-md-5 text-monospace text-break">
-            <span aria-ethereum-date="{{ $parallel_block.Time.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $parallel_block.Time }}</span>
-            (<span id="timestamp" aria-ethereum-date="{{ $parallel_block.Time.Unix }}" aria-ethereum-date-format="LOCAL" data-timer="{{ $parallel_block.Time.Unix }}">{{ formatRecentTimeShort $parallel_block.Time }}</span>)
+            <span aria-ethereum-date="{{ $parallel_block.Time.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $parallel_block.Time.Format "2006-01-02T15:04:05" }}</span>
+            (<span id="timestamp" aria-ethereum-date="{{ $parallel_block.Time.Unix }}" aria-ethereum-date-format="LOCAL" data-timer="{{ $parallel_block.Time.Unix }}">{{ $parallel_block.Time.Format "2006-01-02T15:04:05" }}</span>)
           </div>
         </div>
 
