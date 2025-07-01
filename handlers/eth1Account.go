@@ -11,6 +11,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/eth1data"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/templates"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -20,7 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func Eth1Address(bt *db.Bigtable) http.HandlerFunc {
+func Eth1Address(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		templateFiles := append(layoutTemplateFiles, "sprites.html", "execution/address.html")
 		var eth1AddressTemplate = templates.GetTemplate(templateFiles...)
@@ -77,7 +78,7 @@ func Eth1Address(bt *db.Bigtable) http.HandlerFunc {
 			defer cancel()
 
 			var err error
-			isContract, err = eth1data.IsContract(ctx, common.BytesToAddress(addressBytes))
+			isContract, err = eth1data.IsContract(ctx, rpc, common.BytesToAddress(addressBytes))
 			if err != nil {
 				return fmt.Errorf("IsContract: %w", err)
 			}

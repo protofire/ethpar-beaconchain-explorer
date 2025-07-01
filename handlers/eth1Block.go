@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/templates"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
@@ -19,7 +19,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func Eth1Block(bt *db.Bigtable) http.HandlerFunc {
+func Eth1Block(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		blockTemplateFiles := append(layoutTemplateFiles,
 			"slot/slot.html",
@@ -54,7 +54,7 @@ func Eth1Block(bt *db.Bigtable) http.HandlerFunc {
 		var number uint64
 		var err error
 		if len(numberString) == 64 {
-			number, err = rpc.CurrentErigonClient.GetBlockNumberByHash(numberString)
+			number, err = rpc.GetBlockNumberByHash(numberString)
 		} else {
 			number, err = strconv.ParseUint(numberString, 10, 64)
 		}
@@ -69,7 +69,7 @@ func Eth1Block(bt *db.Bigtable) http.HandlerFunc {
 			return
 		}
 
-		eth1BlockPageData, err := GetExecutionBlockPageData(number, 10, bt)
+		eth1BlockPageData, err := GetExecutionBlockPageData(number, 10, bt, rpc)
 		if err != nil {
 			data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", 0), notFountTemplateFiles)
 			data.Data = "block"
@@ -125,10 +125,10 @@ func Eth1Block(bt *db.Bigtable) http.HandlerFunc {
 	}
 }
 
-func GetExecutionBlockPageData(number uint64, limit int, bt *db.Bigtable) (*types.Eth1BlockPageData, error) {
+func GetExecutionBlockPageData(number uint64, limit int, bt *db.Bigtable, rpc execution.ExecutionClient) (*types.Eth1BlockPageData, error) {
 	block, err := bt.GetBlockFromBlocksTable(number)
 	if diffToHead := int64(services.LatestEth1BlockNumber()) - int64(number); err != nil && diffToHead < 0 && diffToHead >= -5 {
-		block, _, err = rpc.CurrentErigonClient.GetBlock(int64(number), "parity/geth")
+		block, _, err = rpc.GetBlock(int64(number), "parity/geth")
 	}
 	if err != nil {
 		return nil, err

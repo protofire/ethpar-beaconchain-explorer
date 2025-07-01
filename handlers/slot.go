@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/templates"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
@@ -31,7 +32,7 @@ var _ = intersect.Simple
 const MaxSlotValue = 137438953503 // we only render a page for blocks up to this slot
 
 // Slot will return the data for a block contained in the slot
-func Slot(bt *db.Bigtable) http.HandlerFunc {
+func Slot(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slotTemplateFiles := append(layoutTemplateFiles,
 			"slot/slot.html",
@@ -135,7 +136,7 @@ func Slot(bt *db.Bigtable) http.HandlerFunc {
 
 		if slotPageData.Status == 1 && (slotPageData.ExecBlockNumber.Int64 > 0 || isMergedSlot0) {
 			// slot has corresponding execution block, fetch execution data
-			eth1BlockPageData, err := GetExecutionBlockPageData(uint64(slotPageData.ExecBlockNumber.Int64), 10, bt)
+			eth1BlockPageData, err := GetExecutionBlockPageData(uint64(slotPageData.ExecBlockNumber.Int64), 10, bt, rpc)
 			// if err != nil, simply show slot view without block
 			if err == nil {
 				slotPageData.ExecutionData = eth1BlockPageData
@@ -662,7 +663,7 @@ type transactionsData struct {
 }
 
 // BlockTransactionsData returns the transactions for a specific block
-func BlockTransactionsData(bt *db.Bigtable) http.HandlerFunc {
+func BlockTransactionsData(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -674,7 +675,7 @@ func BlockTransactionsData(bt *db.Bigtable) http.HandlerFunc {
 			return
 		}
 
-		transactions, err := GetExecutionBlockPageData(slot, 0, bt)
+		transactions, err := GetExecutionBlockPageData(slot, 0, bt, rpc)
 		if err != nil || transactions == nil {
 			logger.Errorf("error retrieving transactions data for slot %v, err: %v", slot, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

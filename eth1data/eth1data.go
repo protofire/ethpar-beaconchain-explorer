@@ -12,7 +12,6 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
@@ -67,7 +66,7 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 		Events:    make([]*types.Eth1EventData, 0, 10),
 	}
 
-	receipt, err := getTransactionReceipt(ctx, hash)
+	receipt, err := getTransactionReceipt(ctx, rpc, hash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving receipt data for tx: %w", err)
 	}
@@ -80,12 +79,12 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 		txPageData.To = &receipt.ContractAddress
 		txPageData.IsContractCreation = true
 	}
-	txPageData.TargetIsContract, err = IsContract(ctx, *txPageData.To)
+	txPageData.TargetIsContract, err = IsContract(ctx, rpc, *txPageData.To)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving code data for tx recipient %v: %w", tx.To(), err)
 	}
 
-	header, err := getBlockHeaderByHash(ctx, receipt.BlockHash)
+	header, err := getBlockHeaderByHash(ctx, rpc, receipt.BlockHash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving block header data for tx: %w", err)
 	}
@@ -297,13 +296,13 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 	return txPageData, nil
 }
 
-func IsContract(ctx context.Context, address common.Address) (bool, error) {
+func IsContract(ctx context.Context, rpc execution.ExecutionClient, address common.Address) (bool, error) {
 	cacheKey := fmt.Sprintf("%d:isContract:%s", utils.Config.Chain.ClConfig.DepositChainID, address.String())
 	if wanted, err := cache.TieredCache.GetBoolWithLocalTimeout(cacheKey, time.Hour); err == nil {
 		return wanted, nil
 	}
 
-	code, err := rpc.CurrentErigonClient.GetNativeClient().CodeAt(ctx, address, nil)
+	code, err := rpc.GetNativeClient().CodeAt(ctx, address, nil)
 	if err != nil {
 		return false, fmt.Errorf("error retrieving code data for address %v: %w", address, err)
 	}
@@ -317,8 +316,8 @@ func IsContract(ctx context.Context, address common.Address) (bool, error) {
 	return isContract, nil
 }
 
-func getBlockHeaderByHash(ctx context.Context, hash common.Hash) (*geth_types.Header, error) {
-	header, err := rpc.CurrentErigonClient.GetNativeClient().HeaderByHash(ctx, hash)
+func getBlockHeaderByHash(ctx context.Context, rpc execution.ExecutionClient, hash common.Hash) (*geth_types.Header, error) {
+	header, err := rpc.GetNativeClient().HeaderByHash(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving block header data for tx: %w", err)
 	}
@@ -326,7 +325,7 @@ func getBlockHeaderByHash(ctx context.Context, hash common.Hash) (*geth_types.He
 	return header, nil
 }
 
-func getTransactionReceipt(ctx context.Context, hash common.Hash) (*geth_types.Receipt, error) {
+func getTransactionReceipt(ctx context.Context, rpc execution.ExecutionClient, hash common.Hash) (*geth_types.Receipt, error) {
 	cacheKey := fmt.Sprintf("%d:r:%s", utils.Config.Chain.ClConfig.DepositChainID, hash.String())
 
 	if wanted, err := cache.TieredCache.GetWithLocalTimeout(cacheKey, time.Hour, new(geth_types.Receipt)); err == nil {
@@ -334,7 +333,7 @@ func getTransactionReceipt(ctx context.Context, hash common.Hash) (*geth_types.R
 		return wanted.(*geth_types.Receipt), nil
 	}
 
-	receipt, err := rpc.CurrentErigonClient.GetNativeClient().TransactionReceipt(ctx, hash)
+	receipt, err := rpc.GetNativeClient().TransactionReceipt(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving receipt data for tx: %w", err)
 	}
