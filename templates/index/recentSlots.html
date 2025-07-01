@@ -59,7 +59,7 @@
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
               <td v-if="slot.parallel_blocks_count && slot.parallel_blocks_count > 0">
-                <span class="badge rounded-pill text-bg-info">{{ '{{' }} slot.parallel_blocks_count {{ '}}' }}</span>
+                <span class="badge rounded-pill text-bg-info" v-text="slot.parallel_blocks_count"></span>
               </td>
             </tr>
           </tbody>
