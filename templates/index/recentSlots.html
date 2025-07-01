@@ -63,46 +63,61 @@
               </td>
             </tr>
           </tbody>
+          
+          <!-- Server-side rendered slots (fallback when no JS data) -->
           <tbody v-else>
-            {{ range $i, $slot := .Slots }}
-              <tr>
-                <td>
-                  {{ if eq $slot.Status 2 }}
-                    <a href="/slot/0x{{ printf "%x" $slot.BlockRoot }}">{{ formatAddCommas $slot.Slot }}</a>
-                  {{ else }}
-                    <a href="/slot/{{ $slot.Slot }}">{{ formatAddCommas $slot.Slot }}</a>
-                  {{ end }}
-                </td>
-                <td>
-                  {{ if eq $slot.Slot 0 }}
-                    <span class="badge rounded-pill text-bg-info">Genesis</span>
-                  {{ else if eq $slot.Status 0 }}
-                    <span class="badge rounded-pill text-bg-warning">Missed</span>
-                  {{ else if eq $slot.Status 1 }}
-                    <span class="badge rounded-pill text-bg-success">Proposed</span>
-                  {{ else if eq $slot.Status 2 }}
-                    <span class="badge rounded-pill text-bg-light text-dark">Orphaned</span>
-                  {{ else }}
-                    <span class="badge rounded-pill text-bg-secondary">Unknown</span>
-                  {{ end }}
-                </td>
-                <td>
-                  <span aria-ethereum-date="{{ $slot.Ts.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $slot.Ts.Format "2006-01-02T15:04:05" }}</span>
-                </td>
-                <td>
-                  {{ if ne $slot.Slot 0 }}
-                    {{ $slot.ProposerFormatted }}
-                  {{ else }}
-                    N/A
-                  {{ end }}
-                </td>
-                <td>{{ formatAddCommas $slot.Attestations }}</td>
-                <td>{{ formatAddCommas $slot.Deposits }}</td>
-                {{ if gt $slot.ParallelBlocksCount 0 }}
+            {{ if .Slots }}
+              {{ range $i, $slot := .Slots }}
+                <tr>
                   <td>
-                    <span class="badge rounded-pill text-bg-info">{{ $slot.ParallelBlocksCount }}</span>
+                    {{ if eq $slot.Status 2 }}
+                      <a href="/slot/0x{{ printf "%x" $slot.BlockRoot }}">{{ formatAddCommas $slot.Slot }}</a>
+                    {{ else }}
+                      <a href="/slot/{{ $slot.Slot }}">{{ formatAddCommas $slot.Slot }}</a>
+                    {{ end }}
                   </td>
-                {{ end }}
+                  <td>
+                    {{ if eq $slot.Slot 0 }}
+                      <span class="badge rounded-pill text-bg-info">Genesis</span>
+                    {{ else if eq $slot.Status 0 }}
+                      <span class="badge rounded-pill text-bg-warning">Missed</span>
+                    {{ else if eq $slot.Status 1 }}
+                      <span class="badge rounded-pill text-bg-success">Proposed</span>
+                    {{ else if eq $slot.Status 2 }}
+                      <span class="badge rounded-pill text-bg-light text-dark">Orphaned</span>
+                    {{ else }}
+                      <span class="badge rounded-pill text-bg-secondary">Unknown</span>
+                    {{ end }}
+                  </td>
+                  <td>
+                    <span aria-ethereum-date="{{ $slot.Ts.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $slot.Ts.Format "2006-01-02T15:04:05" }}</span>
+                  </td>
+                  <td>
+                    {{ if ne $slot.Slot 0 }}
+                      {{ $slot.ProposerFormatted }}
+                    {{ else }}
+                      N/A
+                    {{ end }}
+                  </td>
+                  <td>{{ formatAddCommas $slot.Attestations }}</td>
+                  <td>{{ formatAddCommas $slot.Deposits }}</td>
+                  {{ if gt $slot.ParallelBlocksCount 0 }}
+                    <td>
+                      <span class="badge rounded-pill text-bg-info">{{ $slot.ParallelBlocksCount }}</span>
+                    </td>
+                  {{ end }}
+                </tr>
+              {{ end }}
+            {{ else }}
+              <!-- No slots data available -->
+              <tr>
+                <td colspan="6" class="text-center">
+                  <div class="p-3 text-muted">
+                    <i class="fas fa-clock fa-2x mb-2"></i>
+                    <br>
+                    No recent slots available
+                  </div>
+                </td>
               </tr>
             {{ end }}
           </tbody>

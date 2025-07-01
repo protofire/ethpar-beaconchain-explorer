@@ -892,6 +892,17 @@ func getIndexPageData() (*types.IndexPageData, error) {
 
 	// Fetch recent slots data for the dashboard
 	var slots []*types.IndexPageDataSlots
+	
+	// Debug: Check if there are any blocks at all
+	var blockCount int
+	err = db.ReaderDb.Get(&blockCount, "SELECT COUNT(*) FROM blocks")
+	if err != nil {
+		logger.Errorf("error getting block count: %v", err)
+	} else {
+		logger.Infof("Total blocks in database: %d", blockCount)
+	}
+	
+	// Try a simpler query first to get some data
 	err = db.ReaderDb.Select(&slots, `
 		SELECT
 			blocks.epoch,
@@ -909,10 +920,15 @@ func getIndexPageData() (*types.IndexPageData, error) {
 		FROM blocks 
 		LEFT JOIN validators ON blocks.proposer = validators.validatorindex
 		LEFT JOIN validator_names ON validators.pubkey = validator_names.publickey
-		WHERE blocks.slot < $1
-		ORDER BY blocks.slot DESC LIMIT 15`, cutoffSlot)
+		ORDER BY blocks.slot DESC LIMIT 15`)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving index slot data: %v", err)
+	}
+
+	// Debug logging - remove after testing
+	logger.Infof("Fetched %d slots, cutoffSlot: %d", len(slots), cutoffSlot)
+	if len(slots) > 0 {
+		logger.Infof("First slot: Slot=%d, Epoch=%d, Status=%d", slots[0].Slot, slots[0].Epoch, slots[0].Status)
 	}
 
 	// Process slots data
