@@ -21,6 +21,9 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.14.6-0.20250124151602-75526bb8e01b
 	github.com/evanw/esbuild v0.8.23
+	github.com/go-playground/locales v0.14.1
+	github.com/go-playground/universal-translator v0.18.1
+	github.com/go-playground/validator/v10 v10.13.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gobitfly/eth-rewards v0.1.2-0.20230403064929-411ddc40a5f7
 	github.com/gobitfly/eth.store v0.0.0-20250125090903-cce1f5e601a4
@@ -62,6 +65,7 @@ require (
 	github.com/skygeario/go-confusable-homoglyphs v0.0.0-20191212061114-e2b2a60df110
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
+	github.com/stretchr/testify v1.10.0
 	github.com/stripe/stripe-go/v72 v72.50.0
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/urfave/negroni v1.0.0
@@ -168,6 +172,7 @@ require (
 	github.com/ipld/go-ipld-prime v0.20.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
+	github.com/leodido/go-urn v1.2.3 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mattn/go-sqlite3 v1.11.0 // indirect
@@ -187,6 +192,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/protolambda/zssz v0.1.5 // indirect
 	github.com/prysmaticlabs/fastssz v0.0.0-20241008181541-518c4ce73516 // indirect

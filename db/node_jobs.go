@@ -11,11 +11,11 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"github.com/sirupsen/logrus"
 	ethutil "github.com/wealdtech/go-eth2-util"
 )
 
@@ -218,7 +218,7 @@ func CreateBLSToExecutionChangesNodeJob(nj *types.NodeJob) (*types.NodeJob, erro
 		return nil, fmt.Errorf("error commiting db-tx: %w", err)
 	}
 
-	logrus.WithFields(logrus.Fields{"id": nj.ID, "type": nj.Type, "validators": len(indicesArr)}).Infof("created node_job")
+	dblog.WithFields(logger.Fields{"id": nj.ID, "type": nj.Type, "validators": len(indicesArr)}).Infof("created node_job")
 	return nj, nil
 }
 
@@ -256,7 +256,7 @@ func UpdateBLSToExecutionChangesNodeJob(job *types.NodeJob) error {
 		Index                 uint64 `db:"validatorindex"`
 		WithdrawalCredentials []byte `db:"withdrawalcredentials"`
 	}{}
-	logrus.WithFields(logrus.Fields{"id": job.ID, "type": job.Type, "status": job.Status, "validators": len(indicesArr)}).Infof("checking node_job")
+	dblog.WithFields(logger.Fields{"id": job.ID, "type": job.Type, "status": job.Status, "validators": len(indicesArr)}).Infof("checking node_job")
 	err := WriterDb.Select(&dbValis, `select validatorindex, withdrawalcredentials from validators where validatorindex = any($1)`, pq.Array(indicesArr))
 	if err != nil {
 		return err
@@ -277,7 +277,7 @@ func UpdateBLSToExecutionChangesNodeJob(job *types.NodeJob) error {
 			if err != nil {
 				return err
 			}
-			logrus.WithFields(logrus.Fields{"id": job.ID, "type": job.Type, "status": types.CompletedNodeJobStatus, "validators": len(indicesArr)}).Infof("updated node_job")
+			dblog.WithFields(logger.Fields{"id": job.ID, "type": job.Type, "status": types.CompletedNodeJobStatus, "validators": len(indicesArr)}).Infof("updated node_job")
 		}
 	}
 	return nil
@@ -317,7 +317,7 @@ func SubmitBLSToExecutionChangesNodeJob(job *types.NodeJob) error {
 			d = d[:1000]
 		}
 		jobStatus = types.FailedNodeJobStatus
-		logrus.WithFields(logrus.Fields{"data": string(d), "status": resp.Status, "jobID": job.ID}).Warnf("failed submitting a job")
+		dblog.WithFields(logger.Fields{"data": string(d), "status": resp.Status, "jobID": job.ID}).Warnf("failed submitting a job")
 	}
 	job.Status = jobStatus
 	job.SubmittedToNodeTime.Time = time.Now()
@@ -326,7 +326,7 @@ func SubmitBLSToExecutionChangesNodeJob(job *types.NodeJob) error {
 	if err != nil {
 		return err
 	}
-	logrus.WithFields(logrus.Fields{"id": job.ID, "type": job.Type, "status": jobStatus}).Infof("submitted node_job")
+	dblog.WithFields(logger.Fields{"id": job.ID, "type": job.Type, "status": jobStatus}).Infof("submitted node_job")
 	return nil
 }
 
@@ -368,7 +368,7 @@ func CreateVoluntaryExitNodeJob(nj *types.NodeJob) (*types.NodeJob, error) {
 	if err != nil {
 		return nil, err
 	}
-	logrus.WithFields(logrus.Fields{"id": nj.ID, "type": nj.Type}).Infof("created node_job")
+	dblog.WithFields(logger.Fields{"id": nj.ID, "type": nj.Type}).Infof("created node_job")
 	return nj, nil
 }
 
@@ -452,7 +452,7 @@ func SubmitVoluntaryExitNodeJob(job *types.NodeJob) error {
 			d = d[:1000]
 		}
 		jobStatus = types.FailedNodeJobStatus
-		logrus.WithFields(logrus.Fields{"res": string(d), "status": resp.Status, "jobID": job.ID, "jobType": job.Type}).Warnf("failed submitting a job")
+		dblog.WithFields(logger.Fields{"res": string(d), "status": resp.Status, "jobID": job.ID, "jobType": job.Type}).Warnf("failed submitting a job")
 	}
 	job.Status = jobStatus
 	job.SubmittedToNodeTime.Time = time.Now()
@@ -461,6 +461,6 @@ func SubmitVoluntaryExitNodeJob(job *types.NodeJob) error {
 	if err != nil {
 		return err
 	}
-	logrus.WithFields(logrus.Fields{"id": job.ID, "type": job.Type}).Infof("submitted node_job")
+	dblog.WithFields(logger.Fields{"id": job.ID, "type": job.Type}).Infof("submitted node_job")
 	return nil
 }

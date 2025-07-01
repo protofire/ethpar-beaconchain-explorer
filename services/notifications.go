@@ -23,7 +23,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	ethclients "github.com/protofire/ethpar-beaconchain-explorer/ethClients"
 	"github.com/protofire/ethpar-beaconchain-explorer/mail"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/notify"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -43,7 +43,7 @@ import (
 // notifications are collected in ascending epoch order
 // the epochs_notified sql table is used to keep track of already notified epochs
 // before collecting notifications several db consistency checks are done
-func notificationCollector() {
+func notificationCollector(bt *db.Bigtable) {
 	for {
 		latestFinalizedEpoch := LatestFinalizedEpoch()
 
@@ -92,7 +92,7 @@ func notificationCollector() {
 			logger.Infof("collecting notifications for epoch %v", epoch)
 
 			// Network DB Notifications (network related)
-			notifications, err := collectNotifications(epoch)
+			notifications, err := collectNotifications(epoch, bt)
 
 			if err != nil {
 				logger.Errorf("error collection notifications: %v", err)
@@ -112,7 +112,7 @@ func notificationCollector() {
 			// Network DB Notifications (user related, must only run on one instance ever!!!!)
 			if utils.Config.Notifications.UserDBNotifications {
 				logger.Infof("collecting user db notifications")
-				userNotifications, err := collectUserDbNotifications(epoch)
+				userNotifications, err := collectUserDbNotifications(epoch, bt)
 				if err != nil {
 					logger.Errorf("error collection user db notifications: %v", err)
 					ReportStatus("notification-collector", "Error", nil)
@@ -206,7 +206,7 @@ func notificationSender() {
 	}
 }
 
-func collectNotifications(epoch uint64) (map[uint64]map[types.EventName][]types.Notification, error) {
+func collectNotifications(epoch uint64, bt *db.Bigtable) (map[uint64]map[types.EventName][]types.Notification, error) {
 	notificationsByUserID := map[uint64]map[types.EventName][]types.Notification{}
 	start := time.Now()
 	var err error
@@ -241,21 +241,21 @@ func collectNotifications(epoch uint64) (map[uint64]map[types.EventName][]types.
 	}
 	logger.Infof("collecting attestation & offline notifications took: %v", time.Since(start))
 
-	err = collectBlockProposalNotifications(notificationsByUserID, 1, types.ValidatorExecutedProposalEventName, epoch)
+	err = collectBlockProposalNotifications(notificationsByUserID, 1, types.ValidatorExecutedProposalEventName, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_executed_block_proposal").Inc()
 		return nil, fmt.Errorf("error collecting validator_proposal_submitted notifications: %v", err)
 	}
 	logger.Infof("collecting block proposal proposed notifications took: %v", time.Since(start))
 
-	err = collectBlockProposalNotifications(notificationsByUserID, 2, types.ValidatorMissedProposalEventName, epoch)
+	err = collectBlockProposalNotifications(notificationsByUserID, 2, types.ValidatorMissedProposalEventName, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_missed_block_proposal").Inc()
 		return nil, fmt.Errorf("error collecting validator_proposal_missed notifications: %v", err)
 	}
 	logger.Infof("collecting block proposal missed notifications took: %v", time.Since(start))
 
-	err = collectBlockProposalNotifications(notificationsByUserID, 3, types.ValidatorMissedProposalEventName, epoch)
+	err = collectBlockProposalNotifications(notificationsByUserID, 3, types.ValidatorMissedProposalEventName, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_missed_orphaned_block_proposal").Inc()
 		return nil, fmt.Errorf("error collecting validator_proposal_missed notifications for orphaned slots: %w", err)
@@ -336,33 +336,33 @@ func collectNotifications(epoch uint64) (map[uint64]map[types.EventName][]types.
 	return notificationsByUserID, nil
 }
 
-func collectUserDbNotifications(epoch uint64) (map[uint64]map[types.EventName][]types.Notification, error) {
+func collectUserDbNotifications(epoch uint64, bt *db.Bigtable) (map[uint64]map[types.EventName][]types.Notification, error) {
 	notificationsByUserID := map[uint64]map[types.EventName][]types.Notification{}
 	var err error
 
 	// Monitoring (premium): machine offline
-	err = collectMonitoringMachineOffline(notificationsByUserID, epoch)
+	err = collectMonitoringMachineOffline(notificationsByUserID, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_monitoring_machine_offline").Inc()
 		return nil, fmt.Errorf("error collecting Eth client offline notifications: %v", err)
 	}
 
 	// Monitoring (premium): disk full warnings
-	err = collectMonitoringMachineDiskAlmostFull(notificationsByUserID, epoch)
+	err = collectMonitoringMachineDiskAlmostFull(notificationsByUserID, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_monitoring_machine_disk_almost_full").Inc()
 		return nil, fmt.Errorf("error collecting Eth client disk full notifications: %v", err)
 	}
 
 	// Monitoring (premium): cpu load
-	err = collectMonitoringMachineCPULoad(notificationsByUserID, epoch)
+	err = collectMonitoringMachineCPULoad(notificationsByUserID, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_monitoring_machine_cpu_load").Inc()
 		return nil, fmt.Errorf("error collecting Eth client cpu notifications: %v", err)
 	}
 
 	// Monitoring (premium): ram
-	err = collectMonitoringMachineMemoryUsage(notificationsByUserID, epoch)
+	err = collectMonitoringMachineMemoryUsage(notificationsByUserID, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_monitoring_machine_memory_usage").Inc()
 		return nil, fmt.Errorf("error collecting Eth client memory notifications: %v", err)
@@ -376,7 +376,7 @@ func collectUserDbNotifications(epoch uint64) (map[uint64]map[types.EventName][]
 	}
 
 	//Tax Report
-	err = collectTaxReportNotificationNotifications(notificationsByUserID, types.TaxReportEventName)
+	err = collectTaxReportNotificationNotifications(notificationsByUserID, types.TaxReportEventName, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_tax_report").Inc()
 		return nil, fmt.Errorf("error collecting tax report notifications: %v", err)
@@ -1160,7 +1160,7 @@ func getUrlPart(validatorIndex uint64) string {
 	return fmt.Sprintf(` For more information visit: <a href='https://%s/validator/%v'>https://%s/validator/%v</a>.`, utils.Config.Frontend.SiteDomain, validatorIndex, utils.Config.Frontend.SiteDomain, validatorIndex)
 }
 
-func collectBlockProposalNotifications(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, status uint64, eventName types.EventName, epoch uint64) error {
+func collectBlockProposalNotifications(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, status uint64, eventName types.EventName, epoch uint64, bt *db.Bigtable) error {
 	type dbResult struct {
 		Proposer      uint64 `db:"proposer"`
 		Status        uint64 `db:"status"`
@@ -1192,7 +1192,7 @@ func collectBlockProposalNotifications(notificationsByUserID map[uint64]map[type
 		}
 
 		if len(blockList) > 0 {
-			blocks, err := db.BigtableClient.GetBlocksIndexedMultiple(blockList, 10000)
+			blocks, err := bt.GetBlocksIndexedMultiple(blockList, 10000)
 			if err != nil {
 				logger.WithError(err).Errorf("can not load blocks from bigtable for notification")
 				return err
@@ -2211,7 +2211,7 @@ type MachineEvents struct {
 	EventThreshold  float64        `db:"event_threshold"`
 }
 
-func collectMonitoringMachineOffline(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64) error {
+func collectMonitoringMachineOffline(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64, bt *db.Bigtable) error {
 	nowTs := time.Now().Unix()
 	return collectMonitoringMachine(notificationsByUserID, types.MonitoringMachineOfflineEventName, 120,
 		// notify condition
@@ -2222,6 +2222,7 @@ func collectMonitoringMachineOffline(notificationsByUserID map[uint64]map[types.
 			return false
 		},
 		epoch,
+		bt,
 	)
 }
 
@@ -2230,7 +2231,7 @@ func isMachineDataRecent(machineData *types.MachineMetricSystemUser) bool {
 	return machineData.CurrentDataInsertTs >= nowTs-60*60
 }
 
-func collectMonitoringMachineDiskAlmostFull(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64) error {
+func collectMonitoringMachineDiskAlmostFull(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64, bt *db.Bigtable) error {
 	return collectMonitoringMachine(notificationsByUserID, types.MonitoringMachineDiskAlmostFullEventName, 750,
 		// notify condition
 		func(subscribeData *MachineEvents, machineData *types.MachineMetricSystemUser) bool {
@@ -2242,10 +2243,11 @@ func collectMonitoringMachineDiskAlmostFull(notificationsByUserID map[uint64]map
 			return percentFree < subscribeData.EventThreshold
 		},
 		epoch,
+		bt,
 	)
 }
 
-func collectMonitoringMachineCPULoad(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64) error {
+func collectMonitoringMachineCPULoad(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64, bt *db.Bigtable) error {
 	return collectMonitoringMachine(notificationsByUserID, types.MonitoringMachineCpuLoadEventName, 10,
 		// notify condition
 		func(subscribeData *MachineEvents, machineData *types.MachineMetricSystemUser) bool {
@@ -2264,10 +2266,11 @@ func collectMonitoringMachineCPULoad(notificationsByUserID map[uint64]map[types.
 			return percentLoad > subscribeData.EventThreshold
 		},
 		epoch,
+		bt,
 	)
 }
 
-func collectMonitoringMachineMemoryUsage(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64) error {
+func collectMonitoringMachineMemoryUsage(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, epoch uint64, bt *db.Bigtable) error {
 	return collectMonitoringMachine(notificationsByUserID, types.MonitoringMachineMemoryUsageEventName, 10,
 		// notify condition
 		func(subscribeData *MachineEvents, machineData *types.MachineMetricSystemUser) bool {
@@ -2282,6 +2285,7 @@ func collectMonitoringMachineMemoryUsage(notificationsByUserID map[uint64]map[ty
 			return memUsage > subscribeData.EventThreshold
 		},
 		epoch,
+		bt,
 	)
 }
 
@@ -2293,6 +2297,7 @@ func collectMonitoringMachine(
 	epochWaitInBetween int,
 	notifyConditionFullfilled func(subscribeData *MachineEvents, machineData *types.MachineMetricSystemUser) bool,
 	epoch uint64,
+	bt *db.Bigtable,
 ) error {
 
 	var allSubscribed []MachineEvents
@@ -2314,10 +2319,10 @@ func collectMonitoringMachine(
 
 	rowKeys := gcp_bigtable.RowList{}
 	for _, data := range allSubscribed {
-		rowKeys = append(rowKeys, db.BigtableClient.GetMachineRowKey(data.UserID, "system", data.MachineName))
+		rowKeys = append(rowKeys, bt.GetMachineRowKey(data.UserID, "system", data.MachineName))
 	}
 
-	machineDataOfSubscribed, err := db.BigtableClient.GetMachineMetricsForNotifications(rowKeys)
+	machineDataOfSubscribed, err := bt.GetMachineMetricsForNotifications(rowKeys)
 	if err != nil {
 		return err
 	}
@@ -2507,7 +2512,7 @@ func (n *taxReportNotification) GetUnsubscribeHash() string {
 	return ""
 }
 
-func (n *taxReportNotification) GetEmailAttachment() *types.EmailAttachment {
+func (n *taxReportNotification) GetEmailAttachment(bt *db.Bigtable) *types.EmailAttachment {
 	tNow := time.Now()
 	lastDay := time.Date(tNow.Year(), tNow.Month(), 1, 0, 0, 0, 0, time.UTC)
 	firstDay := lastDay.AddDate(0, -1, 0)
@@ -2536,7 +2541,7 @@ func (n *taxReportNotification) GetEmailAttachment() *types.EmailAttachment {
 		return nil
 	}
 
-	pdf := GetPdfReport(validators, currency, uint64(firstDay.Unix()), uint64(lastDay.Unix()))
+	pdf := GetPdfReport(validators, currency, uint64(firstDay.Unix()), uint64(lastDay.Unix()), bt)
 
 	return &types.EmailAttachment{Attachment: pdf, Name: fmt.Sprintf("income_history_%v_%v.pdf", firstDay.Format("20060102"), lastDay.Format("20060102"))}
 }
@@ -2570,7 +2575,7 @@ func (n *taxReportNotification) GetInfoMarkdown() string {
 	return n.GetInfo(false)
 }
 
-func collectTaxReportNotificationNotifications(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, eventName types.EventName) error {
+func collectTaxReportNotificationNotifications(notificationsByUserID map[uint64]map[types.EventName][]types.Notification, eventName types.EventName, bt *db.Bigtable) error {
 	lastStatsDay, err := LatestExportedStatisticDay()
 
 	if err != nil {
@@ -2621,7 +2626,7 @@ func collectTaxReportNotificationNotifications(notificationsByUserID map[uint64]
 		if _, exists := notificationsByUserID[r.UserID][n.GetEventName()]; !exists {
 			notificationsByUserID[r.UserID][n.GetEventName()] = []types.Notification{}
 		}
-		notificationsByUserID[r.UserID][n.GetEventName()] = append(notificationsByUserID[r.UserID][n.GetEventName()], n)
+		//notificationsByUserID[r.UserID][n.GetEventName()] = append(notificationsByUserID[r.UserID][n.GetEventName()], n)
 		metrics.NotificationsCollected.WithLabelValues(string(n.GetEventName())).Inc()
 	}
 

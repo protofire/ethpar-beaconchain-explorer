@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
-	"github.com/sirupsen/logrus"
 
 	gcp_bigtable "cloud.google.com/go/bigtable"
 )
@@ -59,11 +58,11 @@ func InitBigtableSchema() error {
 		if utils.Config.Bigtable.EmulatorHost == "" {
 			utils.Config.Bigtable.EmulatorHost = "127.0.0.1"
 		}
-		logrus.Infof("using emulated local bigtable environment, setting BIGTABLE_EMULATOR_HOST env variable to %s:%d", utils.Config.Bigtable.EmulatorHost, utils.Config.Bigtable.EmulatorPort)
+		log.Infof("using emulated local bigtable environment, setting BIGTABLE_EMULATOR_HOST env variable to %s:%d", utils.Config.Bigtable.EmulatorHost, utils.Config.Bigtable.EmulatorPort)
 		err := os.Setenv("BIGTABLE_EMULATOR_HOST", fmt.Sprintf("%s:%d", utils.Config.Bigtable.EmulatorHost, utils.Config.Bigtable.EmulatorPort))
 
 		if err != nil {
-			logrus.Fatal(err, "unable to set bigtable emulator environment variable", 0)
+			log.Fatal(err, "unable to set bigtable emulator environment variable", 0)
 		}
 	}
 

@@ -15,11 +15,11 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-func startMonitoringService(wg *sync.WaitGroup) {
+func startMonitoringService(wg *sync.WaitGroup, bt *db.Bigtable) {
 	defer wg.Done()
 
-	go startClDataMonitoringService()
-	go startElDataMonitoringService()
+	go startClDataMonitoringService(bt)
+	go startElDataMonitoringService(bt)
 	go startRedisMonitoringService()
 	go startApiMonitoringService()
 	go startAppMonitoringService()
@@ -27,7 +27,7 @@ func startMonitoringService(wg *sync.WaitGroup) {
 }
 
 // The cl data monitoring service will check that the data in the validators, blocks & epochs tables is up to date
-func startClDataMonitoringService() {
+func startClDataMonitoringService(bt *db.Bigtable) {
 
 	name := "monitoring_cl_data"
 	firstRun := true
@@ -39,7 +39,7 @@ func startClDataMonitoringService() {
 
 		// retrieve the max attestationslot from the validators table and check that it is not older than 15 minutes
 		var maxAttestationSlot uint64
-		lastAttestationSlots, err := db.BigtableClient.GetLastAttestationSlots([]uint64{})
+		lastAttestationSlots, err := bt.GetLastAttestationSlots([]uint64{})
 		if err != nil {
 			logger.Errorf("error retrieving max attestation slot data from bigtable: %v", err)
 			continue
@@ -92,7 +92,7 @@ func startClDataMonitoringService() {
 	}
 }
 
-func startElDataMonitoringService() {
+func startElDataMonitoringService(bt *db.Bigtable) {
 
 	name := "monitoring_el_data"
 	firstRun := true
@@ -103,13 +103,13 @@ func startElDataMonitoringService() {
 		firstRun = false
 
 		// check latest eth1 indexed block
-		numberBlocksTable, err := db.BigtableClient.GetLastBlockInBlocksTable()
+		numberBlocksTable, err := bt.GetLastBlockInBlocksTable()
 		if err != nil {
 			errorMsg := fmt.Errorf("error: could not retrieve latest block number from the blocks table: %v", err)
 			ReportStatus(name, errorMsg.Error(), nil)
 			continue
 		}
-		blockBlocksTable, err := db.BigtableClient.GetBlockFromBlocksTable(uint64(numberBlocksTable))
+		blockBlocksTable, err := bt.GetBlockFromBlocksTable(uint64(numberBlocksTable))
 		if err != nil {
 			errorMsg := fmt.Errorf("error: could not retrieve latest block (%d) from the blocks table: %v", numberBlocksTable, err)
 			ReportStatus(name, errorMsg.Error(), nil)
@@ -122,7 +122,7 @@ func startElDataMonitoringService() {
 		}
 
 		// check if eth1 indices are up to date
-		numberDataTable, err := db.BigtableClient.GetLastBlockInDataTable()
+		numberDataTable, err := bt.GetLastBlockInDataTable()
 		if err != nil {
 			errorMsg := fmt.Errorf("error: could not retrieve latest block number from the data table: %v", err)
 			ReportStatus(name, errorMsg.Error(), nil)

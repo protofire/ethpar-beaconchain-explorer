@@ -165,10 +165,10 @@ func GetTaggedValidators(filter WatchlistFilter) ([]*types.TaggedValidators, err
 			return nil, err
 		}
 		if len(list) != len(validators) {
-			logger.Errorf("error could not get validators for watchlist. Expected to retrieve %v validators but got %v", len(list), len(validators))
+			dblog.Errorf("error could not get validators for watchlist. Expected to retrieve %v validators but got %v", len(list), len(validators))
 			for i, li := range list {
 				if li == nil {
-					logger.Errorf("empty validator entry %v", list[i])
+					dblog.Errorf("empty validator entry %v", list[i])
 				} else {
 					li.Validator = &types.Validator{}
 				}
@@ -177,7 +177,7 @@ func GetTaggedValidators(filter WatchlistFilter) ([]*types.TaggedValidators, err
 		}
 		for i, li := range list {
 			if li == nil {
-				logger.Errorf("empty validator entry %v", list[i])
+				dblog.Errorf("empty validator entry %v", list[i])
 			} else {
 				li.Validator = validators[i]
 			}
@@ -244,7 +244,7 @@ func GetSubscriptions(filter GetSubscriptionsFilter) ([]*types.Subscription, err
 		args = append(args, filter.Limit)
 		qry += fmt.Sprintf(" LIMIT $%d", len(args))
 	}
-	logger.Infof("user: %v getting subscriptions for query: %v and args: %+v", (*filter.UserIDs)[0], qry, filter)
+	dblog.Infof("user: %v getting subscriptions for query: %v and args: %+v", (*filter.UserIDs)[0], qry, filter)
 	args = append(args, filter.Offset)
 	qry += fmt.Sprintf(" OFFSET $%d", len(args))
 	err := FrontendWriterDB.Select(&subs, qry, args...)

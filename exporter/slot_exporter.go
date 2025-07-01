@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
+func RunSlotExporter(client consensus.ConsensusClient, firstRun bool, bt *db.Bigtable) error {
 	// get the current chain head
 	head, err := client.GetChainHead()
 
@@ -57,7 +57,7 @@ func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 		if len(dbSlots) > 0 {
 			if dbSlots[0] != 0 {
 				logger.Infof("exporting genesis slot as it is missing in the database")
-				err := ExportSlot(client, 0, utils.EpochOfSlot(0) == head.HeadEpoch, tx)
+				err := ExportSlot(client, 0, utils.EpochOfSlot(0) == head.HeadEpoch, tx, bt)
 				if err != nil {
 					return fmt.Errorf("error exporting slot %v: %w", 0, err)
 				}
@@ -77,7 +77,7 @@ func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 				if previousSlot != currentSlot-1 {
 					logger.Infof("slots between %v and %v are missing, exporting them", previousSlot, currentSlot)
 					for slot := previousSlot + 1; slot <= currentSlot-1; slot++ {
-						err := ExportSlot(client, slot, false, tx)
+						err := ExportSlot(client, slot, false, tx, bt)
 
 						if err != nil {
 							return fmt.Errorf("error exporting slot %v: %w", slot, err)
@@ -95,7 +95,7 @@ func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			logger.Infof("db is empty, export genesis slot")
-			err := ExportSlot(client, 0, utils.EpochOfSlot(0) == head.HeadEpoch, tx)
+			err := ExportSlot(client, 0, utils.EpochOfSlot(0) == head.HeadEpoch, tx, bt)
 			if err != nil {
 				return fmt.Errorf("error exporting slot %v: %w", 0, err)
 			}
@@ -109,7 +109,7 @@ func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 	if lastDbSlot != head.HeadSlot {
 		slotsExported := 0
 		for slot := lastDbSlot + 1; slot <= head.HeadSlot; slot++ { // export any new slots
-			err := ExportSlot(client, slot, utils.EpochOfSlot(slot) == head.HeadEpoch, tx)
+			err := ExportSlot(client, slot, utils.EpochOfSlot(slot) == head.HeadEpoch, tx, bt)
 			if err != nil {
 				return fmt.Errorf("error exporting slot %v: %w", slot, err)
 			}
@@ -174,7 +174,7 @@ func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 				if err != nil {
 					return fmt.Errorf("error setting block %v as finalized (orphaned): %w", dbSlot.Slot, err)
 				}
-				err = ExportSlot(client, dbSlot.Slot, utils.EpochOfSlot(dbSlot.Slot) == head.HeadEpoch, tx)
+				err = ExportSlot(client, dbSlot.Slot, utils.EpochOfSlot(dbSlot.Slot) == head.HeadEpoch, tx, bt)
 				if err != nil {
 					return fmt.Errorf("error exporting slot %v: %w", dbSlot.Slot, err)
 				}
@@ -210,7 +210,7 @@ func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 		} else { // check if a late slot has been proposed in the meantime
 			if len(dbSlot.BlockRoot) < 32 && header != nil { // we have no slot in the db, but the node has a slot, export it
 				logger.Infof("exporting new slot %v", dbSlot.Slot)
-				err := ExportSlot(client, dbSlot.Slot, utils.EpochOfSlot(dbSlot.Slot) == head.HeadEpoch, tx)
+				err := ExportSlot(client, dbSlot.Slot, utils.EpochOfSlot(dbSlot.Slot) == head.HeadEpoch, tx, bt)
 				if err != nil {
 					return fmt.Errorf("error exporting slot %v: %w", dbSlot.Slot, err)
 				}
@@ -230,7 +230,7 @@ func RunSlotExporter(client consensus.ConsensusClient, firstRun bool) error {
 
 }
 
-func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool, tx *sqlx.Tx) error {
+func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool, tx *sqlx.Tx, bt *db.Bigtable) error {
 
 	isFirstSlotOfEpoch := slot%utils.Config.Chain.ClConfig.SlotsPerEpoch == 0
 	epoch := slot / utils.Config.Chain.ClConfig.SlotsPerEpoch
@@ -287,14 +287,14 @@ func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool,
 
 			// save all duties to bigtable
 			g.Go(func() error {
-				err := db.BigtableClient.SaveAttestationDuties(attDutiesEpoch)
+				err := bt.SaveAttestationDuties(attDutiesEpoch)
 				if err != nil {
 					return fmt.Errorf("error exporting attestation assignments to bigtable for slot %v: %w", block.Slot, err)
 				}
 				return nil
 			})
 			g.Go(func() error {
-				err := db.BigtableClient.SaveSyncComitteeDuties(syncDutiesEpoch)
+				err := bt.SaveSyncComitteeDuties(syncDutiesEpoch)
 				if err != nil {
 					return fmt.Errorf("error exporting sync committee assignments to bigtable for slot %v: %w", block.Slot, err)
 				}
@@ -303,7 +303,7 @@ func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool,
 
 			// save the validator balances to bigtable
 			g.Go(func() error {
-				err := db.BigtableClient.SaveValidatorBalances(epoch, block.Validators)
+				err := bt.SaveValidatorBalances(epoch, block.Validators)
 				if err != nil {
 					return fmt.Errorf("error exporting validator balances to bigtable for slot %v: %w", block.Slot, err)
 				}
@@ -314,7 +314,7 @@ func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool,
 		// Always update validator table for head epoch
 		if isHeadEpoch {
 			g.Go(func() error {
-				err := db.SaveValidators(epoch, block.Validators, client, 10000, tx)
+				err := db.SaveValidators(epoch, block.Validators, client, 10000, tx, bt)
 				if err != nil {
 					return fmt.Errorf("error saving validators for epoch %v: %w", epoch, err)
 				}
@@ -389,11 +389,11 @@ func ExportSlot(client consensus.ConsensusClient, slot uint64, isHeadEpoch bool,
 
 	// save sync & attestation duties to bigtable
 	if utils.Config.Indexer.Node.Mode != "pruned" {
-		err = db.BigtableClient.SaveAttestationDuties(attDuties)
+		err = bt.SaveAttestationDuties(attDuties)
 		if err != nil {
 			return fmt.Errorf("error exporting attestations to bigtable for slot %v: %w", block.Slot, err)
 		}
-		err = db.BigtableClient.SaveSyncComitteeDuties(syncDuties)
+		err = bt.SaveSyncComitteeDuties(syncDuties)
 		if err != nil {
 			return fmt.Errorf("error exporting sync committee duties to bigtable for slot %v: %w", block.Slot, err)
 		}

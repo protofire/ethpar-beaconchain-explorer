@@ -14,7 +14,7 @@ import (
 var logger = logrus.New().WithField("module", "exporter")
 
 // Start will start the export of data from rpc into the database
-func Start(client consensus.ConsensusClient) {
+func Start(client consensus.ConsensusClient, bt *db.Bigtable) {
 	go networkLivenessUpdater(client)
 	go eth1DepositsExporter()
 	go genesisDepositsExporter(client)
@@ -51,7 +51,7 @@ func Start(client consensus.ConsensusClient) {
 	minWaitTimeBetweenRuns := time.Second * time.Duration(utils.Config.Chain.ClConfig.SecondsPerSlot)
 	for {
 		start := time.Now()
-		err := RunSlotExporter(client, firstRun)
+		err := RunSlotExporter(client, firstRun, bt)
 		if err != nil {
 			logrus.Errorf("error during slot export run: %v", err)
 		} else if err == nil && firstRun {

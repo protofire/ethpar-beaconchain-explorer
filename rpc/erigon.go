@@ -10,9 +10,9 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/contracts/oneinchoracle"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
-	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum"
@@ -405,30 +405,11 @@ func (client *ErigonClient) GetLatestEth1BlockNumber() (uint64, error) {
 	return latestBlock.NumberU64(), nil
 }
 
-type GethTraceCallResultWrapper struct {
-	Result *GethTraceCallResult
-}
-
-type GethTraceCallResult struct {
-	TransactionPosition int
-	Time                string
-	GasUsed             string
-	From                common.Address
-	To                  common.Address
-	Value               string
-	Gas                 string
-	Input               string
-	Output              string
-	Error               string
-	Type                string
-	Calls               []*GethTraceCallResult
-}
-
 var gethTracerArg = map[string]string{
 	"tracer": "callTracer",
 }
 
-func extractCalls(r *GethTraceCallResult, d *[]*GethTraceCallResult) {
+func extractCalls(r *rpc_types.GethTraceCallResult, d *[]*rpc_types.GethTraceCallResult) {
 	if r == nil {
 		return
 	}
@@ -443,15 +424,15 @@ func extractCalls(r *GethTraceCallResult, d *[]*GethTraceCallResult) {
 	}
 }
 
-func (client *ErigonClient) TraceGeth(blockHash common.Hash) ([]*GethTraceCallResult, error) {
-	var res []*GethTraceCallResultWrapper
+func (client *ErigonClient) TraceGeth(blockHash common.Hash) ([]*rpc_types.GethTraceCallResult, error) {
+	var res []*rpc_types.GethTraceCallResultWrapper
 
 	err := client.rpcClient.Call(&res, "debug_traceBlockByHash", blockHash, gethTracerArg)
 	if err != nil {
 		return nil, err
 	}
 
-	data := make([]*GethTraceCallResult, 0, 20)
+	data := make([]*rpc_types.GethTraceCallResult, 0, 20)
 	for i, r := range res {
 		r.Result.TransactionPosition = i
 		extractCalls(r.Result, &data)
@@ -460,65 +441,8 @@ func (client *ErigonClient) TraceGeth(blockHash common.Hash) ([]*GethTraceCallRe
 	return data, nil
 }
 
-type ParityTraceResult struct {
-	Action struct {
-		CallType      string `json:"callType"`
-		From          string `json:"from"`
-		Gas           string `json:"gas"`
-		Input         string `json:"input"`
-		To            string `json:"to"`
-		Value         string `json:"value"`
-		Init          string `json:"init"`
-		Address       string `json:"address"`
-		Balance       string `json:"balance"`
-		RefundAddress string `json:"refundAddress"`
-		Author        string `json:"author"`
-		RewardType    string `json:"rewardType"`
-	} `json:"action"`
-	BlockHash   string `json:"blockHash"`
-	BlockNumber int    `json:"blockNumber"`
-	Error       string `json:"error"`
-	Result      struct {
-		GasUsed string `json:"gasUsed"`
-		Code    string `json:"code"`
-		Output  string `json:"output"`
-		Address string `json:"address"`
-	} `json:"result"`
-
-	Subtraces           int     `json:"subtraces"`
-	TraceAddress        []int64 `json:"traceAddress"`
-	TransactionHash     string  `json:"transactionHash"`
-	TransactionPosition int     `json:"transactionPosition"`
-	Type                string  `json:"type"`
-}
-
-func (trace *ParityTraceResult) ConvertFields() ([]byte, []byte, []byte, string) {
-	var from, to, value []byte
-	tx_type := trace.Type
-
-	switch trace.Type {
-	case "create":
-		from = common.FromHex(trace.Action.From)
-		to = common.FromHex(trace.Result.Address)
-		value = common.FromHex(trace.Action.Value)
-	case "suicide":
-		from = common.FromHex(trace.Action.Address)
-		to = common.FromHex(trace.Action.RefundAddress)
-		value = common.FromHex(trace.Action.Balance)
-	case "call":
-		from = common.FromHex(trace.Action.From)
-		to = common.FromHex(trace.Action.To)
-		value = common.FromHex(trace.Action.Value)
-		tx_type = trace.Action.CallType
-	default:
-		spew.Dump(trace)
-		utils.LogFatal(nil, "unknown trace type", 0, map[string]interface{}{"trace type": trace.Type, "tx hash": trace.TransactionHash})
-	}
-	return from, to, value, tx_type
-}
-
-func (client *ErigonClient) TraceParity(blockNumber uint64) ([]*ParityTraceResult, error) {
-	var res []*ParityTraceResult
+func (client *ErigonClient) TraceParity(blockNumber uint64) ([]*rpc_types.ParityTraceResult, error) {
+	var res []*rpc_types.ParityTraceResult
 
 	err := client.rpcClient.Call(&res, "trace_block", blockNumber)
 	if err != nil {
@@ -528,8 +452,8 @@ func (client *ErigonClient) TraceParity(blockNumber uint64) ([]*ParityTraceResul
 	return res, nil
 }
 
-func (client *ErigonClient) TraceParityTx(txHash string) ([]*ParityTraceResult, error) {
-	var res []*ParityTraceResult
+func (client *ErigonClient) TraceParityTx(txHash string) ([]*rpc_types.ParityTraceResult, error) {
+	var res []*rpc_types.ParityTraceResult
 
 	err := client.rpcClient.Call(&res, "trace_transaction", txHash)
 	if err != nil {
