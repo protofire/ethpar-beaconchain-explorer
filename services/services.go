@@ -890,6 +890,44 @@ func getIndexPageData() (*types.IndexPageData, error) {
 		data.Epochs = data.Epochs[:15]
 	}
 
+	// Fetch recent slots data for the dashboard
+	var slots []*types.IndexPageDataSlots
+	err = db.ReaderDb.Select(&slots, `
+		SELECT
+			blocks.epoch,
+			blocks.slot,
+			blocks.proposer,
+			blocks.blockroot,
+			blocks.attestationscount,
+			blocks.depositscount,
+			COALESCE(blocks.withdrawalcount,0) as withdrawalcount, 
+			blocks.voluntaryexitscount,
+			blocks.status,
+			COALESCE(blocks.syncaggregate_participation, 0) as syncaggregate_participation,
+			COALESCE(blocks.exec_block_number, 0) AS exec_block_number,
+			COALESCE(validator_names.name, '') AS name
+		FROM blocks 
+		LEFT JOIN validators ON blocks.proposer = validators.validatorindex
+		LEFT JOIN validator_names ON validators.pubkey = validator_names.publickey
+		WHERE blocks.slot < $1
+		ORDER BY blocks.slot DESC LIMIT 15`, cutoffSlot)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving index slot data: %v", err)
+	}
+
+	// Process slots data
+	for _, slot := range slots {
+		slot.Ts = utils.SlotToTime(slot.Slot)
+		slot.StatusFormatted = utils.FormatBlockStatus(slot.Status, slot.Slot)
+		slot.ProposerFormatted = utils.FormatValidatorWithName(slot.Proposer, slot.ProposerName)
+		slot.BlockRootFormatted = fmt.Sprintf("%x", slot.BlockRoot)
+		// TODO: For EthPar parallel blocks, query and set ParallelBlocksCount
+		// This would require a query like:
+		// SELECT COUNT(*) FROM parallel_blocks WHERE slot = slot.Slot
+		slot.ParallelBlocksCount = 0 // Default to 0 for now
+	}
+	data.Slots = slots
+
 	if data.GenesisPeriod {
 		for _, blk := range blocks {
 			if blk.Status != 0 {
