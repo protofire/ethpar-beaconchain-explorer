@@ -1,12 +1,8 @@
 {{ define "hero" }}
   <div class="hero-container">
-    <!-- Professional header section with logos -->
+    <!-- Header section without logos (moved to navbar) -->
     <div class="hero-header d-flex justify-content-between align-items-center w-100 mb-4">
-      <div class="hero-logos d-flex align-items-center">
-        <img src="/img/ethpar-logo-official.svg" alt="EthPar Logo" class="hero-logo me-3" style="height: 40px;">
-        <div class="logo-divider mx-2" style="width: 1px; height: 30px; background-color: var(--border-color); opacity: 0.3;"></div>
-        <img src="/img/protofire-logo.png" alt="Protofire Logo" class="hero-logo-protofire ms-3" style="height: 35px; width: 35px;">
-      </div>
+      <div></div>
       
       {{ if .Countdown.Enabled }}
         <div class="countdown-compact d-none d-lg-flex">
@@ -30,33 +26,13 @@
 
     <!-- Main content section -->
     <div class="hero-content d-flex flex-column align-items-center text-center">
-      <!-- Clean Ethereum logo -->
-      <div class="eth-logo-container mb-3">
-        <svg width="60" height="60" viewBox="0 0 256 417" xmlns="http://www.w3.org/2000/svg">
-          <path fill="var(--primary)" d="m127.961 0-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
-          <path fill="var(--secondary)" d="M127.962 0 0 212.32l127.962 75.639V154.158z"/>
-          <path fill="var(--primary)" d="m127.961 312.187-1.575 1.92v98.199l1.575 4.6L256 236.587z"/>
-          <path fill="var(--secondary)" d="M127.962 416.905v-104.72L0 236.585z"/>
-          <path fill="var(--dark)" d="m127.961 287.958 127.96-75.637-127.96-58.162z"/>
-          <path fill="var(--gray)" d="m0 212.32 127.96 75.638v-133.8z"/>
-        </svg>
+      <!-- EthPar Text Logo -->
+      <div class="ethpar-logo-container mb-4">
+        <img src="/img/ETHPAR-Logo-text.svg" alt="EthPar Logo Text" style="height: 80px; width: auto; max-width: 100%;">
       </div>
 
       <h1 class="hero-title mb-2" style="font-size: 2.5rem; font-weight: 700; color: var(--font-color);">{{ .Title }}</h1>
       <h5 class="hero-subtitle mb-4" style="color: var(--gray); font-weight: 400;">{{ .Subtitle }}</h5>
-      
-      <!-- Professional action buttons -->
-      <div class="hero-actions d-flex flex-wrap justify-content-center gap-3">
-        <a href="/validators" class="btn btn-primary px-4 py-2">
-          <i class="fas fa-users me-2"></i>Explore Validators
-        </a>
-        <a href="/blocks" class="btn btn-outline-primary px-4 py-2">
-          <i class="fas fa-cube me-2"></i>View Blocks
-        </a>
-        <a href="/epochs" class="btn btn-outline-secondary px-4 py-2">
-          <i class="fas fa-layer-group me-2"></i>Browse Epochs
-        </a>
-      </div>
     </div>
 
     <!-- Mobile countdown section -->
