@@ -21,11 +21,14 @@
     </div>
   </div>
   <div class="row">
-    <div class="col-lg-6 mt-3 pr-lg-2">
-      {{ template "recentEpochs" }}
+    <div class="col-lg-4 mt-3 pr-lg-2">
+      {{ template "recentEpochs" . }}
     </div>
-    <div class="col-lg-6 mt-3 pl-lg-2">
-      {{ template "recentBlocks" }}
+    <div class="col-lg-4 mt-3 px-lg-1">
+      {{ template "recentSlots" . }}
+    </div>
+    <div class="col-lg-4 mt-3 pl-lg-2">
+      {{ template "recentBlocks" . }}
     </div>
   </div>
 {{ end }}
