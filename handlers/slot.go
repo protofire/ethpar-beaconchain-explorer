@@ -43,6 +43,7 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 		"slot/proposerSlashing.html",
 		"slot/exits.html",
 		"slot/blobs.html",
+		"slot/parallel_blocks.html",
 		"components/timestamp.html",
 		"slot/overview.html",
 		"slot/execTransactions.html")

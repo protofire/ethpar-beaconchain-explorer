@@ -384,7 +384,7 @@
         </li>
         {{ if gt .ParallelBlocksCount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="parallel-blocks-tab" data-toggle="tab" href="#parallel-blocks" role="tab" aria-controls="parallel-blocks" aria-selected="false">Parallel Blocks <span class="badge bg-secondary text-white">{{ .ParallelBlocksCount }}</span></a>
+            <a class="nav-link" id="parallel-blocks-tab" data-toggle="tab" href="#parallel-blocksTabPanel" role="tab" aria-controls="parallel-blocksTabPanel" aria-selected="false">Parallel Blocks <span class="badge bg-secondary text-white">{{ .ParallelBlocksCount }}</span></a>
           </li>
         {{ end }}
         {{ with .ExecutionData }}
