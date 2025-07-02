@@ -30,7 +30,7 @@
             <tr v-for="slot in page.slots">
               <td>
                 <div v-if="slot.status == 2">
-                  <a v-bind:href="'/slot/' + slot.block_root" v-html="addCommas(slot.slot)"></a>
+                  <a v-bind:href="'/slot/0x' + slot.block_root_formatted" v-html="addCommas(slot.slot)"></a>
                 </div>
                 <div v-else>
                   <a v-bind:href="'/slot/' + slot.slot" v-html="addCommas(slot.slot)"></a>
