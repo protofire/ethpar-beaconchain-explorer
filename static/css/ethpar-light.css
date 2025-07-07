@@ -1,0 +1,84 @@
+:root[data-theme="light"] {
+  /* EthPar brand colors for light theme */
+  --ethpar-primary: #FF6B35;     /* Orange from logo */
+  --ethpar-secondary: #2E86AB;   /* Blue from logo */
+  --ethpar-accent: #A23B72;      /* Purple/magenta from logo */
+  --ethpar-dark: #F18F01;        /* Darker orange */
+  --ethpar-light: #C73E1D;       /* Lighter orange variant */
+  
+  /* Override Bootstrap/main theme colors */
+  --bs-primary: var(--ethpar-primary);
+  --bs-secondary: var(--ethpar-secondary);
+  --bs-success: #28a745;
+  --bs-info: var(--ethpar-secondary);
+  --bs-warning: var(--ethpar-dark);
+  --bs-danger: var(--ethpar-accent);
+  
+  /* Background colors */
+  --bs-body-bg: #ffffff;
+  --bs-body-color: #212529;
+  --bs-border-color: #dee2e6;
+}
+
+/* Button overrides */
+.btn-primary {
+  background-color: var(--ethpar-primary) !important;
+  border-color: var(--ethpar-primary) !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--ethpar-light) !important;
+  border-color: var(--ethpar-light) !important;
+}
+
+.btn-secondary {
+  background-color: var(--ethpar-secondary) !important;
+  border-color: var(--ethpar-secondary) !important;
+}
+
+/* Navigation and header */
+.navbar {
+  background-color: var(--ethpar-primary) !important;
+}
+
+.navbar-brand {
+  color: white !important;
+}
+
+/* Links */
+a {
+  color: var(--ethpar-secondary) !important;
+}
+
+a:hover {
+  color: var(--ethpar-accent) !important;
+}
+
+/* Cards and panels */
+.card {
+  border-color: var(--ethpar-primary) !important;
+}
+
+.card-header {
+  background-color: rgba(255, 107, 53, 0.1) !important;
+  border-bottom-color: var(--ethpar-primary) !important;
+}
+
+/* Tables */
+.table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: rgba(255, 107, 53, 0.05) !important;
+}
+
+/* Progress bars */
+.progress-bar {
+  background-color: var(--ethpar-primary) !important;
+}
+
+/* Badges */
+.badge-primary {
+  background-color: var(--ethpar-primary) !important;
+}
+
+.badge-secondary {
+  background-color: var(--ethpar-secondary) !important;
+}

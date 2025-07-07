@@ -36,6 +36,7 @@
       <link rel="stylesheet" href="/css/layout/toggle.css" />
       <link rel="stylesheet" href="/css/layout/banner.css" />
       <link rel="stylesheet" href="/css/layout/herofeed.css" />
+      <link id="ethpar-theme" rel="stylesheet" href="/css/ethpar-light.css" />
       <script>
         var selectedCurrency = {{$.Rates.SelectedCurrency}}
         var mainCurrency = {{config.Frontend.MainCurrency}}
@@ -49,12 +50,18 @@
         var lightScheme = mql.matches
         var currentTheme = localStorage.getItem("theme")
         var d1 = document.getElementById("app-style")
+        var ethparTheme = document.getElementById("ethpar-theme")
 
         if (currentTheme !== "light" && currentTheme !== "dark") {
           currentTheme = lightScheme ? "light" : "dark"
         }
         document.documentElement.setAttribute("data-theme", currentTheme)
         localStorage.setItem("theme", currentTheme)
+
+        // Set EthPar theme based on current theme
+        if (ethparTheme) {
+          ethparTheme.href = currentTheme === "light" ? "/css/ethpar-light.css" : "/css/ethpar-dark.css"
+        }
 
         if (currentTheme === "dark") {
           d1.insertAdjacentHTML("beforebegin", '<link id="app-theme" rel="stylesheet" type="text/css" href="/theme/css/beacon-' + currentTheme + '.min.css" onload="document.documentElement.style.display = ``">')

@@ -24,14 +24,27 @@ $(document).ready(function () {
 // Theme switch
 function switchTheme(e) {
   var d1 = document.getElementById("app-theme")
+  var ethparTheme = document.getElementById("ethpar-theme")
+  
+  // Create ethpar theme link if it doesn't exist
+  if (!ethparTheme) {
+    ethparTheme = document.createElement("link")
+    ethparTheme.id = "ethpar-theme"
+    ethparTheme.rel = "stylesheet"
+    ethparTheme.type = "text/css"
+    document.head.appendChild(ethparTheme)
+  }
+  
   //checked is light
   if (e.target.checked) {
     d1.href = "/theme/css/beacon-light.min.css"
+    ethparTheme.href = "/css/ethpar-light.css"
     document.documentElement.setAttribute("data-theme", "light")
     localStorage.setItem("theme", "light")
   } else {
     // dark theme
     d1.href = "/theme/css/beacon-dark.min.css"
+    ethparTheme.href = "/css/ethpar-dark.css"
     document.documentElement.setAttribute("data-theme", "dark")
     localStorage.setItem("theme", "dark")
   }
@@ -918,4 +931,22 @@ $("[data-tooltip-date=true]").each(function (item) {
     formatAriaEthereumDuration(this)
   })
   $(this).attr("title", titleObject.prop("outerHTML"))
+})
+
+// Initialize EthPar theme on page load
+function initializeEthparTheme() {
+  const currentTheme = localStorage.getItem("theme") || "dark"
+  const ethparTheme = document.createElement("link")
+  ethparTheme.id = "ethpar-theme"
+  ethparTheme.rel = "stylesheet"
+  ethparTheme.type = "text/css"
+  ethparTheme.href = currentTheme === "light" ? "/css/ethpar-light.css" : "/css/ethpar-dark.css"
+  document.head.appendChild(ethparTheme)
+}
+
+// Call on document ready
+$(document).ready(function () {
+  initializeEthparTheme()
+  
+  // ...existing code...
 })

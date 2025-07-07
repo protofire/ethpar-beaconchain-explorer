@@ -1,0 +1,89 @@
+:root[data-theme="dark"] {
+  /* EthPar brand colors for dark theme */
+  --ethpar-primary: #FF6B35;     /* Orange from logo */
+  --ethpar-secondary: #4A9BC7;   /* Lighter blue for dark theme */
+  --ethpar-accent: #C55A8A;      /* Lighter purple for dark theme */
+  --ethpar-dark: #F18F01;        /* Darker orange */
+  --ethpar-light: #FF8C5A;       /* Lighter orange for dark theme */
+  
+  /* Override Bootstrap/main theme colors */
+  --bs-primary: var(--ethpar-primary);
+  --bs-secondary: var(--ethpar-secondary);
+  --bs-success: #28a745;
+  --bs-info: var(--ethpar-secondary);
+  --bs-warning: var(--ethpar-dark);
+  --bs-danger: var(--ethpar-accent);
+  
+  /* Background colors for dark theme */
+  --bs-body-bg: #1a1a1a;
+  --bs-body-color: #ffffff;
+  --bs-border-color: #404040;
+}
+
+/* Button overrides */
+.btn-primary {
+  background-color: var(--ethpar-primary) !important;
+  border-color: var(--ethpar-primary) !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--ethpar-light) !important;
+  border-color: var(--ethpar-light) !important;
+}
+
+.btn-secondary {
+  background-color: var(--ethpar-secondary) !important;
+  border-color: var(--ethpar-secondary) !important;
+}
+
+/* Navigation and header */
+.navbar {
+  background-color: var(--ethpar-primary) !important;
+}
+
+.navbar-brand {
+  color: white !important;
+}
+
+/* Links */
+a {
+  color: var(--ethpar-secondary) !important;
+}
+
+a:hover {
+  color: var(--ethpar-accent) !important;
+}
+
+/* Cards and panels */
+.card {
+  background-color: #2d2d2d !important;
+  border-color: var(--ethpar-primary) !important;
+}
+
+.card-header {
+  background-color: rgba(255, 107, 53, 0.2) !important;
+  border-bottom-color: var(--ethpar-primary) !important;
+}
+
+/* Tables */
+.table-dark {
+  background-color: #2d2d2d !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: rgba(255, 107, 53, 0.1) !important;
+}
+
+/* Progress bars */
+.progress-bar {
+  background-color: var(--ethpar-primary) !important;
+}
+
+/* Badges */
+.badge-primary {
+  background-color: var(--ethpar-primary) !important;
+}
+
+.badge-secondary {
+  background-color: var(--ethpar-secondary) !important;
+}
