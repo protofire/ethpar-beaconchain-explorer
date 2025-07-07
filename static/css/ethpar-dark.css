@@ -1,13 +1,13 @@
 :root[data-theme="dark"] {
-  /* EthPar brand colors from logo - dark theme */
-  --ethpar-primary: #8e1ebf;     /* Brighter purple for dark theme */
-  --ethpar-secondary: #41a9d9;   /* Light blue from logo */
-  --ethpar-accent: #f4b87f;      /* Orange from logo */
-  --ethpar-success: #5cedbd;     /* Teal from logo */
-  --ethpar-warning: #F18F01;     /* Orange variant */
-  --ethpar-danger: #7125b3;      /* Purple variant */
-  --ethpar-dark: #23033b;        /* Dark purple */
-  --ethpar-light: #2562ba;       /* Darker blue */
+  /* EthPar brand colors from logo - muted dark theme */
+  --ethpar-primary: #9f7bc9;     /* Softer purple for dark theme */
+  --ethpar-secondary: #5a8dd9;   /* Softer blue */
+  --ethpar-accent: #d49a73;      /* Softer orange */
+  --ethpar-success: #6bc9b5;     /* Softer teal */
+  --ethpar-warning: #c48a3f;     /* Softer orange variant */
+  --ethpar-danger: #8b6cb8;      /* Softer purple variant */
+  --ethpar-dark: #2a1640;        /* Softer dark purple */
+  --ethpar-light: #4a79c7;       /* Softer blue */
   
   /* Override Bootstrap/main theme colors */
   --bs-primary: var(--ethpar-primary);
@@ -62,7 +62,7 @@
 }
 
 .navbar-nav .nav-link {
-  color: rgba(255, 255, 255, 0.8) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
 .navbar-nav .nav-link:hover {
@@ -78,28 +78,28 @@ a:hover {
   color: var(--ethpar-accent) !important;
 }
 
-/* Cards and panels */
+/* Cards and panels - subtle */
 .card {
-  background-color: #2d2d2d !important;
-  border-color: var(--ethpar-primary) !important;
+  background-color: #242424 !important;
+  border-color: rgba(159, 123, 201, 0.3) !important;
 }
 
 .card-header {
-  background-color: rgba(142, 30, 191, 0.2) !important;
-  border-bottom-color: var(--ethpar-primary) !important;
+  background-color: rgba(159, 123, 201, 0.15) !important;
+  border-bottom-color: rgba(159, 123, 201, 0.3) !important;
 }
 
 /* Tables */
 .table-dark {
-  background-color: #2d2d2d !important;
+  background-color: #242424 !important;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) {
-  background-color: rgba(142, 30, 191, 0.1) !important;
+  background-color: rgba(159, 123, 201, 0.08) !important;
 }
 
 .table th {
-  border-color: var(--ethpar-primary) !important;
+  border-color: rgba(159, 123, 201, 0.3) !important;
 }
 
 /* Progress bars */
@@ -133,38 +133,38 @@ a:hover {
 }
 
 .nav-tabs .nav-link:hover {
-  border-color: var(--ethpar-accent) !important;
+  border-color: rgba(212, 154, 115, 0.5) !important;
 }
 
 /* Forms */
 .form-control:focus {
   border-color: var(--ethpar-primary) !important;
-  box-shadow: 0 0 0 0.2rem rgba(142, 30, 191, 0.25) !important;
+  box-shadow: 0 0 0 0.2rem rgba(159, 123, 201, 0.15) !important;
 }
 
 .form-control {
-  background-color: #2d2d2d !important;
+  background-color: #242424 !important;
   border-color: #404040 !important;
   color: white !important;
 }
 
-/* Alerts */
+/* Alerts - subtle */
 .alert-primary {
-  background-color: rgba(142, 30, 191, 0.15) !important;
-  border-color: var(--ethpar-primary) !important;
+  background-color: rgba(159, 123, 201, 0.12) !important;
+  border-color: rgba(159, 123, 201, 0.3) !important;
   color: var(--ethpar-accent) !important;
 }
 
 .alert-success {
-  background-color: rgba(92, 237, 189, 0.15) !important;
-  border-color: var(--ethpar-success) !important;
+  background-color: rgba(107, 201, 181, 0.12) !important;
+  border-color: rgba(107, 201, 181, 0.3) !important;
   color: var(--ethpar-success) !important;
 }
 
 /* Dropdown menus */
 .dropdown-menu {
-  background-color: #2d2d2d !important;
-  border-color: var(--ethpar-primary) !important;
+  background-color: #242424 !important;
+  border-color: rgba(159, 123, 201, 0.3) !important;
 }
 
 .dropdown-item {
@@ -172,20 +172,20 @@ a:hover {
 }
 
 .dropdown-item:hover {
-  background-color: var(--ethpar-primary) !important;
+  background-color: rgba(159, 123, 201, 0.2) !important;
   color: white !important;
 }
 
 /* Pagination */
 .page-link {
-  background-color: #2d2d2d !important;
-  border-color: var(--ethpar-primary) !important;
+  background-color: #242424 !important;
+  border-color: rgba(159, 123, 201, 0.3) !important;
   color: var(--ethpar-secondary) !important;
 }
 
 .page-link:hover {
-  background-color: var(--ethpar-primary) !important;
-  border-color: var(--ethpar-primary) !important;
+  background-color: rgba(159, 123, 201, 0.2) !important;
+  border-color: rgba(159, 123, 201, 0.5) !important;
   color: white !important;
 }
 
