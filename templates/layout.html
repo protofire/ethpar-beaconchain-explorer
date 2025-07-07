@@ -63,6 +63,26 @@
           ethparTheme.href = currentTheme === "light" ? "/css/ethpar-light.css" : "/css/ethpar-dark.css"
         }
 
+        // Initialize logo visibility immediately
+        function initLogoVisibility() {
+          const lightLogo = document.getElementById("ethpar-logo-light")
+          const darkLogo = document.getElementById("ethpar-logo-dark")
+          
+          if (lightLogo && darkLogo) {
+            if (currentTheme === "light") {
+              lightLogo.style.display = "block"
+              darkLogo.style.display = "none"
+            } else {
+              lightLogo.style.display = "none"
+              darkLogo.style.display = "block"
+            }
+          }
+        }
+
+        // Call immediately and on DOM ready
+        initLogoVisibility()
+        document.addEventListener("DOMContentLoaded", initLogoVisibility)
+
         if (currentTheme === "dark") {
           d1.insertAdjacentHTML("beforebegin", '<link id="app-theme" rel="stylesheet" type="text/css" href="/theme/css/beacon-' + currentTheme + '.min.css" onload="document.documentElement.style.display = ``">')
           window.addEventListener("load", function () {

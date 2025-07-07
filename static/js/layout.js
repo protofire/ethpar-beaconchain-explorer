@@ -21,6 +21,22 @@ $(document).ready(function () {
   }
 })
 
+// Function to update logo visibility based on theme
+function updateLogoVisibility(theme) {
+  const lightLogo = document.getElementById("ethpar-logo-light")
+  const darkLogo = document.getElementById("ethpar-logo-dark")
+  
+  if (lightLogo && darkLogo) {
+    if (theme === "light") {
+      lightLogo.style.display = "block"
+      darkLogo.style.display = "none"
+    } else {
+      lightLogo.style.display = "none"
+      darkLogo.style.display = "block"
+    }
+  }
+}
+
 // Theme switch
 function switchTheme(e) {
   var d1 = document.getElementById("app-theme")
@@ -35,19 +51,25 @@ function switchTheme(e) {
     document.head.appendChild(ethparTheme)
   }
   
+  var theme
   //checked is light
   if (e.target.checked) {
     d1.href = "/theme/css/beacon-light.min.css"
     ethparTheme.href = "/css/ethpar-light.css"
     document.documentElement.setAttribute("data-theme", "light")
     localStorage.setItem("theme", "light")
+    theme = "light"
   } else {
     // dark theme
     d1.href = "/theme/css/beacon-dark.min.css"
     ethparTheme.href = "/css/ethpar-dark.css"
     document.documentElement.setAttribute("data-theme", "dark")
     localStorage.setItem("theme", "dark")
+    theme = "dark"
   }
+  
+  // Update logo visibility
+  updateLogoVisibility(theme)
 }
 $("#toggleSwitch").on("change", switchTheme)
 
@@ -942,6 +964,9 @@ function initializeEthparTheme() {
   ethparTheme.type = "text/css"
   ethparTheme.href = currentTheme === "light" ? "/css/ethpar-light.css" : "/css/ethpar-dark.css"
   document.head.appendChild(ethparTheme)
+  
+  // Initialize logo visibility based on current theme
+  updateLogoVisibility(currentTheme)
 }
 
 // Call on document ready

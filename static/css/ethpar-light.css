@@ -193,3 +193,20 @@ a:hover {
   background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
   border-color: var(--ethpar-primary) !important;
 }
+
+/* Logo theme switching */
+[data-theme="light"] #ethpar-logo-light {
+  display: block !important;
+}
+
+[data-theme="light"] #ethpar-logo-dark {
+  display: none !important;
+}
+
+[data-theme="dark"] #ethpar-logo-light {
+  display: none !important;
+}
+
+[data-theme="dark"] #ethpar-logo-dark {
+  display: block !important;
+}
