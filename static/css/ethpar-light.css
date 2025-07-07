@@ -1,18 +1,21 @@
 :root[data-theme="light"] {
-  /* EthPar brand colors for light theme */
-  --ethpar-primary: #FF6B35;     /* Orange from logo */
-  --ethpar-secondary: #2E86AB;   /* Blue from logo */
-  --ethpar-accent: #A23B72;      /* Purple/magenta from logo */
-  --ethpar-dark: #F18F01;        /* Darker orange */
-  --ethpar-light: #C73E1D;       /* Lighter orange variant */
+  /* EthPar brand colors from logo - light theme */
+  --ethpar-primary: #7125b3;     /* Purple from logo */
+  --ethpar-secondary: #2562ba;   /* Blue from logo */
+  --ethpar-accent: #f4b87f;      /* Orange from logo */
+  --ethpar-success: #5cedbd;     /* Teal from logo */
+  --ethpar-warning: #F18F01;     /* Orange variant */
+  --ethpar-danger: #8e1ebf;      /* Magenta purple */
+  --ethpar-dark: #23033b;        /* Dark purple */
+  --ethpar-light: #41a9d9;       /* Light blue */
   
   /* Override Bootstrap/main theme colors */
   --bs-primary: var(--ethpar-primary);
   --bs-secondary: var(--ethpar-secondary);
-  --bs-success: #28a745;
-  --bs-info: var(--ethpar-secondary);
-  --bs-warning: var(--ethpar-dark);
-  --bs-danger: var(--ethpar-accent);
+  --bs-success: var(--ethpar-success);
+  --bs-info: var(--ethpar-light);
+  --bs-warning: var(--ethpar-warning);
+  --bs-danger: var(--ethpar-danger);
   
   /* Background colors */
   --bs-body-bg: #ffffff;
@@ -24,16 +27,29 @@
 .btn-primary {
   background-color: var(--ethpar-primary) !important;
   border-color: var(--ethpar-primary) !important;
+  color: white !important;
 }
 
 .btn-primary:hover {
-  background-color: var(--ethpar-light) !important;
-  border-color: var(--ethpar-light) !important;
+  background-color: var(--ethpar-danger) !important;
+  border-color: var(--ethpar-danger) !important;
 }
 
 .btn-secondary {
   background-color: var(--ethpar-secondary) !important;
   border-color: var(--ethpar-secondary) !important;
+  color: white !important;
+}
+
+.btn-secondary:hover {
+  background-color: var(--ethpar-light) !important;
+  border-color: var(--ethpar-light) !important;
+}
+
+.btn-success {
+  background-color: var(--ethpar-success) !important;
+  border-color: var(--ethpar-success) !important;
+  color: var(--ethpar-dark) !important;
 }
 
 /* Navigation and header */
@@ -45,13 +61,21 @@
   color: white !important;
 }
 
+.navbar-nav .nav-link {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.navbar-nav .nav-link:hover {
+  color: var(--ethpar-accent) !important;
+}
+
 /* Links */
 a {
   color: var(--ethpar-secondary) !important;
 }
 
 a:hover {
-  color: var(--ethpar-accent) !important;
+  color: var(--ethpar-primary) !important;
 }
 
 /* Cards and panels */
@@ -60,13 +84,17 @@ a:hover {
 }
 
 .card-header {
-  background-color: rgba(255, 107, 53, 0.1) !important;
+  background-color: rgba(113, 37, 179, 0.1) !important;
   border-bottom-color: var(--ethpar-primary) !important;
 }
 
 /* Tables */
 .table-striped > tbody > tr:nth-of-type(odd) {
-  background-color: rgba(255, 107, 53, 0.05) !important;
+  background-color: rgba(113, 37, 179, 0.05) !important;
+}
+
+.table th {
+  border-color: var(--ethpar-primary) !important;
 }
 
 /* Progress bars */
@@ -81,4 +109,43 @@ a:hover {
 
 .badge-secondary {
   background-color: var(--ethpar-secondary) !important;
+}
+
+.badge-success {
+  background-color: var(--ethpar-success) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+.badge-warning {
+  background-color: var(--ethpar-warning) !important;
+}
+
+/* Tabs */
+.nav-tabs .nav-link.active {
+  background-color: var(--ethpar-primary) !important;
+  border-color: var(--ethpar-primary) !important;
+  color: white !important;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: var(--ethpar-accent) !important;
+}
+
+/* Forms */
+.form-control:focus {
+  border-color: var(--ethpar-primary) !important;
+  box-shadow: 0 0 0 0.2rem rgba(113, 37, 179, 0.25) !important;
+}
+
+/* Alerts */
+.alert-primary {
+  background-color: rgba(113, 37, 179, 0.1) !important;
+  border-color: var(--ethpar-primary) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+.alert-success {
+  background-color: rgba(92, 237, 189, 0.1) !important;
+  border-color: var(--ethpar-success) !important;
+  color: var(--ethpar-dark) !important;
 }
