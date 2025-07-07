@@ -1,13 +1,13 @@
 :root[data-theme="light"] {
-  /* EthPar brand colors from logo - muted light theme */
-  --ethpar-primary: #8b6cb8;     /* Softer purple */
-  --ethpar-secondary: #4a79c7;   /* Softer blue */
-  --ethpar-accent: #e8a573;      /* Softer orange */
-  --ethpar-success: #7dd4c0;     /* Softer teal */
-  --ethpar-warning: #d49a47;     /* Softer orange variant */
-  --ethpar-danger: #a066c4;      /* Softer magenta purple */
-  --ethpar-dark: #4a2863;        /* Lighter dark purple */
-  --ethpar-light: #6bb5d9;       /* Muted light blue */
+  /* EthPar brand colors from logo - professional light theme */
+  --ethpar-primary: #7c5fb0;     /* Deep purple from logo */
+  --ethpar-secondary: #4a7bc7;   /* Professional blue */
+  --ethpar-accent: #e8a370;      /* Warm orange accent */
+  --ethpar-success: #5cb89a;     /* Sophisticated teal */
+  --ethpar-warning: #d4a855;     /* Refined gold */
+  --ethpar-danger: #c76584;      /* Muted pink */
+  --ethpar-dark: #1f1825;        /* Deep brand purple */
+  --ethpar-light: #6b8dd4;       /* Soft blue */
   
   /* Override Bootstrap/main theme colors */
   --bs-primary: var(--ethpar-primary);
@@ -19,8 +19,8 @@
   
   /* Background colors */
   --bs-body-bg: #ffffff;
-  --bs-body-color: #212529;
-  --bs-border-color: #dee2e6;
+  --bs-body-color: #2c3e50;
+  --bs-border-color: #e9ecef;
 }
 
 /* Button overrides */
@@ -54,15 +54,17 @@
 
 /* Navigation and header - more subtle */
 .navbar {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+  border-bottom: 1px solid rgba(124, 95, 176, 0.2) !important;
 }
 
 .navbar-brand {
   color: white !important;
+  font-weight: 600 !important;
 }
 
 .navbar-nav .nav-link {
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
 .navbar-nav .nav-link:hover {
@@ -72,39 +74,45 @@
 /* Links - more subtle */
 a {
   color: var(--ethpar-secondary) !important;
+  text-decoration: none !important;
 }
 
 a:hover {
   color: var(--ethpar-primary) !important;
+  text-decoration: none !important;
 }
 
 /* Cards and panels - very subtle */
 .card {
-  border-color: rgba(139, 108, 184, 0.3) !important;
+  border: 1px solid rgba(124, 95, 176, 0.15) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
 }
 
 .card-header {
-  background-color: rgba(139, 108, 184, 0.08) !important;
-  border-bottom-color: rgba(139, 108, 184, 0.3) !important;
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.05) 0%, rgba(74, 123, 199, 0.05) 100%) !important;
+  border-bottom: 1px solid rgba(124, 95, 176, 0.15) !important;
+  border-radius: 7px 7px 0 0 !important;
 }
 
 /* Tables - subtle stripes */
 .table-striped > tbody > tr:nth-of-type(odd) {
-  background-color: rgba(139, 108, 184, 0.03) !important;
+  background-color: rgba(124, 95, 176, 0.03) !important;
 }
 
 .table th {
-  border-color: rgba(139, 108, 184, 0.2) !important;
+  border-color: rgba(124, 95, 176, 0.15) !important;
+  background-color: rgba(124, 95, 176, 0.08) !important;
 }
 
 /* Progress bars */
 .progress-bar {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
 }
 
 /* Badges */
 .badge-primary {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
 }
 
 .badge-secondary {
@@ -118,34 +126,70 @@ a:hover {
 
 .badge-warning {
   background-color: var(--ethpar-warning) !important;
+  color: var(--ethpar-dark) !important;
 }
 
 /* Tabs */
 .nav-tabs .nav-link.active {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
   border-color: var(--ethpar-primary) !important;
   color: white !important;
 }
 
 .nav-tabs .nav-link:hover {
-  border-color: rgba(232, 165, 115, 0.5) !important;
+  border-color: rgba(124, 95, 176, 0.4) !important;
 }
 
 /* Forms */
 .form-control:focus {
   border-color: var(--ethpar-primary) !important;
-  box-shadow: 0 0 0 0.2rem rgba(139, 108, 184, 0.15) !important;
+  box-shadow: 0 0 0 0.2rem rgba(124, 95, 176, 0.15) !important;
 }
 
 /* Alerts - very subtle */
 .alert-primary {
-  background-color: rgba(139, 108, 184, 0.08) !important;
-  border-color: rgba(139, 108, 184, 0.3) !important;
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.08) 0%, rgba(74, 123, 199, 0.08) 100%) !important;
+  border-color: rgba(124, 95, 176, 0.2) !important;
   color: var(--ethpar-dark) !important;
 }
 
 .alert-success {
-  background-color: rgba(125, 212, 192, 0.08) !important;
-  border-color: rgba(125, 212, 192, 0.3) !important;
+  background-color: rgba(92, 184, 154, 0.08) !important;
+  border-color: rgba(92, 184, 154, 0.2) !important;
   color: var(--ethpar-dark) !important;
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(124, 95, 176, 0.15) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dropdown-item {
+  color: var(--bs-body-color) !important;
+}
+
+.dropdown-item:hover {
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.08) 0%, rgba(74, 123, 199, 0.08) 100%) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+/* Pagination */
+.page-link {
+  background-color: #ffffff !important;
+  border-color: rgba(124, 95, 176, 0.15) !important;
+  color: var(--ethpar-secondary) !important;
+}
+
+.page-link:hover {
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.08) 0%, rgba(74, 123, 199, 0.08) 100%) !important;
+  border-color: rgba(124, 95, 176, 0.3) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+.page-item.active .page-link {
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+  border-color: var(--ethpar-primary) !important;
 }

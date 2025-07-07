@@ -1,13 +1,13 @@
 :root[data-theme="dark"] {
-  /* EthPar brand colors from logo - muted dark theme */
-  --ethpar-primary: #9f7bc9;     /* Softer purple for dark theme */
-  --ethpar-secondary: #5a8dd9;   /* Softer blue */
-  --ethpar-accent: #d49a73;      /* Softer orange */
-  --ethpar-success: #6bc9b5;     /* Softer teal */
-  --ethpar-warning: #c48a3f;     /* Softer orange variant */
-  --ethpar-danger: #8b6cb8;      /* Softer purple variant */
-  --ethpar-dark: #2a1640;        /* Softer dark purple */
-  --ethpar-light: #4a79c7;       /* Softer blue */
+  /* EthPar brand colors from logo - professional dark theme */
+  --ethpar-primary: #7c5fb0;     /* Deep purple from logo */
+  --ethpar-secondary: #4a7bc7;   /* Professional blue */
+  --ethpar-accent: #e8a370;      /* Warm orange accent */
+  --ethpar-success: #5cb89a;     /* Sophisticated teal */
+  --ethpar-warning: #d4a855;     /* Refined gold */
+  --ethpar-danger: #c76584;      /* Muted pink */
+  --ethpar-dark: #1f1825;        /* Deep brand purple */
+  --ethpar-light: #6b8dd4;       /* Soft blue */
   
   /* Override Bootstrap/main theme colors */
   --bs-primary: var(--ethpar-primary);
@@ -18,9 +18,9 @@
   --bs-danger: var(--ethpar-danger);
   
   /* Background colors for dark theme */
-  --bs-body-bg: #1a1a1a;
-  --bs-body-color: #ffffff;
-  --bs-border-color: #404040;
+  --bs-body-bg: #0f0f0f;
+  --bs-body-color: #e8e8e8;
+  --bs-border-color: #2a2a2a;
 }
 
 /* Button overrides */
@@ -54,15 +54,17 @@
 
 /* Navigation and header */
 .navbar {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+  border-bottom: 1px solid rgba(124, 95, 176, 0.3) !important;
 }
 
 .navbar-brand {
   color: white !important;
+  font-weight: 600 !important;
 }
 
 .navbar-nav .nav-link {
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
 .navbar-nav .nav-link:hover {
@@ -72,44 +74,55 @@
 /* Links */
 a {
   color: var(--ethpar-secondary) !important;
+  text-decoration: none !important;
 }
 
 a:hover {
   color: var(--ethpar-accent) !important;
+  text-decoration: none !important;
 }
 
 /* Cards and panels - subtle */
 .card {
-  background-color: #242424 !important;
-  border-color: rgba(159, 123, 201, 0.3) !important;
+  background-color: #1a1a1a !important;
+  border: 1px solid rgba(124, 95, 176, 0.2) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
 }
 
 .card-header {
-  background-color: rgba(159, 123, 201, 0.15) !important;
-  border-bottom-color: rgba(159, 123, 201, 0.3) !important;
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.08) 0%, rgba(74, 123, 199, 0.08) 100%) !important;
+  border-bottom: 1px solid rgba(124, 95, 176, 0.2) !important;
+  border-radius: 7px 7px 0 0 !important;
 }
 
 /* Tables */
 .table-dark {
-  background-color: #242424 !important;
+  background-color: #1a1a1a !important;
+  border-color: rgba(124, 95, 176, 0.2) !important;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) {
-  background-color: rgba(159, 123, 201, 0.08) !important;
+  background-color: rgba(124, 95, 176, 0.05) !important;
 }
 
 .table th {
-  border-color: rgba(159, 123, 201, 0.3) !important;
+  border-color: rgba(124, 95, 176, 0.2) !important;
+  background-color: rgba(124, 95, 176, 0.1) !important;
+}
+
+.table td {
+  border-color: rgba(124, 95, 176, 0.15) !important;
 }
 
 /* Progress bars */
 .progress-bar {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
 }
 
 /* Badges */
 .badge-primary {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
 }
 
 .badge-secondary {
@@ -118,11 +131,12 @@ a:hover {
 
 .badge-success {
   background-color: var(--ethpar-success) !important;
-  color: var(--ethpar-dark) !important;
+  color: #1f1825 !important;
 }
 
 .badge-warning {
   background-color: var(--ethpar-warning) !important;
+  color: #1f1825 !important;
 }
 
 /* Tabs */
@@ -139,32 +153,34 @@ a:hover {
 /* Forms */
 .form-control:focus {
   border-color: var(--ethpar-primary) !important;
-  box-shadow: 0 0 0 0.2rem rgba(159, 123, 201, 0.15) !important;
+  box-shadow: 0 0 0 0.2rem rgba(124, 95, 176, 0.15) !important;
 }
 
 .form-control {
-  background-color: #242424 !important;
-  border-color: #404040 !important;
+  background-color: #1a1a1a !important;
+  border-color: #333 !important;
   color: white !important;
 }
 
 /* Alerts - subtle */
 .alert-primary {
-  background-color: rgba(159, 123, 201, 0.12) !important;
-  border-color: rgba(159, 123, 201, 0.3) !important;
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.1) 0%, rgba(74, 123, 199, 0.1) 100%) !important;
+  border-color: rgba(124, 95, 176, 0.3) !important;
   color: var(--ethpar-accent) !important;
 }
 
 .alert-success {
-  background-color: rgba(107, 201, 181, 0.12) !important;
-  border-color: rgba(107, 201, 181, 0.3) !important;
+  background-color: rgba(92, 184, 154, 0.1) !important;
+  border-color: rgba(92, 184, 154, 0.3) !important;
   color: var(--ethpar-success) !important;
 }
 
 /* Dropdown menus */
 .dropdown-menu {
-  background-color: #242424 !important;
-  border-color: rgba(159, 123, 201, 0.3) !important;
+  background-color: #1a1a1a !important;
+  border: 1px solid rgba(124, 95, 176, 0.2) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
 }
 
 .dropdown-item {
@@ -172,24 +188,24 @@ a:hover {
 }
 
 .dropdown-item:hover {
-  background-color: rgba(159, 123, 201, 0.2) !important;
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.1) 0%, rgba(74, 123, 199, 0.1) 100%) !important;
   color: white !important;
 }
 
 /* Pagination */
 .page-link {
-  background-color: #242424 !important;
-  border-color: rgba(159, 123, 201, 0.3) !important;
+  background-color: #1a1a1a !important;
+  border-color: rgba(124, 95, 176, 0.2) !important;
   color: var(--ethpar-secondary) !important;
 }
 
 .page-link:hover {
-  background-color: rgba(159, 123, 201, 0.2) !important;
-  border-color: rgba(159, 123, 201, 0.5) !important;
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.1) 0%, rgba(74, 123, 199, 0.1) 100%) !important;
+  border-color: rgba(124, 95, 176, 0.4) !important;
   color: white !important;
 }
 
 .page-item.active .page-link {
-  background-color: var(--ethpar-primary) !important;
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
   border-color: var(--ethpar-primary) !important;
 }
