@@ -21,20 +21,55 @@ $(document).ready(function () {
   }
 })
 
+// Function to update logo visibility based on theme
+function updateLogoVisibility(theme) {
+  const lightLogo = document.getElementById("ethpar-logo-light")
+  const darkLogo = document.getElementById("ethpar-logo-dark")
+  
+  if (lightLogo && darkLogo) {
+    if (theme === "light") {
+      lightLogo.style.display = "block"
+      darkLogo.style.display = "none"
+    } else {
+      lightLogo.style.display = "none"
+      darkLogo.style.display = "block"
+    }
+  }
+}
+
 // Theme switch
 function switchTheme(e) {
   var d1 = document.getElementById("app-theme")
+  var ethparTheme = document.getElementById("ethpar-theme")
+  
+  // Create ethpar theme link if it doesn't exist
+  if (!ethparTheme) {
+    ethparTheme = document.createElement("link")
+    ethparTheme.id = "ethpar-theme"
+    ethparTheme.rel = "stylesheet"
+    ethparTheme.type = "text/css"
+    document.head.appendChild(ethparTheme)
+  }
+  
+  var theme
   //checked is light
   if (e.target.checked) {
     d1.href = "/theme/css/beacon-light.min.css"
+    ethparTheme.href = "/css/ethpar-light.css"
     document.documentElement.setAttribute("data-theme", "light")
     localStorage.setItem("theme", "light")
+    theme = "light"
   } else {
     // dark theme
     d1.href = "/theme/css/beacon-dark.min.css"
+    ethparTheme.href = "/css/ethpar-dark.css"
     document.documentElement.setAttribute("data-theme", "dark")
     localStorage.setItem("theme", "dark")
+    theme = "dark"
   }
+  
+  // Update logo visibility
+  updateLogoVisibility(theme)
 }
 $("#toggleSwitch").on("change", switchTheme)
 
@@ -918,4 +953,25 @@ $("[data-tooltip-date=true]").each(function (item) {
     formatAriaEthereumDuration(this)
   })
   $(this).attr("title", titleObject.prop("outerHTML"))
+})
+
+// Initialize EthPar theme on page load
+function initializeEthparTheme() {
+  const currentTheme = localStorage.getItem("theme") || "dark"
+  const ethparTheme = document.createElement("link")
+  ethparTheme.id = "ethpar-theme"
+  ethparTheme.rel = "stylesheet"
+  ethparTheme.type = "text/css"
+  ethparTheme.href = currentTheme === "light" ? "/css/ethpar-light.css" : "/css/ethpar-dark.css"
+  document.head.appendChild(ethparTheme)
+  
+  // Initialize logo visibility based on current theme
+  updateLogoVisibility(currentTheme)
+}
+
+// Call on document ready
+$(document).ready(function () {
+  initializeEthparTheme()
+  
+  // ...existing code...
 })

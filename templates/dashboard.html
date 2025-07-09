@@ -44,26 +44,24 @@
               }
 
               .blue-cube {
-                /* --mainColor: #009CDE;
-            --strokeColor: #0079ad;
-            --lightColor: #00affa;
-            --darkColor: #008bc7; */
                 width: 89px;
                 height: auto;
               }
 
+              /* Light theme - using ethpar logo inspired colors */
               .blue-cube {
-                --mainColor: rgba(75, 75, 75, 0.7);
-                --strokeColor: rgba(55, 55, 55, 1);
-                --lightColor: rgba(0, 0, 0, 0.5);
-                --darkColor: rgba(100, 100, 100, 0.8);
+                --mainColor: #56CBA5; /* Ethpar teal */
+                --strokeColor: #23033B; /* Ethpar dark blue */
+                --lightColor: #5CEDBD; /* Ethpar light teal */
+                --darkColor: #2562BA; /* Ethpar blue */
               }
 
+              /* Dark theme - enhanced visibility with ethpar colors */
               [data-theme="dark"] .blue-cube {
-                --mainColor: rgba(180, 180, 180, 0.7);
-                --strokeColor: rgba(200, 200, 200, 1);
-                --lightColor: rgba(255, 255, 255, 0.5);
-                --darkColor: rgba(150, 150, 150, 0.8);
+                --mainColor: #5CEDBD; /* Brighter teal for visibility */
+                --strokeColor: #56CBA5; /* Teal stroke for contrast */
+                --lightColor: #41A9D9; /* Ethpar cyan */
+                --darkColor: #7125B3; /* Ethpar purple */
               }
 
               @keyframes moveX {
@@ -91,12 +89,13 @@
               }
 
               .move {
-                /* transform: translate(-50px, -20px);
-            animation: 2s moveBack alternate infinite paused; */
+                /* Animation styles for cube movement - placeholder for future animations */
+                position: relative;
               }
 
               .move > use {
-                /* animation: 2s moveBack alternate infinite paused; */
+                /* Animation styles for cube elements - placeholder for future animations */
+                transition: transform 0.3s ease;
               }
 
               .m-left,
@@ -131,6 +130,209 @@
 
               .multiselect-border {
                 z-index: 5;
+              }
+
+              /* Enhanced dashboard header styling for better logo visibility */
+              .dashboard-header {
+                padding: 1rem 0;
+                border-radius: 8px;
+                background: linear-gradient(135deg, rgba(86, 203, 165, 0.05), rgba(92, 237, 189, 0.05));
+                border: 1px solid rgba(86, 203, 165, 0.1);
+                margin-bottom: 1rem;
+              }
+
+              /* Dark theme header background */
+              [data-theme="dark"] .dashboard-header {
+                background: linear-gradient(135deg, rgba(92, 237, 189, 0.08), rgba(113, 37, 179, 0.08));
+                border: 1px solid rgba(92, 237, 189, 0.15);
+                box-shadow: 0 2px 8px rgba(92, 237, 189, 0.1);
+              }
+
+              .dashboard-title {
+                padding: 0 1rem;
+              }
+
+              .brand .title {
+                color: #56CBA5;
+                font-weight: 600;
+              }
+
+              .brand .stat {
+                background: linear-gradient(135deg, #56CBA5, #2562BA);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                font-weight: 700;
+              }
+
+              /* Dark theme text styling */
+              [data-theme="dark"] .brand .title {
+                color: #5CEDBD;
+              }
+
+              [data-theme="dark"] .brand .stat {
+                background: linear-gradient(135deg, #5CEDBD, #41A9D9);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+              }
+
+              /* Custom ethpar-themed buttons */
+              .dashboard-container .btn-primary {
+                background: linear-gradient(135deg, #56CBA5, #2562BA);
+                border: 1px solid #56CBA5;
+                transition: all 0.3s ease;
+              }
+
+              .dashboard-container .btn-primary:hover {
+                background: linear-gradient(135deg, #5CEDBD, #41A9D9);
+                border: 1px solid #5CEDBD;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(86, 203, 165, 0.3);
+              }
+
+              /* Dark theme button styling */
+              [data-theme="dark"] .dashboard-container .btn-primary {
+                background: linear-gradient(135deg, #5CEDBD, #7125B3);
+                border: 1px solid #5CEDBD;
+              }
+
+              [data-theme="dark"] .dashboard-container .btn-primary:hover {
+                background: linear-gradient(135deg, #41A9D9, #8E1EBF);
+                border: 1px solid #41A9D9;
+                box-shadow: 0 4px 8px rgba(92, 237, 189, 0.4);
+              }
+
+              /* Accent colors for icons and links */
+              .dashboard-container .text-primary {
+                color: #56CBA5 !important;
+              }
+
+              [data-theme="dark"] .dashboard-container .text-primary {
+                color: #5CEDBD !important;
+              }
+
+              /* Enhanced card styling with ethpar theme */
+              .dashboard-container .card {
+                border: 1px solid rgba(86, 203, 165, 0.1);
+                box-shadow: 0 2px 8px rgba(86, 203, 165, 0.05);
+                transition: all 0.3s ease;
+              }
+
+              .dashboard-container .card:hover {
+                border-color: rgba(86, 203, 165, 0.2);
+                box-shadow: 0 4px 12px rgba(86, 203, 165, 0.1);
+              }
+
+              [data-theme="dark"] .dashboard-container .card {
+                border: 1px solid rgba(92, 237, 189, 0.15);
+                box-shadow: 0 2px 8px rgba(92, 237, 189, 0.1);
+              }
+
+              [data-theme="dark"] .dashboard-container .card:hover {
+                border-color: rgba(92, 237, 189, 0.25);
+                box-shadow: 0 4px 12px rgba(92, 237, 189, 0.15);
+              }
+
+              /* Summary table styling */
+              .summary-table .title {
+                color: #56CBA5;
+                font-weight: 500;
+              }
+
+              [data-theme="dark"] .summary-table .title {
+                color: #5CEDBD;
+              }
+
+              /* Chart tabs and navigation styling */
+              .dashboard-container .nav-tabs .nav-link {
+                color: #56CBA5;
+                border-color: transparent;
+                transition: all 0.3s ease;
+              }
+
+              .dashboard-container .nav-tabs .nav-link:hover {
+                color: #2562BA;
+                border-color: rgba(86, 203, 165, 0.3);
+              }
+
+              .dashboard-container .nav-tabs .nav-link.active {
+                color: #2562BA;
+                background: linear-gradient(135deg, rgba(86, 203, 165, 0.1), rgba(37, 98, 186, 0.1));
+                border-color: #56CBA5;
+                border-bottom-color: transparent;
+              }
+
+              /* Dark theme tab styling */
+              [data-theme="dark"] .dashboard-container .nav-tabs .nav-link {
+                color: #5CEDBD;
+              }
+
+              [data-theme="dark"] .dashboard-container .nav-tabs .nav-link:hover {
+                color: #41A9D9;
+                border-color: rgba(92, 237, 189, 0.3);
+              }
+
+              [data-theme="dark"] .dashboard-container .nav-tabs .nav-link.active {
+                color: #41A9D9;
+                background: linear-gradient(135deg, rgba(92, 237, 189, 0.15), rgba(113, 37, 179, 0.15));
+                border-color: #5CEDBD;
+                border-bottom-color: transparent;
+              }
+
+              /* Switch chart icons styling */
+              .dashboard-container .switch-chart {
+                color: #56CBA5;
+                transition: all 0.3s ease;
+              }
+
+              .dashboard-container .switch-chart:hover,
+              .dashboard-container .proposal-switch-selected {
+                color: #2562BA;
+                background-color: rgba(86, 203, 165, 0.1);
+                border-radius: 4px;
+              }
+
+              [data-theme="dark"] .dashboard-container .switch-chart {
+                color: #5CEDBD;
+              }
+
+              [data-theme="dark"] .dashboard-container .switch-chart:hover,
+              [data-theme="dark"] .dashboard-container .proposal-switch-selected {
+                color: #41A9D9;
+                background-color: rgba(92, 237, 189, 0.15);
+              }
+
+              /* Input field and multiselect styling */
+              .dashboard-container .multiselect-border {
+                border-color: rgba(86, 203, 165, 0.3);
+                transition: all 0.3s ease;
+              }
+
+              .dashboard-container .multiselect-border:hover,
+              .dashboard-container .multiselect-border.focused {
+                border-color: #56CBA5;
+                box-shadow: 0 0 6px 0 rgba(86, 203, 165, 0.3);
+              }
+
+              [data-theme="dark"] .dashboard-container .multiselect-border {
+                border-color: rgba(92, 237, 189, 0.3);
+              }
+
+              [data-theme="dark"] .dashboard-container .multiselect-border:hover,
+              [data-theme="dark"] .dashboard-container .multiselect-border.focused {
+                border-color: #5CEDBD;
+                box-shadow: 0 0 6px 0 rgba(92, 237, 189, 0.4);
+              }
+
+              /* Dashboard info text styling */
+              #dashboard-info {
+                color: #56CBA5;
+                font-weight: 500;
+              }
+
+              [data-theme="dark"] #dashboard-info {
+                color: #5CEDBD;
               }
             </style>
 
