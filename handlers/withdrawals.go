@@ -61,14 +61,14 @@ func WithdrawalsData(bt *db.Bigtable) http.HandlerFunc {
 
 		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 			return
 		}
 
 		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			log.Warnf("error converting datatables start parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 			return
 		}
@@ -77,7 +77,7 @@ func WithdrawalsData(bt *db.Bigtable) http.HandlerFunc {
 		}
 		length, err := strconv.ParseUint(q.Get("length"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+			log.Warnf("error converting datatables length parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
 			return
 		}
@@ -90,14 +90,14 @@ func WithdrawalsData(bt *db.Bigtable) http.HandlerFunc {
 
 		data, err := WithdrawalsTableData(draw, search, length, start, orderBy, orderDir, currency, bt)
 		if err != nil {
-			logger.Errorf("error getting withdrawal table data: %v", err)
+			log.Errorf("error getting withdrawal table data: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(data)
 		if err != nil {
-			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			log.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -238,13 +238,13 @@ func BLSChangeData(bt *db.Bigtable) http.HandlerFunc {
 
 		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 			return
 		}
 		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			log.Warnf("error converting datatables start parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 			return
 		}
@@ -254,7 +254,7 @@ func BLSChangeData(bt *db.Bigtable) http.HandlerFunc {
 		}
 		length, err := strconv.ParseUint(q.Get("length"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+			log.Warnf("error converting datatables length parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
 			return
 		}
@@ -267,14 +267,14 @@ func BLSChangeData(bt *db.Bigtable) http.HandlerFunc {
 
 		data, err := BLSTableData(draw, search, length, start, orderBy, orderDir, bt)
 		if err != nil {
-			logger.Errorf("Error getting bls changes: %v", err)
+			log.Errorf("Error getting bls changes: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(data)
 		if err != nil {
-			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			log.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}

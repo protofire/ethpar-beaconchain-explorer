@@ -54,7 +54,7 @@ func Eth1Address(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFun
 
 		metadata, err := bt.GetMetadataForAddress(addressBytes, 0, db.ECR20TokensPerAddressLimit)
 		if err != nil {
-			logger.Errorf("error retrieving balances for %v route: %v", r.URL.String(), err)
+			log.Errorf("error retrieving balances for %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -174,7 +174,7 @@ func Eth1Address(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFun
 
 		pngStr, pngStrInverse, err := utils.GenerateQRCodeForAddress(addressBytes)
 		if err != nil {
-			logger.WithError(err).Errorf("error generating qr code for address %v", address)
+			log.WithError(err).Errorf("error generating qr code for address %v", address)
 		}
 
 		tabs := []types.Eth1AddressPageTabs{}
@@ -551,7 +551,7 @@ func lowerAddressFromRequest(w http.ResponseWriter, r *http.Request) (string, er
 }
 
 func handleNotFoundJson(address string, w http.ResponseWriter, r *http.Request, err error) {
-	logger.Errorf("error getting address for ENS name [%v] not found for %v route: %v", address, r.URL.String(), err)
+	log.Errorf("error getting address for ENS name [%v] not found for %v route: %v", address, r.URL.String(), err)
 	http.Error(w, "Invalid ENS name", http.StatusInternalServerError)
 }
 

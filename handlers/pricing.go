@@ -31,7 +31,7 @@ func Pricing(w http.ResponseWriter, r *http.Request) {
 	pageData.User = data.User
 	pageData.FlashMessage, err = utils.GetFlash(w, r, "pricing_flash")
 	if err != nil {
-		logger.Errorf("error retrieving flashes for advertisewithusform %v", err)
+		log.Errorf("error retrieving flashes for advertisewithusform %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -39,7 +39,7 @@ func Pricing(w http.ResponseWriter, r *http.Request) {
 	if data.User.Authenticated {
 		subscription, err := db.StripeGetUserSubscription(data.User.UserID, utils.GROUP_API)
 		if err != nil {
-			logger.Errorf("error retrieving user subscriptions %v", err)
+			log.Errorf("error retrieving user subscriptions %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -75,7 +75,7 @@ func MobilePricing(w http.ResponseWriter, r *http.Request) {
 	pageData.User = data.User
 	pageData.FlashMessage, err = utils.GetFlash(w, r, "pricing_flash")
 	if err != nil {
-		logger.Errorf("error retrieving flashes for advertisewithusform %v", err)
+		log.Errorf("error retrieving flashes for advertisewithusform %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -83,7 +83,7 @@ func MobilePricing(w http.ResponseWriter, r *http.Request) {
 	if data.User.Authenticated {
 		subscription, err := db.StripeGetUserSubscription(data.User.UserID, utils.GROUP_MOBILE)
 		if err != nil {
-			logger.Errorf("error retrieving user subscriptions %v", err)
+			log.Errorf("error retrieving user subscriptions %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -91,7 +91,7 @@ func MobilePricing(w http.ResponseWriter, r *http.Request) {
 
 		premiumSubscription, err := db.GetUserPremiumSubscription(data.User.UserID)
 		if err != nil && err != sql.ErrNoRows {
-			logger.Errorf("error retrieving user subscriptions %v", err)
+			log.Errorf("error retrieving user subscriptions %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -145,7 +145,7 @@ func PricingPost(w http.ResponseWriter, r *http.Request) {
 
 	err = mail.SendTextMail(utils.Config.Frontend.Mail.Contact.InquiryEmail, "New API usage inquiry", msg, []types.EmailAttachment{})
 	if err != nil {
-		logger.Errorf("error sending ad form: %v", err)
+		log.Errorf("error sending ad form: %v", err)
 		utils.SetFlash(w, r, "pricing_flash", "Error: unable to submit api request")
 		http.Redirect(w, r, "/pricing", http.StatusSeeOther)
 		return

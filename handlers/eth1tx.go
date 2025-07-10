@@ -49,7 +49,7 @@ func Eth1TransactionTx(rpc execution.ExecutionClient, bt *db.Bigtable) http.Hand
 
 		txHash, err := hex.DecodeString(strings.ReplaceAll(txHashString, "0x", ""))
 		if err != nil {
-			logger.Warnf("error parsing tx hash %v: %v", txHashString, err)
+			log.Warnf("error parsing tx hash %v: %v", txHashString, err)
 			data = InitPageData(w, r, "blockchain", path, title, txNotFoundTemplateFiles)
 			txTemplate = txNotFoundTemplate
 		} else {
@@ -138,7 +138,7 @@ func Eth1TransactionTxData(rpc execution.ExecutionClient, bt *db.Bigtable) http.
 		currency := GetCurrency(r)
 		err := json.NewEncoder(w).Encode(getEth1TransactionTxData(txHashString, currency, rpc, bt))
 		if err != nil {
-			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			log.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 	}
@@ -148,7 +148,7 @@ func getEth1TransactionTxData(txhash, currency string, rpc execution.ExecutionCl
 	tableData := make([][]interface{}, 0, minimumTransactionsPerUpdate)
 	txHash, err := hex.DecodeString(strings.ReplaceAll(txhash, "0x", ""))
 	if err != nil {
-		logger.Warnf("error parsing tx hash %v: %v", txhash, err)
+		log.Warnf("error parsing tx hash %v: %v", txhash, err)
 	} else {
 		txData, err := eth1data.GetEth1Transaction(common.BytesToHash(txHash), currency, rpc, bt)
 		its := txData.InternalTxns

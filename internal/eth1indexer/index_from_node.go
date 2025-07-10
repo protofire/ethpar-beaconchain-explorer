@@ -34,39 +34,50 @@ func IndexFromNode(bt *db.Bigtable, client execution.ExecutionClient, start, end
 
 	progress := newProgressTracker(start, end, logger)
 
-	// Iterate over block numbers and schedule processing
+	// Iterate over block numbers
 	for i := start; i <= end; i++ {
-
 		blockNumber := i
+
 		g.Go(func() error {
 			select {
 			case <-gCtx.Done():
-				return gCtx.Err() // Handle early cancellation
+				return gCtx.Err()
 			default:
 			}
 
-			startTime := time.Now()
+			var firstBlockSuccess bool
 
-			// Fetch full block from Execution layer JSON-RPC
-			bc, timings, err := client.GetBlock(blockNumber, traceMode)
-			if err != nil {
-				return fmt.Errorf("error getting block: %d from ethereum node err: %w", blockNumber, err)
+			for rank := uint32(0); rank <= 4; rank++ {
+				startTime := time.Now()
+
+				// Fetch block from execution client
+				bc, timings, err := client.GetBlock(int64(blockNumber), traceMode, rank)
+				if err != nil {
+					if rank == 0 {
+						// rank 0 must exist
+						return fmt.Errorf("error getting beacon (rank 0) block %d: %w", blockNumber, err)
+					}
+					// rank > 0 — optional, just skip
+					continue
+				}
+
+				observeBlockMetrics(timings, time.Since(startTime))
+
+				// Save to Bigtable
+				if err := bt.SaveBlock(bc); err != nil {
+					return fmt.Errorf("error saving block %d rank %d to bigtable: %w", blockNumber, rank, err)
+				}
+
+				firstBlockSuccess = true
 			}
 
-			// Record RPC and processing durations
-			observeBlockMetrics(timings, time.Since(startTime))
-
-			// Save block to Bigtable
-			if err := bt.SaveBlock(bc); err != nil {
-				return fmt.Errorf("error saving block: %d to bigtable: %w", blockNumber, err)
-
+			if !firstBlockSuccess {
+				return fmt.Errorf("no valid blocks found for block number %d", blockNumber)
 			}
 
-			// Log progress every 5 seconds
 			progress.Tick(blockNumber)
 			return nil
 		})
-
 	}
 
 	// Wait for all goroutines to complete

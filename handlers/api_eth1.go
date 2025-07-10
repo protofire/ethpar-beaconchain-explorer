@@ -88,7 +88,7 @@ func ApiETH1ExecBlocks(bt *db.Bigtable) http.HandlerFunc {
 
 		blocks, err := bt.GetBlocksIndexedMultiple(blockList, limit)
 		if err != nil {
-			logger.Errorf("Can not retrieve blocks from bigtable %v", err)
+			log.Errorf("Can not retrieve blocks from bigtable %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from bigtable")
 			return
 		}
@@ -101,7 +101,7 @@ func ApiETH1ExecBlocks(bt *db.Bigtable) http.HandlerFunc {
 
 		relaysData, err := db.GetRelayDataForIndexedBlocks(blocks)
 		if err != nil {
-			logger.Errorf("can not load mev data %v", err)
+			log.Errorf("can not load mev data %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "can not retrieve mev data")
 			return
 		}
@@ -225,14 +225,14 @@ func ApiETH1AccountProducedBlocks(bt *db.Bigtable) http.HandlerFunc {
 
 		blocks, err := bt.GetBlocksIndexedMultiple(blockList, uint64(limit))
 		if err != nil {
-			logger.Errorf("Can not retrieve blocks from bigtable %v", err)
+			log.Errorf("Can not retrieve blocks from bigtable %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from bigtable")
 			return
 		}
 
 		relaysData, err := db.GetRelayDataForIndexedBlocks(blocks)
 		if err != nil {
-			logger.Errorf("can not load mev data %v", err)
+			log.Errorf("can not load mev data %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "can not retrieve mev data")
 			return
 		}
@@ -265,7 +265,7 @@ func ApiEth1GasNowData(w http.ResponseWriter, r *http.Request) {
 	gasnowData := services.LatestGasNowData()
 
 	if gasnowData == nil {
-		logger.Errorf("error gasnow data is not defined. The frontend updater might not be running.")
+		log.Errorf("error gasnow data is not defined. The frontend updater might not be running.")
 		SendBadRequestResponse(w, r.URL.String(), "error gasnow data is currently not available.")
 		return
 	}
@@ -275,7 +275,7 @@ func ApiEth1GasNowData(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewEncoder(w).Encode(gasnowData)
 	if err != nil {
-		logger.Errorf("error gasnow data is not defined. The frontend updater might not be running.")
+		log.Errorf("error gasnow data is not defined. The frontend updater might not be running.")
 		SendBadRequestResponse(w, r.URL.String(), "error gasnow data is currently not available.")
 		return
 	}
@@ -322,7 +322,7 @@ func ApiEth1Address(bt *db.Bigtable) http.HandlerFunc {
 
 		metadata, err := bt.GetMetadataForAddress(common.FromHex(address), 0, 200)
 		if err != nil {
-			logger.Errorf("error retrieving metadata for address: %v route: %v err: %v", address, r.URL.String(), err)
+			log.Errorf("error retrieving metadata for address: %v route: %v err: %v", address, r.URL.String(), err)
 			sendServerErrorResponse(w, r.URL.String(), "error could not get metadata for address")
 			return
 		}

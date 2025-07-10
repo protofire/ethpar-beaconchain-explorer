@@ -73,7 +73,7 @@ func NotFound(w http.ResponseWriter, r *http.Request) {
 	data := InitPageData(w, r, "blockchain", r.URL.Path, "Not Found", templateFiles)
 	err := notFoundTemplate.ExecuteTemplate(w, "layout", data)
 	if err != nil {
-		logger.Errorf("error executing not-found template for %v route: %v", r.URL.String(), err)
+		log.Errorf("error executing not-found template for %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

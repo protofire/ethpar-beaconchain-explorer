@@ -109,7 +109,7 @@ func startElDataMonitoringService(bt *db.Bigtable) {
 			ReportStatus(name, errorMsg.Error(), nil)
 			continue
 		}
-		blockBlocksTable, err := bt.GetBlockFromBlocksTable(uint64(numberBlocksTable))
+		blockBlocksTable, err := bt.GetBlockFromBlocksTable(uint64(numberBlocksTable),0) // TODO: implement for Ethpar
 		if err != nil {
 			errorMsg := fmt.Errorf("error: could not retrieve latest block (%d) from the blocks table: %v", numberBlocksTable, err)
 			ReportStatus(name, errorMsg.Error(), nil)

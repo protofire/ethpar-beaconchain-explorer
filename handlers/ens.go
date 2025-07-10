@@ -35,7 +35,7 @@ func ResolveEnsDomain(w http.ResponseWriter, r *http.Request) {
 	data, err := GetEnsDomain(search)
 
 	if err != nil {
-		logger.Warnf("failed to resolve ens %v: %v", search, err)
+		log.Warnf("failed to resolve ens %v: %v", search, err)
 		SendBadRequestResponse(w, r.URL.String(), "failed to resolve ens")
 		return
 	}
@@ -71,7 +71,7 @@ func GetEnsDomain(search string) (*types.EnsDomainResponse, error) {
 
 		err = cache.TieredCache.SetString(cacheKey, data.Address, time.Minute)
 		if err != nil {
-			logger.Errorf("error caching ens address: %v", err)
+			log.Errorf("error caching ens address: %v", err)
 		}
 
 	} else if utils.IsValidEth1Address(search) {
@@ -90,7 +90,7 @@ func GetEnsDomain(search string) (*types.EnsDomainResponse, error) {
 		data.Domain = name
 		err = cache.TieredCache.SetString(cacheKey, data.Domain, time.Minute)
 		if err != nil {
-			logger.Errorf("error caching ens address: %v", err)
+			log.Errorf("error caching ens address: %v", err)
 		}
 	} else {
 		returnError = errors.New("not an ens domain or address")

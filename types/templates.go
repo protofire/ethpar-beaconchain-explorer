@@ -242,6 +242,7 @@ type IndexPageDataBlocks struct {
 	Graffiti             []byte        `db:"graffiti"`
 	ProposerName         string        `db:"name"`
 	ExecutionBlockNumber int           `db:"exec_block_number" json:"exec_block_number"`
+	ExecutionRanks       []int         `json:"execution_ranks"`
 }
 
 // IndexPageEpochHistory is a struct to hold the epoch history for the main web page

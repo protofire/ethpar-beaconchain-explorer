@@ -79,7 +79,7 @@ func InitPageData(w http.ResponseWriter, r *http.Request, active, path, title st
 	if utils.Config.Frontend.Debug {
 		_, session, err := getUserSession(r)
 		if err != nil {
-			logger.WithError(err).Error("error getting user session")
+			log.WithError(err).Error("error getting user session")
 		}
 		if session != nil {
 			jsn := make(map[string]interface{})
@@ -140,7 +140,7 @@ func getUserSession(r *http.Request) (*types.User, *utils.CustomSession, error) 
 	}
 	session, err := utils.SessionStore.Get(r, authSessionName)
 	if err != nil {
-		logger.Errorf("error getting session from sessionStore: %v", err)
+		log.Errorf("error getting session from sessionStore: %v", err)
 		return u, session, err
 	}
 	ok := false

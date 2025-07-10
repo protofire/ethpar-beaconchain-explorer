@@ -101,7 +101,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 
 		if *churnRate == 0 {
 			*churnRate = 4
-			logger.Warning("Churn rate not set in config using 4 as default")
+			log.Warn("Churn rate not set in config using 4 as default")
 		}
 		validatorPageData.ChurnRate = *churnRate
 
@@ -112,7 +112,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 
 		if *activationChurnRate == 0 {
 			*activationChurnRate = 4
-			logger.Warning("Activation Churn rate not set in config using 4 as default")
+			log.Warn("Activation Churn rate not set in config using 4 as default")
 		}
 
 		pendingCount := stats.PendingValidatorCount
@@ -483,7 +483,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 						address, err := utils.WithdrawalCredentialsToAddress(validatorPageData.WithdrawCredentials)
 						if err != nil {
 							// warning only as "N/A" will be displayed
-							logger.Warn("invalid withdrawal credentials")
+							log.Warn("invalid withdrawal credentials")
 						}
 
 						// create the table data
@@ -621,7 +621,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 				if lastStatsDay > 0 {
 					err := db.ReaderDb.Get(&attestationStats, "SELECT missed_attestations_total AS missed_attestations FROM validator_stats WHERE validatorindex = $1 AND day = $2", index, lastStatsDay)
 					if err == sql.ErrNoRows {
-						logger.Warningf("no entry in validator_stats for validator index %v while lastStatsDay = %v", index, lastStatsDay)
+						log.Warnf("no entry in validator_stats for validator index %v while lastStatsDay = %v", index, lastStatsDay)
 					} else if err != nil {
 						return fmt.Errorf("error getting validator attestationStats while lastStatsDay = %v: %w", lastStatsDay, err)
 					}
@@ -906,7 +906,7 @@ func ValidatorDeposits(bt *db.Bigtable) http.HandlerFunc {
 
 		pubkey, err := hex.DecodeString(strings.Replace(vars["pubkey"], "0x", "", -1))
 		if err != nil {
-			logger.Warnf("error parsing validator public key %v: %v", vars["pubkey"], err)
+			log.Warnf("error parsing validator public key %v: %v", vars["pubkey"], err)
 			http.Error(w, "Error: Invalid parameter public key.", http.StatusBadRequest)
 			return
 		}
@@ -939,7 +939,7 @@ func ValidatorAttestationInclusionEffectiveness(bt *db.Bigtable) http.HandlerFun
 		vars := mux.Vars(r)
 		index, err := strconv.ParseUint(vars["index"], 10, 64)
 		if err != nil || index > math.MaxInt32 { // index in postgres is limited to int
-			logger.Warnf("error parsing validator index: %v", err)
+			log.Warnf("error parsing validator index: %v", err)
 			http.Error(w, "Error: Invalid parameter validator index.", http.StatusBadRequest)
 			return
 		}
@@ -994,7 +994,7 @@ func ValidatorProposedBlocks(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index, err := strconv.ParseUint(vars["index"], 10, 64)
 	if err != nil || index > math.MaxInt32 { // index in postgres is limited to int
-		logger.Warnf("error parsing validator index: %v", err)
+		log.Warnf("error parsing validator index: %v", err)
 		http.Error(w, "Error: Invalid parameter validator index.", http.StatusBadRequest)
 		return
 	}
@@ -1003,19 +1003,19 @@ func ValidatorProposedBlocks(w http.ResponseWriter, r *http.Request) {
 
 	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+		log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 		return
 	}
 	start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+		log.Warnf("error converting datatables start parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 		return
 	}
 	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+		log.Warnf("error converting datatables length parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
 		return
 	}
@@ -1123,7 +1123,7 @@ func ValidatorAttestations(bt *db.Bigtable) http.HandlerFunc {
 		vars := mux.Vars(r)
 		index, err := strconv.ParseUint(vars["index"], 10, 64)
 		if err != nil || index > math.MaxInt32 { // index in postgres is limited to int
-			logger.Warnf("error parsing validator index: %v", err)
+			log.Warnf("error parsing validator index: %v", err)
 			http.Error(w, "Error: Invalid parameter validator index.", http.StatusBadRequest)
 			return
 		}
@@ -1132,13 +1132,13 @@ func ValidatorAttestations(bt *db.Bigtable) http.HandlerFunc {
 
 		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 			return
 		}
 		start, err := strconv.ParseInt(q.Get("start"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			log.Warnf("error converting datatables start parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 			return
 		}
@@ -1240,7 +1240,7 @@ func ValidatorWithdrawals(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index, err := strconv.ParseUint(vars["index"], 10, 64)
 	if err != nil || index > math.MaxInt32 { // index in postgres is limited to int
-		logger.Warnf("error parsing validator index: %v", err)
+		log.Warnf("error parsing validator index: %v", err)
 		http.Error(w, "Error: Invalid parameter validator index.", http.StatusBadRequest)
 		return
 	}
@@ -1249,13 +1249,13 @@ func ValidatorWithdrawals(w http.ResponseWriter, r *http.Request) {
 
 	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+		log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 		return
 	}
 	start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+		log.Warnf("error converting datatables start parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 		return
 	}
@@ -1336,7 +1336,7 @@ func ValidatorSlashings(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index, err := strconv.ParseUint(vars["index"], 10, 64)
 	if err != nil || index > math.MaxInt32 { // index in postgres is limited to int
-		logger.Warnf("error parsing validator index: %v", err)
+		log.Warnf("error parsing validator index: %v", err)
 		http.Error(w, "Error: Invalid parameter validator index.", http.StatusBadRequest)
 		return
 	}
@@ -1345,7 +1345,7 @@ func ValidatorSlashings(w http.ResponseWriter, r *http.Request) {
 
 	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+		log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 		return
 	}
@@ -1407,7 +1407,7 @@ func ValidatorSlashings(w http.ResponseWriter, r *http.Request) {
 		inter := intersect.Simple(b.Attestestation1Indices, b.Attestestation2Indices)
 		slashedValidators := []int64{}
 		if len(inter) == 0 {
-			logger.Warning("No intersection found for attestation violation")
+			log.Warn("No intersection found for attestation violation")
 		}
 		for _, v := range inter {
 			slashedValidators = append(slashedValidators, v.(int64))
@@ -1499,7 +1499,7 @@ func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
 
 		pubkeyDecoded, err := hex.DecodeString(pubkey)
 		if err != nil {
-			logger.Warnf("error parsing submitted pubkey %v: %v", pubkey, err)
+			log.Warnf("error parsing submitted pubkey %v: %v", pubkey, err)
 			utils.SetFlash(w, r, validatorEditFlash, "Error: the provided signature is invalid")
 			http.Redirect(w, r, "/validator/"+pubkey, http.StatusMovedPermanently)
 			return
@@ -1516,7 +1516,7 @@ func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
 		signatureWrapper := &types.MyCryptoSignature{}
 		err = json.Unmarshal([]byte(signature), signatureWrapper)
 		if err != nil {
-			logger.Warnf("error decoding submitted signature %v: %v", signature, err)
+			log.Warnf("error decoding submitted signature %v: %v", signature, err)
 			utils.SetFlash(w, r, validatorEditFlash, "Error: the provided signature is invalid")
 			http.Redirect(w, r, "/validator/"+pubkey, http.StatusMovedPermanently)
 			return
@@ -1524,7 +1524,7 @@ func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
 
 		msg, err := sanitizeMessage(signatureWrapper.Msg)
 		if err != nil {
-			logger.Warnf("Message is invalid %v: %v", signatureWrapper.Msg, err)
+			log.Warnf("Message is invalid %v: %v", signatureWrapper.Msg, err)
 			utils.SetFlash(w, r, validatorEditFlash, "Error: the provided message is invalid")
 			http.Redirect(w, r, "/validator/"+pubkey, http.StatusMovedPermanently)
 			return
@@ -1533,7 +1533,7 @@ func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
 
 		sig, err := sanitizeSignature(signatureWrapper.Sig)
 		if err != nil {
-			logger.Warnf("error parsing submitted signature %v: %v", signatureWrapper.Sig, err)
+			log.Warnf("error parsing submitted signature %v: %v", signatureWrapper.Sig, err)
 			utils.SetFlash(w, r, validatorEditFlash, "Error: the provided signature is invalid")
 			http.Redirect(w, r, "/validator/"+pubkey, http.StatusMovedPermanently)
 			return
@@ -1541,7 +1541,7 @@ func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
 
 		recoveredPubkey, err := crypto.SigToPub(msgHash, sig)
 		if err != nil {
-			logger.Warnf("error recovering pubkey: %v", err)
+			log.Warnf("error recovering pubkey: %v", err)
 			utils.SetFlash(w, r, validatorEditFlash, "Error: the provided signature is invalid")
 			http.Redirect(w, r, "/validator/"+pubkey, http.StatusMovedPermanently)
 			return
@@ -1621,7 +1621,7 @@ func ValidatorHistory(bt *db.Bigtable) http.HandlerFunc {
 		vars := mux.Vars(r)
 		index, err := strconv.ParseUint(vars["index"], 10, 31)
 		if err != nil {
-			logger.Warnf("error parsing validator index: %v", err)
+			log.Warnf("error parsing validator index: %v", err)
 			http.Error(w, "Error: Invalid parameter validator index.", http.StatusBadRequest)
 			return
 		}
@@ -1630,14 +1630,14 @@ func ValidatorHistory(bt *db.Bigtable) http.HandlerFunc {
 
 		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 			return
 		}
 
 		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			log.Warnf("error converting datatables start parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 			return
 		}
@@ -1918,7 +1918,7 @@ func ValidatorStatsTable(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			// Request is not a valid index number
-			logger.Warnf("error parsing validator index: %v", err)
+			log.Warnf("error parsing validator index: %v", err)
 			validatorNotFound(data, w, r, vars, "/stats")
 			return
 		}
@@ -1993,7 +1993,7 @@ func ValidatorSync(bt *db.Bigtable) http.HandlerFunc {
 		vars := mux.Vars(r)
 		validatorIndex, err := strconv.ParseUint(vars["index"], 10, 64)
 		if err != nil || validatorIndex > math.MaxInt32 { // index in postgres is limited to int
-			logger.Warnf("error parsing validator index: %v", err)
+			log.Warnf("error parsing validator index: %v", err)
 			http.Error(w, "Error: Invalid parameter validator index.", http.StatusBadRequest)
 			return
 		}
@@ -2002,19 +2002,19 @@ func ValidatorSync(bt *db.Bigtable) http.HandlerFunc {
 
 		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 			return
 		}
 		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			log.Warnf("error converting datatables start parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 			return
 		}
 		length, err := strconv.ParseUint(q.Get("length"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+			log.Warnf("error converting datatables length parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
 			return
 		}

@@ -45,7 +45,7 @@ func VisBlocks(w http.ResponseWriter, r *http.Request) {
 
 	// slot in postgres is limited to int
 	if sinceSlot > math.MaxInt32 {
-		logger.Warnf("error retrieving block tree data, slot too big: %v", err)
+		log.Warnf("error retrieving block tree data, slot too big: %v", err)
 		http.Error(w, "Error: Invalid parameter since.", http.StatusBadRequest)
 		return
 	}
@@ -55,7 +55,7 @@ func VisBlocks(w http.ResponseWriter, r *http.Request) {
 	err = db.ReaderDb.Select(&chartData, "select slot, blockroot, parentroot, proposer from blocks where slot >= $1 and status in ('1', '2') order by slot desc limit 50;", sinceSlot)
 
 	if err != nil {
-		logger.Errorf("error retrieving block tree data: %v", err)
+		log.Errorf("error retrieving block tree data: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -74,11 +74,11 @@ func VisBlocks(w http.ResponseWriter, r *http.Request) {
 		d.Difficulty = d.Slot
 	}
 
-	logger.Printf("returning %v blocks since %v", len(chartData), sinceSlot)
+	log.Infof("returning %v blocks since %v", len(chartData), sinceSlot)
 
 	err = json.NewEncoder(w).Encode(chartData)
 	if err != nil {
-		logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+		log.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -109,7 +109,7 @@ func VisVotes(w http.ResponseWriter, r *http.Request) {
 												order by blocks.slot desc LIMIT 10;`, sinceSlot)
 
 	if err != nil {
-		logger.Errorf("error retrieving votes tree data: %v", err)
+		log.Errorf("error retrieving votes tree data: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -120,14 +120,14 @@ func VisVotes(w http.ResponseWriter, r *http.Request) {
 		data := &types.VotesVisChartData{}
 		err := rows.Scan(&data.Slot, &data.BlockRoot, &data.ParentRoot, &data.Validators)
 		if err != nil {
-			logger.Errorf("error scanning votes tree data: %v", err)
+			log.Errorf("error scanning votes tree data: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		chartData = append(chartData, data)
 	}
 
-	logger.Printf("returning %v entries since %v", len(chartData), sinceSlot)
+	log.Infof("returning %v entries since %v", len(chartData), sinceSlot)
 
 	data := InitPageData(w, r, "vis", "/vis", "Votes", templateFiles)
 	data.Data = &types.VisVotesPageData{ChartData: chartData}

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
@@ -19,9 +17,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func Eth1Block(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		blockTemplateFiles := append(layoutTemplateFiles,
+var (
+	blockTemplate = templates.GetTemplate(
+		append(layoutTemplateFiles,
 			"slot/slot.html",
 			"slot/transactions.html",
 			"slot/attestations.html",
@@ -34,101 +32,146 @@ func Eth1Block(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc 
 			"slot/overview.html",
 			"slot/execTransactions.html",
 			"slot/blobs.html",
-			"slot/withdrawals.html")
-		var blockTemplate = templates.GetTemplate(
-			blockTemplateFiles...,
-		)
-		preMergeTemplateFiles := append(layoutTemplateFiles,
+			"slot/withdrawals.html",
+		)...)
+
+	preMergeBlockTemplate = templates.GetTemplate(
+		append(layoutTemplateFiles,
 			"execution/block.html",
 			"slot/execTransactions.html",
-			"components/timestamp.html")
-		notFountTemplateFiles := append(layoutTemplateFiles, "slotnotfound.html")
-		var blockNotFoundTemplate = templates.GetTemplate(notFountTemplateFiles...)
-		var preMergeBlockTemplate = templates.GetTemplate(preMergeTemplateFiles...)
+			"components/timestamp.html",
+		)...)
 
+	blockNotFoundTemplate = templates.GetTemplate(
+		append(layoutTemplateFiles, "slotnotfound.html")...)
+)
+
+// Eth1Block returns an HTTP handler that renders an execution-layer block page.
+//
+// It supports both pre-Merge (PoW) and post-Merge (PoS) blocks and optionally accepts
+// a "rank" parameter to display a specific ranked parallel block.
+//
+// The handler extracts the block number or hash from the URL, resolves it using the provided
+// ExecutionClient, fetches the corresponding execution block data from Bigtable,
+// and renders the appropriate HTML template based on the Merge context.
+//
+// If the block is not found or input is invalid, a 404 Not Found page is rendered.
+//
+// URL parameters:
+//   - {block}: block number (decimal) or hash (64 hex chars)
+//   - {rank} (optional): execution block rank (0 to 4)
+//
+// Parameters:
+//   - bt: reference to the Bigtable client
+//   - rpc: execution-layer RPC client
+func Eth1Block(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		vars := mux.Vars(r)
 
-		// parse block number from url
-		numberString := strings.Replace(vars["block"], "0x", "", -1)
-		var number uint64
-		var err error
-		if len(numberString) == 64 {
-			number, err = rpc.GetBlockNumberByHash(numberString)
-		} else {
-			number, err = strconv.ParseUint(numberString, 10, 64)
-		}
-
+		// Parse block ID from URL
+		rank, err := parseRankParam(vars)
 		if err != nil {
-			data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", 0), notFountTemplateFiles)
-			data.Data = "block"
-
-			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "number", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-				return // an error has occurred and was processed
-			}
+			renderNotFound(w, r, "blockchain", "/block", err.Error(), blockNotFoundTemplate)
+			return
+		}
+		number, err := parseBlockNumber(vars, rpc)
+		if err != nil {
+			renderNotFound(w, r, "blockchain", "/block", err.Error(), blockNotFoundTemplate)
 			return
 		}
 
-		eth1BlockPageData, err := GetExecutionBlockPageData(number, 10, bt, rpc)
+		// Fetch execution-layer block data
+		eth1BlockPageData, err := getExecutionBlockPageData(number, rank, 10, bt, rpc)
 		if err != nil {
-			data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", 0), notFountTemplateFiles)
-			data.Data = "block"
-			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "GetExecutionBlockPageData", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-				return // an error has occurred and was processed
-			}
+			renderNotFound(w, r, "blockchain", "/block", fmt.Sprintf("block %d (rank %d) not found", number, rank), blockNotFoundTemplate)
 			return
 		}
 
-		// special handling for networks that launch with PoS on block 0
-		isPosBlock0 := utils.IsPoSBlock0(number, eth1BlockPageData.Ts.Unix())
-
-		// execute template based on whether block is PoW or PoS
-		if eth1BlockPageData.Difficulty.Cmp(big.NewInt(0)) == 0 || isPosBlock0 {
-			// Post Merge PoS Block
-			data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", number), blockTemplateFiles)
-
-			blockSlot := uint64(0)
-			if !isPosBlock0 {
-				blockSlot = utils.TimeToSlot(uint64(eth1BlockPageData.Ts.Unix()))
-			}
-
-			// retrieve consensus data
-			blockPageData, err := GetSlotPageData(blockSlot)
-			if err != nil {
-				if err != sql.ErrNoRows {
-					logger.Errorf("error retrieving slot page data: %v", err)
-				}
-
-				data.Data = "block"
-				if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "GetSlotPageData", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-					return // an error has occurred and was processed
-				}
-				return
-			}
-			blockPageData.ExecutionData = eth1BlockPageData
-			blockPageData.ExecutionData.IsValidMev = blockPageData.IsValidMev
-
-			data.Data = blockPageData
-
-			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "Done (Post Merge)", blockTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-				return // an error has occurred and was processed
-			}
+		if isPostMergeBlock(number, eth1BlockPageData.Ts.Unix(), eth1BlockPageData.Difficulty) {
+			handlePostMergeBlock(w, r, number, eth1BlockPageData)
 		} else {
-			// Pre Merge PoW Block
-			data := InitPageData(w, r, "block", "/block", fmt.Sprintf("Block %d", eth1BlockPageData.Number), preMergeTemplateFiles)
-			data.Data = eth1BlockPageData
-
-			if handleTemplateError(w, r, "eth1Block.go", "Eth1Block", "Done (Pre Merge)", preMergeBlockTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-				return // an error has occurred and was processed
-			}
+			handlePreMergeBlock(w, r, number, eth1BlockPageData)
 		}
 	}
 }
 
-func GetExecutionBlockPageData(number uint64, limit int, bt *db.Bigtable, rpc execution.ExecutionClient) (*types.Eth1BlockPageData, error) {
-	block, err := bt.GetBlockFromBlocksTable(number)
+// handlePostMergeBlock handles rendering of a post-Merge (PoS) execution block.
+//
+// It invokes renderExecutionBlockPostMerge to retrieve the corresponding consensus-layer
+// slot data and render the template. If the slot is not found or an unexpected error occurs,
+// a 404 Not Found page is rendered.
+func handlePostMergeBlock(w http.ResponseWriter, r *http.Request, number uint64, data *types.Eth1BlockPageData) {
+	err := renderExecutionBlockPostMerge(w, r, number, data)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.Errorf("error retrieving slot page data: %v", err)
+		}
+		renderNotFound(w, r, "blockchain", "/block", fmt.Sprintf("slot not found for block %d", number), blockNotFoundTemplate)
+	}
+}
+
+// renderExecutionBlockPostMerge renders a post-Merge execution block using slot data.
+//
+// It derives the consensus slot from the block timestamp, loads the corresponding slot page data,
+// attaches execution-layer data to it, and renders the full block layout.
+//
+// Returns an error if the slot data cannot be loaded or the template rendering fails.
+func renderExecutionBlockPostMerge(
+	w http.ResponseWriter,
+	r *http.Request,
+	number uint64,
+	blockData *types.Eth1BlockPageData,
+) error {
+	blockSlot := uint64(0)
+	if !utils.IsPoSBlock0(number, blockData.Ts.Unix()) {
+		blockSlot = utils.TimeToSlot(uint64(blockData.Ts.Unix()))
+	}
+
+	slotPageData, err := GetSlotPageData(blockSlot)
+	if err != nil {
+		return err
+	}
+
+	slotPageData.ExecutionData = blockData
+	slotPageData.ExecutionData.IsValidMev = slotPageData.IsValidMev
+
+	data := InitPageData(w, r, "blockchain", "/block", fmt.Sprintf("Block %d", number), nil)
+	data.Data = slotPageData
+
+	return blockTemplate.ExecuteTemplate(w, "layout", data)
+}
+
+// handlePreMergeBlock handles rendering of a pre-Merge (PoW) execution block.
+//
+// It delegates rendering to renderExecutionBlockPreMerge. If rendering fails,
+// a 404 Not Found page is shown.
+func handlePreMergeBlock(w http.ResponseWriter, r *http.Request, number uint64, data *types.Eth1BlockPageData) {
+	err := renderExecutionBlockPreMerge(w, r, data)
+	if err != nil {
+		renderNotFound(w, r, "blockchain", "/block", fmt.Sprintf("render failed for block %d", number), blockNotFoundTemplate)
+	}
+}
+
+// renderExecutionBlockPreMerge renders a pre-Merge execution block page.
+//
+// It initializes the page data and renders the block using the legacy pre-Merge template.
+//
+// Returns an error if the template rendering fails.
+func renderExecutionBlockPreMerge(
+	w http.ResponseWriter,
+	r *http.Request,
+	blockData *types.Eth1BlockPageData,
+) error {
+	data := InitPageData(w, r, "block", "/block", fmt.Sprintf("Block %d", blockData.Number), nil)
+	data.Data = blockData
+	return preMergeBlockTemplate.ExecuteTemplate(w, "layout", data)
+}
+
+func getExecutionBlockPageData(number uint64, rank uint32, limit int, bt *db.Bigtable, rpc execution.ExecutionClient) (*types.Eth1BlockPageData, error) {
+	block, err := bt.GetBlockFromBlocksTable(number, rank)
 	if diffToHead := int64(services.LatestEth1BlockNumber()) - int64(number); err != nil && diffToHead < 0 && diffToHead >= -5 {
-		block, _, err = rpc.GetBlock(int64(number), "parity/geth")
+		block, _, err = rpc.GetBlock(int64(number), "parity/geth", rank)
 	}
 	if err != nil {
 		return nil, err
@@ -231,7 +274,7 @@ func GetExecutionBlockPageData(number uint64, limit int, bt *db.Bigtable, rpc ex
 		}
 	}
 
-	blobGasPrice := eip4844.CalcBlobFee(block.ExcessBlobGas)
+	blobGasPrice := eip4844.CalcBlobFee(block.ExcessBlobGas, true) // TODO: check this
 	burnedTxFees := new(big.Int).Mul(new(big.Int).SetBytes(block.BaseFee), big.NewInt(int64(block.GasUsed)))
 	burnedBlobFees := new(big.Int).Mul(blobGasPrice, big.NewInt(int64(block.BlobGasUsed)))
 	burnedFees := new(big.Int).Add(burnedTxFees, burnedBlobFees)

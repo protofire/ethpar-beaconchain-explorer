@@ -26,7 +26,7 @@ func AdvertiseWithUs(w http.ResponseWriter, r *http.Request) {
 
 	pageData.FlashMessage, err = utils.GetFlash(w, r, "ad_flash")
 	if err != nil {
-		logger.Errorf("error retrieving flashes for advertisewithusform %v", err)
+		log.Errorf("error retrieving flashes for advertisewithusform %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -71,7 +71,7 @@ func AdvertiseWithUsPost(w http.ResponseWriter, r *http.Request) {
 
 	err = mail.SendTextMail(utils.Config.Frontend.Mail.Contact.InquiryEmail, "New ad inquiry", msg, []types.EmailAttachment{})
 	if err != nil {
-		logger.Errorf("error sending ad form: %v", err)
+		log.Errorf("error sending ad form: %v", err)
 		utils.SetFlash(w, r, "ad_flash", "Error: unable to submit ad request")
 		http.Redirect(w, r, "/advertisewithus", http.StatusSeeOther)
 		return

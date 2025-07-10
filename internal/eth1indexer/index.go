@@ -49,9 +49,9 @@ func (p *IndexingParams) transforms() []func(*types.Eth1Block, *freecache.Cache)
 		p.Bigtable.TransformERC20,
 		p.Bigtable.TransformERC721,
 		p.Bigtable.TransformERC1155,
-		p.Bigtable.TransformUncle,
+		// p.Bigtable.TransformUncle,
 		p.Bigtable.TransformWithdrawals,
-		p.Bigtable.TransformEnsNameRegistered,
+		p.Bigtable.TransformEnsNameRegistered, // TODO: not implemented for EthPar
 		p.Bigtable.TransformContract,
 	}
 }
@@ -110,7 +110,7 @@ func IndexLive(p IndexingParams) error {
 	var lastBlockFromNodeSameCount uint64
 	lastSuccessulBlockIndexingTs := time.Now()
 	for ; ; time.Sleep(time.Second * 14) {
-		err := HandleChainReorgs(p.Bigtable, p.Client, p.ReorgDepth, p.Log)
+		err := handleChainReorgs(p.Bigtable, p.Client, p.ReorgDepth, p.Log)
 		if err != nil {
 			p.Log.Errorf("error handling chain reorgs: %v", err)
 			continue

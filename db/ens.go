@@ -1,7 +1,6 @@
 package db
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/hex"
@@ -11,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	ensContracts "github.com/protofire/ethpar-beaconchain-explorer/contracts/ens"
+	
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -19,245 +18,12 @@ import (
 	gcp_bigtable "cloud.google.com/go/bigtable"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/coocood/freecache"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	eth_types "github.com/ethereum/go-ethereum/core/types"
 	go_ens "github.com/wealdtech/go-ens/v3"
 )
-
-// TransformEnsNameRegistered accepts an eth1 block and creates bigtable mutations for ENS Name events.
-// It transforms the logs contained within a block and indexes ens relevant transactions and tags changes (to be verified from the node in a separate process)
-// ==================================================
-//
-// It indexes transactions
-//
-// - by hashed ens name
-// Row:    <chainID>:ENS:I:H:<nameHash>:<txHash>
-// Family: f
-// Column: nil
-// Cell:   nil
-// Example scan: "5:ENS:I:H:4ae569dd0aa2f6e9207e41423c956d0d27cbc376a499ee8d90fe1d84489ae9d1:e627ae94bd16eb1ed8774cd4003fc25625159f13f8a2612cc1c7f8d2ab11b1d7"
-//
-// - by address
-// Row:    <chainID>:ENS:I:A:<address>:<txHash>
-// Family: f
-// Column: nil
-// Cell:   nil
-// Example scan: "5:ENS:I:A:05579fadcf7cc6544f7aa018a2726c85251600c5:e627ae94bd16eb1ed8774cd4003fc25625159f13f8a2612cc1c7f8d2ab11b1d7"
-//
-// ==================================================
-//
-// Track for later verification via the node ("set dirty")
-//
-// - by name
-// Row:    <chainID>:ENS:V:N:<name>
-// Family: f
-// Column: nil
-// Cell:   nil
-// Example scan: "5:ENS:V:N:somename"
-//
-// - by name hash
-// Row:    <chainID>:ENS:V:H:<nameHash>
-// Family: f
-// Column: nil
-// Cell:   nil
-// Example scan: "5:ENS:V:H:6f5d9cc23e60abe836401b4fd386ec9280a1f671d47d9bf3ec75dab76380d845"
-//
-// - by address
-// Row:    <chainID>:ENS:V:A:<address>
-// Family: f
-// Column: nil
-// Cell:   nil
-// Example scan: "5:ENS:V:A:27234cb8734d5b1fac0521c6f5dc5aebc6e839b6"
-//
-// ==================================================
-
-func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache *freecache.Cache) (bulkData *types.BulkMutations, bulkMetadataUpdates *types.BulkMutations, err error) {
-	startTime := time.Now()
-	defer func() {
-		metrics.TaskDuration.WithLabelValues("bt_transform_ens").Observe(time.Since(startTime).Seconds())
-	}()
-
-	bulkData = &types.BulkMutations{}
-	bulkMetadataUpdates = &types.BulkMutations{}
-	var ensCrontractAddresses map[string]string
-	switch bigtable.chainId {
-	case "1":
-		ensCrontractAddresses = ensContracts.ENSCrontractAddressesEthereum
-	case "17000":
-		ensCrontractAddresses = ensContracts.ENSCrontractAddressesHolesky
-	case "11155111":
-		ensCrontractAddresses = ensContracts.ENSCrontractAddressesSepolia
-	// TODO hoodi
-	default:
-		return bulkData, bulkMetadataUpdates, nil
-	}
-
-	keys := make(map[string]bool)
-	ethLog := eth_types.Log{}
-
-	for i, tx := range blk.GetTransactions() {
-		if i >= TX_PER_BLOCK_LIMIT {
-			return nil, nil, fmt.Errorf("unexpected number of transactions in block expected at most %d but got: %v, tx: %x", TX_PER_BLOCK_LIMIT-1, i, tx.GetHash())
-		}
-		for j, log := range tx.GetLogs() {
-			if j >= ITX_PER_TX_LIMIT {
-				return nil, nil, fmt.Errorf("unexpected number of logs in block expected at most %d but got: %v tx: %x", ITX_PER_TX_LIMIT-1, j, tx.GetHash())
-			}
-			ensContract := ensCrontractAddresses[common.BytesToAddress(log.Address).String()]
-
-			topics := log.GetTopics()
-			ethTopics := make([]common.Hash, 0, len(topics))
-			for _, t := range topics {
-				ethTopics = append(ethTopics, common.BytesToHash(t))
-			}
-
-			ethLog.Address = common.BytesToAddress(log.GetAddress())
-			ethLog.Data = log.Data
-			ethLog.Topics = ethTopics
-			ethLog.BlockNumber = blk.GetNumber()
-			ethLog.TxHash = common.BytesToHash(tx.GetHash())
-			ethLog.TxIndex = uint(i)
-			ethLog.BlockHash = common.BytesToHash(blk.GetHash())
-			ethLog.Index = uint(j)
-			ethLog.Removed = log.GetRemoved()
-
-			for _, lTopic := range topics {
-				logFields := map[string]interface{}{
-					"block":       blk.GetNumber(),
-					"tx":          tx.GetHash(),
-					"logIndex":    j,
-					"ensContract": ensContract,
-				}
-
-				if ensContract == "Registry" {
-					if bytes.Equal(lTopic, ensContracts.ENSRegistryParsedABI.Events["NewResolver"].ID.Bytes()) {
-						logFields["event"] = "NewResolver"
-						r := &ensContracts.ENSRegistryNewResolver{}
-						err = ensContracts.ENSRegistryContract.UnpackLog(r, "NewResolver", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:H:%x", bigtable.chainId, r.Node)] = true
-					} else if bytes.Equal(lTopic, ensContracts.ENSRegistryParsedABI.Events["NewOwner"].ID.Bytes()) {
-						logFields["event"] = "NewOwner"
-						r := &ensContracts.ENSRegistryNewOwner{}
-						err = ensContracts.ENSRegistryContract.UnpackLog(r, "NewOwner", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:A:%x", bigtable.chainId, r.Owner)] = true
-					} else if bytes.Equal(lTopic, ensContracts.ENSRegistryParsedABI.Events["NewTTL"].ID.Bytes()) {
-						logFields["event"] = "NewTTL"
-						r := &ensContracts.ENSRegistryNewTTL{}
-						err = ensContracts.ENSRegistryContract.UnpackLog(r, "NewTTL", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:H:%x", bigtable.chainId, r.Node)] = true
-					}
-				} else if ensContract == "ETHRegistrarController" {
-					if bytes.Equal(lTopic, ensContracts.ENSETHRegistrarControllerParsedABI.Events["NameRegistered"].ID.Bytes()) {
-						logFields["event"] = "NameRegistered"
-						r := &ensContracts.ENSETHRegistrarControllerNameRegistered{}
-						err = ensContracts.ENSETHRegistrarControllerContract.UnpackLog(r, "NameRegistered", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
-						keys[fmt.Sprintf("%s:ENS:V:A:%x", bigtable.chainId, r.Owner)] = true
-					} else if bytes.Equal(lTopic, ensContracts.ENSETHRegistrarControllerParsedABI.Events["NameRenewed"].ID.Bytes()) {
-						logFields["event"] = "NameRenewed"
-						r := &ensContracts.ENSETHRegistrarControllerNameRenewed{}
-						err = ensContracts.ENSETHRegistrarControllerContract.UnpackLog(r, "NameRenewed", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
-					}
-				} else if ensContract == "OldEnsRegistrarController" {
-					if bytes.Equal(lTopic, ensContracts.ENSOldRegistrarControllerParsedABI.Events["NameRegistered"].ID.Bytes()) {
-						logFields["event"] = "NameRegistered"
-						r := &ensContracts.ENSOldRegistrarControllerNameRegistered{}
-						err = ensContracts.ENSOldRegistrarControllerContract.UnpackLog(r, "NameRegistered", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
-						keys[fmt.Sprintf("%s:ENS:V:A:%x", bigtable.chainId, r.Owner)] = true
-					} else if bytes.Equal(lTopic, ensContracts.ENSOldRegistrarControllerParsedABI.Events["NameRenewed"].ID.Bytes()) {
-						logFields["event"] = "NameRenewed"
-						r := &ensContracts.ENSOldRegistrarControllerNameRenewed{}
-						err = ensContracts.ENSOldRegistrarControllerContract.UnpackLog(r, "NameRenewed", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
-					}
-				} else {
-					if bytes.Equal(lTopic, ensContracts.ENSPublicResolverParsedABI.Events["NameChanged"].ID.Bytes()) {
-						logFields["event"] = "NameChanged"
-						r := &ensContracts.ENSPublicResolverNameChanged{}
-						err = ensContracts.ENSPublicResolverContract.UnpackLog(r, "NameChanged", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
-					} else if bytes.Equal(lTopic, ensContracts.ENSPublicResolverParsedABI.Events["AddressChanged"].ID.Bytes()) {
-						logFields["event"] = "AddressChanged"
-						r := &ensContracts.ENSPublicResolverAddressChanged{}
-						err = ensContracts.ENSPublicResolverContract.UnpackLog(r, "AddressChanged", ethLog)
-						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
-							continue
-						}
-						keys[fmt.Sprintf("%s:ENS:V:H:%x", bigtable.chainId, r.Node)] = true
-					}
-				}
-			}
-		}
-	}
-	for key := range keys {
-		mut := gcp_bigtable.NewMutation()
-		mut.Set(DEFAULT_FAMILY, key, gcp_bigtable.Timestamp(0), nil)
-
-		bulkData.Keys = append(bulkData.Keys, key)
-		bulkData.Muts = append(bulkData.Muts, mut)
-	}
-
-	return bulkData, bulkMetadataUpdates, nil
-}
 
 func verifyName(name string) error {
 	// limited by max capacity of db (caused by btrees of indexes); tests showed maximum of 2684 (added buffer)

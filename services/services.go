@@ -56,7 +56,7 @@ func Init(client consensus.ConsensusClient, bt *db.Bigtable) {
 	go slotVizUpdater(ready)
 
 	ready.Add(1)
-	go indexPageDataUpdater(ready)
+	go indexPageDataUpdater(ready, bt)
 
 	ready.Add(1)
 	go poolsUpdater(ready)
@@ -516,13 +516,13 @@ func latestProposedSlotUpdater(wg *sync.WaitGroup) {
 	}
 }
 
-func indexPageDataUpdater(wg *sync.WaitGroup) {
+func indexPageDataUpdater(wg *sync.WaitGroup, bt *db.Bigtable) {
 	firstRun := true
 
 	for {
 		logger.Infof("updating index page data")
 		start := time.Now()
-		data, err := getIndexPageData()
+		data, err := getIndexPageData(bt)
 		if err != nil {
 			logger.Errorf("error retrieving index page data: %v", err)
 			time.Sleep(time.Second * 10)
@@ -651,7 +651,7 @@ func getEthStoreStatisticsData() (*types.EthStoreStatistics, error) {
 	return data, nil
 }
 
-func getIndexPageData() (*types.IndexPageData, error) {
+func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 	currency := utils.Config.Frontend.MainCurrency
 
 	data := &types.IndexPageData{}
@@ -853,6 +853,9 @@ func getIndexPageData() (*types.IndexPageData, error) {
 	sort.Slice(blocks, func(i, j int) bool {
 		return blocks[i].Slot > blocks[j].Slot
 	})
+	if err := enrichExecutionRanks(blocks, bt); err != nil {
+		return nil, fmt.Errorf("error retrieving block ranks from BigTable: %v", err)
+	}
 	data.Blocks = blocks
 
 	if len(data.Blocks) > 15 {
@@ -949,6 +952,22 @@ func getIndexPageData() (*types.IndexPageData, error) {
 	data.Subtitle = template.HTML(utils.Config.Frontend.SiteSubtitle)
 
 	return data, nil
+}
+
+func enrichExecutionRanks(blocks []*types.IndexPageDataBlocks, bt *db.Bigtable) error {
+    for _, b := range blocks {
+        if b.ExecutionBlockNumber == 0 {
+            continue
+        }
+
+        ranks, err := bt.GetAvailableRanksForExecBlock(uint64(b.ExecutionBlockNumber))
+        if err != nil {
+            return fmt.Errorf("failed to get ranks for exec block %d: %w", b.ExecutionBlockNumber, err)
+        }
+
+        b.ExecutionRanks = ranks
+    }
+    return nil
 }
 
 // LatestEpoch will return the latest epoch

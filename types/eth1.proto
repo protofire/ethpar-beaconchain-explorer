@@ -31,6 +31,9 @@ message Eth1Block {
     // EIP 4844
     uint64 blob_gas_used = 23;
     uint64 excess_blob_gas = 24;
+
+    // EthPar
+    uint32 rank = 25;
 }
 
 message Eth1Withdrawal {
@@ -64,8 +67,7 @@ message Eth1Transaction {
     uint64 gas_used = 19;
     bytes logs_bloom = 20;
     uint64 status = 21;
-    reserved 22; // string error_msg = 22;
-
+    string error_msg = 22;
     repeated Eth1Log logs = 23;
 
     // Internal transactions
@@ -134,6 +136,9 @@ message Eth1BlockIndexed {
     uint64 blob_gas_used = 30;
     uint64 excess_blob_gas = 31;
     uint64 blob_transaction_count = 32;
+
+    // EthPar
+    uint32 rank = 33;
 }
 
 message Eth1UncleIndexed {
@@ -145,6 +150,8 @@ message Eth1UncleIndexed {
     bytes difficulty = 6;
     google.protobuf.Timestamp time = 7;
     bytes reward = 8;
+    // EthPar
+    uint32 rank = 9;
 }
 
 message Eth1WithdrawalIndexed {
@@ -154,12 +161,8 @@ message Eth1WithdrawalIndexed {
     bytes address = 4;
     bytes amount = 5;
     google.protobuf.Timestamp time = 6;
-}
-
-enum StatusType {
-    FAILED = 0;
-    SUCCESS = 1;
-    PARTIAL = 2;
+    // EthPar
+    uint32 rank = 7;
 }
 
 message Eth1TransactionIndexed {
@@ -173,15 +176,16 @@ message Eth1TransactionIndexed {
     bytes tx_fee = 8;
     bytes gas_price = 9;
     bool is_contract_creation = 10;
-    reserved 11; // bool invokes_contract = 11;
-
+    // invokes_contract is unused, should mark reserved!
+    bool invokes_contract = 11;
     string error_msg = 12;
 
     // EIP 4844
     bytes blob_tx_fee = 13;
     bytes blob_gas_price = 14;
 
-    StatusType status = 15;
+    // EthPar
+    uint32 rank = 15;
 }
 
 message Eth1InternalTransactionIndexed {
@@ -192,7 +196,8 @@ message Eth1InternalTransactionIndexed {
     bytes from = 5;
     bytes to = 6;
     bytes value = 7;
-    bool reverted = 8;
+    // EthPar
+    uint32 rank = 8;
 }
 
 // https://eips.ethereum.org/EIPS/eip-4844
@@ -212,6 +217,8 @@ message Eth1BlobTransactionIndexed {
 
     string error_msg = 12;
     repeated bytes blob_versioned_hashes = 13;
+    // EthPar
+    uint32 rank = 14;
 }
 
 message Eth1ERC20Indexed {
@@ -222,6 +229,8 @@ message Eth1ERC20Indexed {
     bytes from = 5;
     bytes to = 6;
     bytes value = 7;
+    // EthPar
+    uint32 rank = 8;
 }
 
 message Eth1ERC721Indexed {
@@ -232,6 +241,8 @@ message Eth1ERC721Indexed {
     bytes from = 5;
     bytes to = 6;
     bytes token_id = 7;
+    // EthPar
+    uint32 rank = 8;
 }
 
 // https://eips.ethereum.org/EIPS/eip-1155
@@ -246,4 +257,6 @@ message ETh1ERC1155Indexed {
     bytes value = 8;
     // the address approved to make the transfer
     bytes operator = 9;
+    // EthPar
+    uint32 rank = 10;
 }

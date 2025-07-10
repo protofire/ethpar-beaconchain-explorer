@@ -188,13 +188,13 @@ func parseValidatorsDataQueryParams(r *http.Request) (*ValidatorsDataQueryParams
 
 	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+		log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 		return nil, err
 	}
 
 	start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+		log.Warnf("error converting datatables start parameter from string to int: %v", err)
 		return nil, err
 	}
 	if start > 10000 {
@@ -204,7 +204,7 @@ func parseValidatorsDataQueryParams(r *http.Request) (*ValidatorsDataQueryParams
 
 	length, err := strconv.ParseInt(q.Get("length"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+		log.Warnf("error converting datatables length parameter from string to int: %v", err)
 		return nil, err
 	}
 	if length < 0 {
@@ -239,7 +239,7 @@ func ValidatorsData(bt *db.Bigtable) http.HandlerFunc {
 
 		dataQuery, err := parseValidatorsDataQueryParams(r)
 		if err != nil {
-			logger.Warnf("error parsing query-data: %v", err)
+			log.Warnf("error parsing query-data: %v", err)
 			http.Error(w, "Error: Invalid query-data parameter.", http.StatusBadRequest)
 			return
 		}

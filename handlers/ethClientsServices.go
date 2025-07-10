@@ -32,7 +32,7 @@ func EthClientsServices(w http.ResponseWriter, r *http.Request) {
 			 where user_id = $1 AND event_name=$2
 			`, data.User.UserID, string(types.EthClientUpdateEventName))
 		if err != nil {
-			logger.Errorf("error getting user subscriptions: %v route: %v", r.URL.String(), err)
+			log.Errorf("error getting user subscriptions: %v route: %v", r.URL.String(), err)
 		}
 
 		for _, item := range dbData {

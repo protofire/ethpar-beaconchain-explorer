@@ -132,7 +132,7 @@ func Epoch(w http.ResponseWriter, r *http.Request) {
 		WHERE epoch = $1
 		ORDER BY blocks.slot DESC`, epoch)
 	if err != nil {
-		logger.Errorf("error epoch blocks data: %v", err)
+		log.Errorf("error epoch blocks data: %v", err)
 		data := InitPageData(w, r, "blockchain", metaPath, epochTitle, append(layoutTemplateFiles, epochNotFoundTemplateFiles...))
 
 		if handleTemplateError(w, r, "epoch.go", "Epoch", "read Blocks from db", epochNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
@@ -161,7 +161,7 @@ func Epoch(w http.ResponseWriter, r *http.Request) {
 
 	withdrawalTotal, err := db.GetEpochWithdrawalsTotal(epoch)
 	if err != nil {
-		logger.Errorf("error getting epoch withdrawals total: %v", err)
+		log.Errorf("error getting epoch withdrawals total: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -175,7 +175,7 @@ func Epoch(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		epochPageData.NextEpoch = 0
 	} else if err != nil {
-		logger.Errorf("error retrieving next epoch for epoch %v: %v", epochPageData.Epoch, err)
+		log.Errorf("error retrieving next epoch for epoch %v: %v", epochPageData.Epoch, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -185,7 +185,7 @@ func Epoch(w http.ResponseWriter, r *http.Request) {
 	} else {
 		err = db.ReaderDb.Get(&epochPageData.PreviousEpoch, "SELECT epoch FROM epochs WHERE epoch < $1 ORDER BY epoch DESC LIMIT 1", epochPageData.Epoch)
 		if err != nil {
-			logger.Errorf("error retrieving previous epoch for epoch %v: %v", epochPageData.Epoch, err)
+			log.Errorf("error retrieving previous epoch for epoch %v: %v", epochPageData.Epoch, err)
 			epochPageData.PreviousEpoch = 0
 		}
 	}

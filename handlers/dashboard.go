@@ -40,7 +40,7 @@ func handleValidatorsQuery(w http.ResponseWriter, r *http.Request, checkValidato
 	// Parse all the validator indices and pubkeys from the query string
 	queryValidatorIndices, queryValidatorPubkeys, err := parseValidatorsFromQueryString(q.Get("validators"), validatorLimit)
 	if err != nil && (checkValidatorLimit || err != ErrTooManyValidators) {
-		logger.Warnf("could not parse validators from query string: %v; Route: %v", err, r.URL.String())
+		log.Warnf("could not parse validators from query string: %v; Route: %v", err, r.URL.String())
 		http.Error(w, "Invalid query", http.StatusBadRequest)
 		return nil, nil, false, err
 	}
@@ -57,7 +57,7 @@ func handleValidatorsQuery(w http.ResponseWriter, r *http.Request, checkValidato
 		// Check after the redirect whether all validators are correct
 		err = checkValidatorsQuery(queryValidatorIndices, queryValidatorPubkeys)
 		if err != nil {
-			logger.Warnf("could not find validators in database from query string: %v; Route: %v", err, r.URL.String())
+			log.Warnf("could not find validators in database from query string: %v; Route: %v", err, r.URL.String())
 			http.Error(w, "Not found", http.StatusNotFound)
 			return nil, nil, false, err
 		}
@@ -279,7 +279,7 @@ func Heatmap(bt *db.Bigtable) http.HandlerFunc {
 			return heatmapData.IncomeData[i][1] < heatmapData.IncomeData[j][1]
 		})
 
-		logger.Infof("retrieved income history of %v validators in %v", len(incomeData), time.Since(start))
+		log.Infof("retrieved income history of %v validators in %v", len(incomeData), time.Since(start))
 
 		data := InitPageData(w, r, "dashboard", "/heatmap", "Validator Heatmap", templateFiles)
 		data.Data = heatmapData
@@ -414,7 +414,7 @@ func getNextWithdrawalRow(queryValidators []uint64, currency string, bt *db.Bigt
 	address, err := utils.WithdrawalCredentialsToAddress(nextValidator.WithdrawalCredentials)
 	if err != nil {
 		// warning only as "N/A" will be displayed
-		logger.Warn("invalid withdrawal credentials")
+		log.Warn("invalid withdrawal credentials")
 	}
 	if address != nil {
 		withdrawalCredentialsTemplate = template.HTML(fmt.Sprintf(`<a href="/address/0x%x"><span class="text-muted">%s</span></a>`, address, utils.FormatAddress(address, nil, "", false, false, true)))
@@ -456,7 +456,7 @@ func DashboardDataBalanceCombined(bt *db.Bigtable) http.HandlerFunc {
 		if len(param) != 0 {
 			days, err := strconv.ParseUint(param, 10, 32)
 			if err != nil {
-				logger.Warnf("error parsing days: %v", err)
+				log.Warnf("error parsing days: %v", err)
 				http.Error(w, "Error: invalid parameter days", http.StatusBadRequest)
 				return
 			}
@@ -618,13 +618,13 @@ func DashboardDataWithdrawals(bt *db.Bigtable) http.HandlerFunc {
 
 		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 			return
 		}
 		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			log.Warnf("error converting datatables start parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
 			return
 		}

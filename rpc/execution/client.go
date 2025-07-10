@@ -21,7 +21,7 @@ type ExecutionClient interface {
 	ValidateChainIdFromConfig(confId uint64) bool
 	GetNativeClient() *ethclient.Client
 	GetRPCClient() *geth_rpc.Client
-	GetBlock(number int64, traceMode string) (*types.Eth1Block, *types.GetBlockTimings, error)
+	GetBlock(number int64, traceMode string, rank uint32) (*types.Eth1Block, *types.GetBlockTimings, error)
 	GetBlockNumberByHash(hash string) (uint64, error)
 	GetLatestEth1BlockNumber() (uint64, error)
 	TraceGeth(blockHash common.Hash) ([]*rpc_types.GethTraceCallResult, error)

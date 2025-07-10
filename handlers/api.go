@@ -143,7 +143,7 @@ func ApiHealthz(w http.ResponseWriter, r *http.Request) {
 		_, err = fmt.Fprint(w, response.String())
 
 		if err != nil {
-			logger.Debugf("error writing status: %v", err)
+			log.Debugf("error writing status: %v", err)
 		}
 	} else {
 		http.Error(w, response.String(), http.StatusInternalServerError)
@@ -238,7 +238,7 @@ func ApiEthStoreDay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		logger.Errorf("error retrieving eth.store data: %v", err)
+		log.Errorf("error retrieving eth.store data: %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -280,7 +280,7 @@ func ApiLatestState(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewEncoder(w).Encode(data)
 	if err != nil {
-		logger.Errorf("error sending latest index page data: %v", err)
+		log.Errorf("error sending latest index page data: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -333,7 +333,7 @@ func ApiEpoch(w http.ResponseWriter, r *http.Request) {
 		(SELECT COUNT(*) FROM blocks WHERE epoch = $1 AND status = '3') as orphanedblocks
 		FROM epochs WHERE epoch = $1`, epoch, latestFinalizedEpoch)
 	if err != nil {
-		logger.WithError(err).Error("error retrieving epoch data")
+		log.WithError(err).Error("error retrieving epoch data")
 		sendServerErrorResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -493,7 +493,7 @@ func ApiSlots(w http.ResponseWriter, r *http.Request) {
 		blocks.blockroot = $1`, blockRootHash)
 
 	if err != nil {
-		logger.WithError(err).Error("could not retrieve db results")
+		log.WithError(err).Error("could not retrieve db results")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -539,7 +539,7 @@ func ApiSlotAttestations(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.ReaderDb.Query("SELECT aggregationbits, beaconblockroot, block_index, block_root, block_slot, committeeindex, signature, slot, source_epoch, source_root, target_epoch, target_root, validators FROM blocks_attestations WHERE block_slot = $1 ORDER BY block_index", slot)
 	if err != nil {
-		logger.WithError(err).Error("could not retrieve db results")
+		log.WithError(err).Error("could not retrieve db results")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -624,7 +624,7 @@ func ApiSlotDeposits(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.ReaderDb.Query("SELECT amount, block_index, block_root, block_slot, proof, publickey, signature, withdrawalcredentials FROM blocks_deposits WHERE block_slot = $1 ORDER BY block_index DESC limit $2 offset $3", slot, limit, offset)
 	if err != nil {
-		logger.WithError(err).Error("could not retrieve db results")
+		log.WithError(err).Error("could not retrieve db results")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -656,7 +656,7 @@ func ApiSlotProposerSlashings(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.ReaderDb.Query("SELECT block_index, block_root, block_slot, header1_bodyroot, header1_parentroot, header1_signature, header1_slot, header1_stateroot, header2_bodyroot, header2_parentroot, header2_signature, header2_slot, header2_stateroot, proposerindex FROM blocks_proposerslashings WHERE block_slot = $1 ORDER BY block_index DESC", slot)
 	if err != nil {
-		logger.WithError(err).Error("could not retrieve db results")
+		log.WithError(err).Error("could not retrieve db results")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -688,7 +688,7 @@ func ApiSlotVoluntaryExits(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.ReaderDb.Query("SELECT block_slot, block_index, block_root, epoch, validatorindex, signature FROM blocks_voluntaryexits WHERE block_slot = $1 ORDER BY block_index DESC", slot)
 	if err != nil {
-		logger.WithError(err).Error("could not retrieve db results")
+		log.WithError(err).Error("could not retrieve db results")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -718,7 +718,7 @@ func ApiSlotWithdrawals(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.ReaderDb.Query("SELECT block_slot, withdrawalindex, validatorindex, address, amount FROM blocks_withdrawals WHERE block_slot = $1 ORDER BY withdrawalindex", slot)
 	if err != nil {
-		logger.WithError(err).Error("error getting blocks_withdrawals")
+		log.WithError(err).Error("error getting blocks_withdrawals")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -759,7 +759,7 @@ func ApiSyncCommittee(w http.ResponseWriter, r *http.Request) {
 	// and the order of the committeeindex is important, deduplicating it would mess up the order
 	rows, err := db.ReaderDb.Query(`SELECT period, GREATEST(period*$2, $3) AS start_epoch, ((period+1)*$2)-1 AS end_epoch, ARRAY_AGG(validatorindex ORDER BY committeeindex) AS validators FROM sync_committees WHERE period = $1 GROUP BY period`, period, utils.Config.Chain.ClConfig.EpochsPerSyncCommitteePeriod, utils.Config.Chain.ClConfig.AltairForkEpoch)
 	if err != nil {
-		logger.WithError(err).WithField("url", r.URL.String()).Errorf("error querying db")
+		log.WithError(err).WithField("url", r.URL.String()).Errorf("error querying db")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -901,7 +901,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					validatorsData, err = getGeneralValidatorInfoForAppDashboard(queryIndices, bt)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("getGeneralValidatorInfoForAppDashboard(%v) took longer than 10 sec", queryIndices)
+						log.Warnf("getGeneralValidatorInfoForAppDashboard(%v) took longer than 10 sec", queryIndices)
 					}
 					return err
 				})
@@ -912,7 +912,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					validatorEffectivenessData, err = getValidatorEffectiveness(epoch-1, queryIndices, bt)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("getValidatorEffectiveness(%v, %v) took longer than 10 sec", epoch-1, queryIndices)
+						log.Warnf("getValidatorEffectiveness(%v, %v) took longer than 10 sec", epoch-1, queryIndices)
 					}
 					return err
 				})
@@ -923,7 +923,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					rocketpoolData, err = getRocketpoolValidators(queryIndices)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("getRocketpoolValidators(%v) took longer than 10 sec", queryIndices)
+						log.Warnf("getRocketpoolValidators(%v) took longer than 10 sec", queryIndices)
 					}
 					return err
 				})
@@ -934,7 +934,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					executionPerformance, err = getValidatorExecutionPerformance(queryIndices, bt)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("getValidatorExecutionPerformance(%v) took longer than 10 sec", queryIndices)
+						log.Warnf("getValidatorExecutionPerformance(%v) took longer than 10 sec", queryIndices)
 					}
 					return err
 				})
@@ -946,7 +946,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					currentSyncCommittee, err = getSyncCommitteeInfoForValidators(queryIndices, period)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("getSyncCommitteeInfoForValidators(%v, %v) took longer than 10 sec", queryIndices, period)
+						log.Warnf("getSyncCommitteeInfoForValidators(%v, %v) took longer than 10 sec", queryIndices, period)
 					}
 					return err
 				})
@@ -958,8 +958,8 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					nextSyncCommittee, err = getSyncCommitteeInfoForValidators(queryIndices, period)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("SyncPeriodOfEpoch(%v) + 1 took longer than 10 sec", epoch)
-						logger.Warnf("getSyncCommitteeInfoForValidators(%v, %v) took longer than 10 sec", queryIndices, period)
+						log.Warnf("SyncPeriodOfEpoch(%v) + 1 took longer than 10 sec", epoch)
+						log.Warnf("getSyncCommitteeInfoForValidators(%v, %v) took longer than 10 sec", queryIndices, period)
 					}
 					return err
 				})
@@ -970,7 +970,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					syncCommitteeStats, err = getSyncCommitteeStatistics(queryIndices, epoch, bt)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("getSyncCommitteeStatistics(%v, %v) took longer than 10 sec", queryIndices, epoch)
+						log.Warnf("getSyncCommitteeStatistics(%v, %v) took longer than 10 sec", queryIndices, epoch)
 					}
 					return err
 				})
@@ -981,7 +981,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 					proposalLuckStats, err = getProposalLuckStats(queryIndices)
 					elapsed := time.Since(start)
 					if elapsed > 10*time.Second {
-						logger.Warnf("getProposalLuck(%v, %v) took longer than 10 sec", queryIndices, epoch)
+						log.Warnf("getProposalLuck(%v, %v) took longer than 10 sec", queryIndices, epoch)
 					}
 					return err
 				})
@@ -994,7 +994,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 			currentEpochData, err = getEpoch(int64(epoch) - 1)
 			elapsed := time.Since(start)
 			if elapsed > 10*time.Second {
-				logger.Warnf("getEpoch(%v) took longer than 10 sec", int64(epoch)-1)
+				log.Warnf("getEpoch(%v) took longer than 10 sec", int64(epoch)-1)
 			}
 			return err
 		})
@@ -1005,7 +1005,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 			olderEpochData, err = getEpoch(int64(epoch) - 10)
 			elapsed := time.Since(start)
 			if elapsed > 10*time.Second {
-				logger.Warnf("getEpoch(%v) took longer than 10 sec", int64(epoch)-10)
+				log.Warnf("getEpoch(%v) took longer than 10 sec", int64(epoch)-10)
 			}
 			return err
 		})
@@ -1016,7 +1016,7 @@ func ApiDashboard(bt *db.Bigtable) http.HandlerFunc {
 			rocketpoolStats, err = getRocketpoolStats()
 			elapsed := time.Since(start)
 			if elapsed > 10*time.Second {
-				logger.Warnf("getRocketpoolStats() took longer than 10 sec")
+				log.Warnf("getRocketpoolStats() took longer than 10 sec")
 			}
 			return err
 		})
@@ -1479,13 +1479,13 @@ func getGeneralValidatorInfoForAppDashboard(queryIndices []uint64, bt *db.Bigtab
 	for _, entry := range data {
 		eMap, ok := entry.(map[string]interface{})
 		if !ok {
-			logger.Errorf("error converting validator data to map[string]interface{}")
+			log.Errorf("error converting validator data to map[string]interface{}")
 			continue
 		}
 
 		validatorIndex, ok := eMap["validatorindex"].(int64)
 		if !ok {
-			logger.Errorf("error converting validatorindex to int64")
+			log.Errorf("error converting validatorindex to int64")
 			continue
 		}
 		eMap["lastattestationslot"] = lastAttestationSlots[uint64(validatorIndex)]
@@ -1496,7 +1496,7 @@ func getGeneralValidatorInfoForAppDashboard(queryIndices []uint64, bt *db.Bigtab
 			}
 
 			if !ok {
-				logger.Errorf("error converting validatorindex to int64")
+				log.Errorf("error converting validatorindex to int64")
 				continue
 			}
 			if int64(balanceIndex) == validatorIndex {
@@ -1669,7 +1669,7 @@ func getApiValidator(bt *db.Bigtable) http.HandlerFunc {
 			ORDER BY v.validatorindex
 		`, pq.Array(queryIndices), cutoffSlot, lastExportedDay)
 		if err != nil {
-			logger.Warnf("error retrieving validator data from db: %v", err)
+			log.Warnf("error retrieving validator data from db: %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 			return
 		}
@@ -1715,7 +1715,7 @@ func getApiValidator(bt *db.Bigtable) http.HandlerFunc {
 
 		if err != nil {
 			sendServerErrorResponse(w, r.URL.String(), "could not serialize data results")
-			logger.Errorf("error serializing json data for API %v route: %v", r.URL, err)
+			log.Errorf("error serializing json data for API %v route: %v", r.URL, err)
 		}
 	}
 }
@@ -2069,7 +2069,7 @@ func ApiValidatorWithdrawals(w http.ResponseWriter, r *http.Request) {
 
 	data, err := db.GetValidatorsWithdrawals(queryIndices, endEpoch, epoch)
 	if err != nil {
-		logger.Errorf("error retrieving withdrawals for %v route: %v", r.URL.String(), err)
+		log.Errorf("error retrieving withdrawals for %v route: %v", r.URL.String(), err)
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -2125,7 +2125,7 @@ func ApiValidatorBlsChange(w http.ResponseWriter, r *http.Request) {
 
 	data, err := db.GetValidatorsBLSChange(queryIndices)
 	if err != nil {
-		logger.Errorf("error retrieving validators bls change for %v route: %v", r.URL.String(), err)
+		log.Errorf("error retrieving validators bls change for %v route: %v", r.URL.String(), err)
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -2338,13 +2338,13 @@ func ApiValidatorPerformance(bt *db.Bigtable) http.HandlerFunc {
 		for _, entry := range data {
 			eMap, ok := entry.(map[string]interface{})
 			if !ok {
-				logger.Errorf("error converting validator data to map[string]interface{}")
+				log.Errorf("error converting validator data to map[string]interface{}")
 				continue
 			}
 
 			validatorIndex, ok := eMap["validatorindex"].(int64)
 			if !ok {
-				logger.Errorf("error converting validatorindex to int64")
+				log.Errorf("error converting validatorindex to int64")
 				continue
 			}
 
@@ -2366,13 +2366,13 @@ func ApiValidatorPerformance(bt *db.Bigtable) http.HandlerFunc {
 		for _, entry := range data {
 			eMap, ok := entry.(map[string]interface{})
 			if !ok {
-				logger.Errorf("error converting validator data to map[string]interface{}")
+				log.Errorf("error converting validator data to map[string]interface{}")
 				continue
 			}
 
 			validatorIndex, ok := eMap["validatorindex"].(int64)
 			if !ok {
-				logger.Errorf("error converting validatorindex to int64")
+				log.Errorf("error converting validatorindex to int64")
 				continue
 			}
 
@@ -2411,7 +2411,7 @@ func ApiValidatorExecutionPerformance(bt *db.Bigtable) http.HandlerFunc {
 		result, err := getValidatorExecutionPerformance(queryIndices, bt)
 		if err != nil {
 			SendBadRequestResponse(w, r.URL.String(), err.Error())
-			logger.WithError(err).Error("can not getValidatorExecutionPerformance")
+			log.WithError(err).Error("can not getValidatorExecutionPerformance")
 			return
 		}
 
@@ -2582,7 +2582,7 @@ func ApiValidatorDeposits(w http.ResponseWriter, r *http.Request) {
 		WHERE publickey = ANY($1)`, pubkeys,
 	)
 	if err != nil {
-		logger.WithError(err).Error("could not retrieve db results")
+		log.WithError(err).Error("could not retrieve db results")
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -2742,7 +2742,7 @@ func ApiValidatorProposals(w http.ResponseWriter, r *http.Request) {
 	WHERE (proposer = ANY($1)) and epoch <= $2 AND epoch >= $3 
 	ORDER BY proposer, epoch desc, slot desc`, pq.Array(queryIndices), epochQuery, epochQuery-100)
 	if err != nil {
-		logger.Errorf("could not retrieve db results: %v", err)
+		log.Errorf("could not retrieve db results: %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -2781,7 +2781,7 @@ func ApiGraffitiwall(w http.ResponseWriter, r *http.Request) {
 		var err error
 		endSlot, err = strconv.ParseUint(q.Get("slot"), 10, 64)
 		if err != nil {
-			// logger.WithError(err).Errorf("invalid slot provided: %v", err)
+			// log.WithError(err).Errorf("invalid slot provided: %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "invalid slot provided")
 			return
 		}
@@ -2794,12 +2794,12 @@ func ApiGraffitiwall(w http.ResponseWriter, r *http.Request) {
 		var err error
 		startSlot, err = strconv.ParseUint(q.Get("startSlot"), 10, 64)
 		if err != nil {
-			// logger.WithError(err).Errorf("invalid startSlot provided: %v", err)
+			// log.WithError(err).Errorf("invalid startSlot provided: %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "invalid startSlot provided")
 			return
 		}
 		if startSlot > endSlot {
-			// logger.Errorf("start slot greater than end slot")
+			// log.Errorf("start slot greater than end slot")
 			SendBadRequestResponse(w, r.URL.String(), "start slot greater than end slot")
 			return
 		}
@@ -2814,7 +2814,7 @@ func ApiGraffitiwall(w http.ResponseWriter, r *http.Request) {
 	endY := utilMath.MinU64(parseUintWithDefault(q.Get("endy"), defaultEndPxl), defaultEndPxl)
 
 	if startX > endX || startY > endY {
-		// logger.Error("invalid area provided by the coordinates")
+		// log.Error("invalid area provided by the coordinates")
 		SendBadRequestResponse(w, r.URL.String(), "invalid area provided by the coordinates")
 		return
 	}
@@ -2825,7 +2825,7 @@ func ApiGraffitiwall(w http.ResponseWriter, r *http.Request) {
 		var err error
 		summarize, err = strconv.ParseBool(summarizeParam)
 		if err != nil {
-			// logger.WithError(err).Errorf("invalid value for summarize provided: %v", err)
+			// log.WithError(err).Errorf("invalid value for summarize provided: %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "invalid value for summarize provided")
 			return
 		}
@@ -2849,7 +2849,7 @@ func ApiGraffitiwall(w http.ResponseWriter, r *http.Request) {
 	ORDER BY x, y, slot DESC`, startSlot, endSlot, startX, endX, startY, endY)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			logger.WithError(err).Error("could not retrieve db results")
+			log.WithError(err).Error("could not retrieve db results")
 		}
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
@@ -2942,7 +2942,7 @@ func getTokenByCode(w http.ResponseWriter, r *http.Request) {
 	// Check if code entry exists and isn't expired (codes expire after 5 minutes)
 	codeAuthData, err := db.GetUserAuthDataByAuthorizationCode(codeHashed)
 	if err != nil {
-		logger.Errorf("Error hashed code can not be found in table: %v | Error: %v", codeHashed, err)
+		log.Errorf("Error hashed code can not be found in table: %v | Error: %v", codeHashed, err)
 		w.WriteHeader(http.StatusUnauthorized)
 		utils.SendOAuthErrorResponse(j, r.URL.String(), utils.AccessDenied, "access_token or refresh_token invalid")
 		return
@@ -3005,7 +3005,7 @@ func getTokenByRefresh(w http.ResponseWriter, r *http.Request) {
 	// Do not use userIDClaim as userID until confirmed by refreshToken validation
 	unsafeClaims, err := utils.UnsafeGetClaims(accessToken)
 	if err != nil {
-		logger.Errorf("Error access_token claim: %v", err)
+		log.Errorf("Error access_token claim: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		utils.SendOAuthErrorResponse(j, r.URL.String(), utils.InvalidRequest, "access_token validation failed")
 		return
@@ -3015,9 +3015,9 @@ func getTokenByRefresh(w http.ResponseWriter, r *http.Request) {
 	userID, err := db.GetByRefreshToken(unsafeClaims.UserID, unsafeClaims.AppID, unsafeClaims.DeviceID, refreshTokenHashed)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			logger.Warnf("No refresh token found for user: %v | %v", unsafeClaims.UserID, refreshTokenHashed)
+			log.Warnf("No refresh token found for user: %v | %v", unsafeClaims.UserID, refreshTokenHashed)
 		} else {
-			logger.Errorf("Error refreshtoken check: %v | %v | %v", unsafeClaims.UserID, refreshTokenHashed, err)
+			log.Errorf("Error refreshtoken check: %v | %v | %v", unsafeClaims.UserID, refreshTokenHashed, err)
 		}
 		w.WriteHeader(http.StatusUnauthorized)
 		utils.SendOAuthErrorResponse(j, r.URL.String(), utils.UnauthorizedClient, "invalid token credentials")
@@ -3107,7 +3107,7 @@ func RegisterEthpoolSubscription(w http.ResponseWriter, r *http.Request) {
 	localSignature := hmacSign(fmt.Sprintf("ETHPOOL %v %v", pkg, ethpoolUserID))
 	if signature != localSignature {
 		w.WriteHeader(http.StatusBadRequest)
-		logger.Errorf("signature mismatch %v | %v", signature, localSignature)
+		log.Errorf("signature mismatch %v | %v", signature, localSignature)
 		SendBadRequestResponse(w, r.URL.String(), "Unauthorized: signature not valid")
 		return
 	}
@@ -3139,7 +3139,7 @@ func RegisterEthpoolSubscription(w http.ResponseWriter, r *http.Request) {
 
 	err = db.InsertMobileSubscription(nil, claims.UserID, parsedBase, parsedBase.Transaction.Type, parsedBase.Transaction.Receipt, 0, "", "")
 	if err != nil {
-		logger.Errorf("could not save subscription data %v", err)
+		log.Errorf("could not save subscription data %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		SendBadRequestResponse(w, r.URL.String(), "Can not save subscription data")
 		return
@@ -3162,7 +3162,7 @@ func RegisterMobileSubscriptions(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(gorillacontext.Get(r, utils.JsonBodyNakedKey).([]byte), &parsedBase)
 
 	if err != nil {
-		logger.Errorf("error parsing body | err: %v", err)
+		log.Errorf("error parsing body | err: %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not parse body")
 		return
 	}
@@ -3212,13 +3212,13 @@ func RegisterMobileSubscriptions(w http.ResponseWriter, r *http.Request) {
 
 	err = db.InsertMobileSubscription(nil, claims.UserID, parsedBase, parsedBase.Transaction.Type, verifyPackage.Receipt, validationResult.ExpirationDate, validationResult.RejectReason, "")
 	if err != nil {
-		logger.Errorf("could not save subscription data %v", err)
+		log.Errorf("could not save subscription data %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "Can not save subscription data")
 		return
 	}
 
 	if !parsedBase.Valid {
-		logger.Errorf("receipt is not valid %v", validationResult.RejectReason)
+		log.Errorf("receipt is not valid %v", validationResult.RejectReason)
 		SendBadRequestResponse(w, r.URL.String(), "receipt is not valid")
 		return
 	}
@@ -3405,14 +3405,14 @@ func GetMobileWidgetStats(w http.ResponseWriter, r *http.Request, indexOrPubkey 
 	for _, entry := range generalData {
 		eMap, ok := entry.(map[string]interface{})
 		if !ok {
-			logger.Errorf("error converting validator data to map[string]interface{}")
+			log.Errorf("error converting validator data to map[string]interface{}")
 			continue
 		}
 
 		validatorIndex, ok := eMap["validatorindex"].(int64)
 
 		if !ok {
-			logger.Errorf("error converting validatorindex to int64")
+			log.Errorf("error converting validatorindex to int64")
 			continue
 		}
 
@@ -3499,7 +3499,7 @@ func MobileDeviceSettingsPOST(w http.ResponseWriter, r *http.Request) {
 		customDeviceID := FormValueOrJSON(r, "id")
 		temp, err := strconv.ParseUint(customDeviceID, 10, 64)
 		if err != nil {
-			logger.Errorf("error parsing id %v | err: %v", customDeviceID, err)
+			log.Errorf("error parsing id %v | err: %v", customDeviceID, err)
 			SendBadRequestResponse(w, r.URL.String(), "could not parse id")
 			return
 		}
@@ -3517,7 +3517,7 @@ func MobileDeviceSettingsPOST(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.MobileDeviceSettingsUpdate(userID, userDeviceID, notifyEnabled, active)
 	if err != nil {
-		logger.Errorf("could not retrieve db results err: %v", err)
+		log.Errorf("could not retrieve db results err: %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -3606,21 +3606,21 @@ func ClientStats(bt *db.Bigtable) http.HandlerFunc {
 
 		system, err := bt.GetMachineMetricsSystem(claims.UserID, int(limit), int(offset))
 		if err != nil {
-			logger.Errorf("sytem stat error : %v", err)
+			log.Errorf("sytem stat error : %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not retrieve system stats from db")
 			return
 		}
 
 		validator, err := bt.GetMachineMetricsValidator(claims.UserID, int(limit), int(offset))
 		if err != nil {
-			logger.Errorf("validator stat error : %v", err)
+			log.Errorf("validator stat error : %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not retrieve validator stats from db")
 			return
 		}
 
 		node, err := bt.GetMachineMetricsNode(claims.UserID, int(limit), int(offset))
 		if err != nil {
-			logger.Errorf("node stat error : %v", err)
+			log.Errorf("node stat error : %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not retrieve beaconnode stats from db")
 			return
 		}
@@ -3683,7 +3683,7 @@ func clientStatsPost(w http.ResponseWriter, r *http.Request, apiKey, machine str
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		logger.Warnf("error reading body | err: %v", err)
+		log.Warnf("error reading body | err: %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not read body")
 		return
 	}
@@ -3694,7 +3694,7 @@ func clientStatsPost(w http.ResponseWriter, r *http.Request, apiKey, machine str
 		var jsonObject map[string]interface{}
 		err = json.Unmarshal(body, &jsonObject)
 		if err != nil {
-			logger.Warnf("Could not parse stats (meta stats) general | %v ", err)
+			log.Warnf("Could not parse stats (meta stats) general | %v ", err)
 			SendBadRequestResponse(w, r.URL.String(), "Invalid JSON format in request body")
 			return
 		}
@@ -3702,7 +3702,7 @@ func clientStatsPost(w http.ResponseWriter, r *http.Request, apiKey, machine str
 	}
 
 	if len(jsonObjects) >= 10 {
-		logger.Info("Max number of stat entries are 10", err)
+		log.Info("Max number of stat entries are 10", err)
 		SendBadRequestResponse(w, r.URL.String(), "Max number of stat entries are 10")
 		return
 	}
@@ -3739,7 +3739,7 @@ func insertStats(userData *types.UserWithPremium, machine string, body *map[stri
 	var parsedMeta *types.StatsMeta
 	err := mapstructure.Decode(body, &parsedMeta)
 	if err != nil {
-		logger.Warnf("Could not parse stats (meta stats) | %v ", err)
+		log.Warnf("Could not parse stats (meta stats) | %v ", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not parse meta")
 		return err
 	}
@@ -3760,7 +3760,7 @@ func insertStats(userData *types.UserWithPremium, machine string, body *map[stri
 
 	count, err := bt.GetMachineMetricsMachineCount(userData.ID)
 	if err != nil {
-		logger.Errorf("Could not get max machine count| %v", err)
+		log.Errorf("Could not get max machine count| %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not get machine count")
 		return err
 	}
@@ -3775,13 +3775,13 @@ func insertStats(userData *types.UserWithPremium, machine string, body *map[stri
 		var parsedResponse *types.MachineMetricSystem
 		err = DecodeMapStructure(body, &parsedResponse)
 		if err != nil {
-			logger.Warnf("Could not parse stats (system stats) | %v", err)
+			log.Warnf("Could not parse stats (system stats) | %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not parse system")
 			return err
 		}
 		data, err = proto.Marshal(parsedResponse)
 		if err != nil {
-			logger.Errorf("Could not parse stats (system stats) | %v", err)
+			log.Errorf("Could not parse stats (system stats) | %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could marshal system")
 			return err
 		}
@@ -3789,13 +3789,13 @@ func insertStats(userData *types.UserWithPremium, machine string, body *map[stri
 		var parsedResponse *types.MachineMetricValidator
 		err = DecodeMapStructure(body, &parsedResponse)
 		if err != nil {
-			logger.Warnf("Could not parse stats (validator stats) | %v", err)
+			log.Warnf("Could not parse stats (validator stats) | %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could marshal validator")
 			return err
 		}
 		data, err = proto.Marshal(parsedResponse)
 		if err != nil {
-			logger.Errorf("Could not parse stats (validator stats) | %v", err)
+			log.Errorf("Could not parse stats (validator stats) | %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could marshal validator")
 			return err
 		}
@@ -3803,13 +3803,13 @@ func insertStats(userData *types.UserWithPremium, machine string, body *map[stri
 		var parsedResponse *types.MachineMetricNode
 		err = DecodeMapStructure(body, &parsedResponse)
 		if err != nil {
-			logger.Warnf("Could not parse stats (beaconnode stats) | %v", err)
+			log.Warnf("Could not parse stats (beaconnode stats) | %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not parse beaconnode")
 			return err
 		}
 		data, err = proto.Marshal(parsedResponse)
 		if err != nil {
-			logger.Errorf("Could not parse stats (beaconnode stats) | %v", err)
+			log.Errorf("Could not parse stats (beaconnode stats) | %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not parse beaconnode")
 			return err
 		}
@@ -3820,7 +3820,7 @@ func insertStats(userData *types.UserWithPremium, machine string, body *map[stri
 		if strings.HasPrefix(err.Error(), "rate limit") {
 			return err
 		}
-		logger.Errorf("Could not store stats | %v", err)
+		log.Errorf("Could not store stats | %v", err)
 		SendBadRequestResponse(w, r.URL.String(), fmt.Sprintf("could not store stats: %v", err))
 		return err
 	}
@@ -3889,7 +3889,7 @@ func ApiWithdrawalCredentialsValidators(w http.ResponseWriter, r *http.Request) 
 	`, credentials, limit, offset)
 
 	if err != nil {
-		logger.Warnf("error retrieving validator data from db: %v", err)
+		log.Warnf("error retrieving validator data from db: %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -4041,7 +4041,7 @@ func APIDashboardDataBalance(bt *db.Bigtable) http.HandlerFunc {
 
 		queryValidatorIndices, queryValidatorPubkeys, err := parseValidatorsFromQueryString(q.Get("validators"), 100)
 		if err != nil || len(queryValidatorPubkeys) > 0 {
-			logger.WithError(err).WithField("route", r.URL.String()).Error("error parsing validators from query string")
+			log.WithError(err).WithField("route", r.URL.String()).Error("error parsing validators from query string")
 			http.Error(w, "Invalid query", http.StatusBadRequest)
 			return
 		}
@@ -4065,7 +4065,7 @@ func APIDashboardDataBalance(bt *db.Bigtable) http.HandlerFunc {
 
 		balances, err := bt.GetValidatorBalanceHistory(queryValidatorIndices, latestEpoch-queryOffsetEpoch, latestEpoch)
 		if err != nil {
-			logger.WithError(err).WithField("route", r.URL.String()).Errorf("error retrieving validator balance history")
+			log.WithError(err).WithField("route", r.URL.String()).Errorf("error retrieving validator balance history")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -4104,7 +4104,7 @@ func APIDashboardDataBalance(bt *db.Bigtable) http.HandlerFunc {
 
 		err = json.NewEncoder(w).Encode(balanceHistoryChartData)
 		if err != nil {
-			logger.WithError(err).WithField("route", r.URL.String()).Error("error enconding json response")
+			log.WithError(err).WithField("route", r.URL.String()).Error("error enconding json response")
 			sendServerErrorResponse(w, r.URL.String(), "could not serialize data results")
 			return
 		}
@@ -4168,7 +4168,7 @@ func returnQueryResultsAsArray(rows *sql.Rows, w http.ResponseWriter, r *http.Re
 
 	if err != nil {
 		sendServerErrorResponse(w, r.URL.String(), "could not serialize data results")
-		logger.Errorf("error serializing json data for API %v route: %v", r.URL.String(), err)
+		log.Errorf("error serializing json data for API %v route: %v", r.URL.String(), err)
 	}
 }
 
@@ -4204,7 +4204,7 @@ func sendErrorWithCodeResponse(w http.ResponseWriter, route, message string, err
 	err := j.Encode(response)
 
 	if err != nil {
-		logger.Errorf("error serializing json error for API %v route: %v", route, err)
+		log.Errorf("error serializing json error for API %v route: %v", route, err)
 	}
 }
 
@@ -4220,7 +4220,7 @@ func SendOKResponse(j *json.Encoder, route string, data []interface{}) {
 	err := j.Encode(response)
 
 	if err != nil {
-		logger.Errorf("error serializing json data for API %v route: %v", route, err)
+		log.Errorf("error serializing json data for API %v route: %v", route, err)
 	}
 }
 

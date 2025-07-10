@@ -71,7 +71,7 @@ func Eth1Token(bt *db.Bigtable) http.HandlerFunc {
 
 		pngStr, pngStrInverse, err := utils.GenerateQRCodeForAddress(token)
 		if err != nil {
-			logger.WithError(err).Errorf("error generating qr code for address %v", token)
+			log.WithError(err).Errorf("error generating qr code for address %v", token)
 		}
 
 		data := InitPageData(w, r, "blockchain", "/token", fmt.Sprintf("Token 0x%x", token), templateFiles)
@@ -120,17 +120,17 @@ func Eth1TokenTransfers(bt *db.Bigtable) http.HandlerFunc {
 		address := common.FromHex(strings.TrimPrefix(q.Get("a"), "0x"))
 		pageToken := q.Get("pageToken")
 
-		// logger.Infof("GETTING TRANSACTION table data for address: %v search: %v draw: %v start: %v length: %v", address, search, draw, start, length)
+		// log.Infof("GETTING TRANSACTION table data for address: %v search: %v draw: %v start: %v length: %v", address, search, draw, start, length)
 		data, err := bt.GetTokenTransactionsTableData(token, address, pageToken)
 		if err != nil {
 			utils.LogError(err, "error getting eth1 block table data", 0)
 		}
 
-		// logger.Infof("GOT TX: %+v", data)
+		// log.Infof("GOT TX: %+v", data)
 
 		err = json.NewEncoder(w).Encode(data)
 		if err != nil {
-			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			log.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}

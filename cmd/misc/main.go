@@ -1054,13 +1054,13 @@ func updateBlockFinalizationSequentially() error {
 
 func debugBlocks(rpc execution.ExecutionClient, bt *db.Bigtable) error {
 	for i := opts.StartBlock; i <= opts.EndBlock; i++ {
-		btBlock, err := bt.GetBlockFromBlocksTable(i)
+		btBlock, err := bt.GetBlockFromBlocksTable(i,0) // TODO: implement for EthPar
 		if err != nil {
 			return err
 		}
 		// log.WithFields(logger.Fields{"block": i, "data": fmt.Sprintf("%+v", b)}).Infof("block from bt")
 
-		elBlock, _, err := rpc.GetBlock(int64(i), "geth")
+		elBlock, _, err := rpc.GetBlock(int64(i), "geth", 0) // TODO: implement for EthPar
 		if err != nil {
 			return err
 		}
@@ -1525,10 +1525,11 @@ func indexMissingBlocks(start uint64, end uint64, bt *db.Bigtable, rpc execution
 			}
 
 			log.Infof("block [%v] not found, will index it", block)
-			if _, err := bt.GetBlockFromBlocksTable(block); err != nil {
+			// TODO: implement for ethpar
+			if _, err := bt.GetBlockFromBlocksTable(block, 0); err != nil {
 				log.Infof("could not load [%v] from blocks table, will try to fetch it from the node and save it", block)
 
-				bc, _, err := rpc.GetBlock(int64(block), "parity/geth")
+				bc, _, err := rpc.GetBlock(int64(block), "parity/geth", 0)
 				if err != nil {
 					utils.LogError(err, fmt.Sprintf("error getting block %v from the node", block), 0)
 					return
