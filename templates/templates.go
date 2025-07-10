@@ -31,19 +31,6 @@ var _ error = CompileTimeCheck(fs.FS(Files))
 func GetTemplate(files ...string) *template.Template {
 	name := strings.Join(files, "-")
 
-	if utils.Config.Frontend.Debug {
-		templateFiles := make([]string, len(files))
-		copy(templateFiles, files)
-		for i := range files {
-			if strings.HasPrefix(files[i], "templates") {
-				templateFiles[i] = files[i]
-			} else {
-				templateFiles[i] = "templates/" + files[i]
-			}
-		}
-		return template.Must(template.New(name).Funcs(template.FuncMap(templateFuncs)).ParseFiles(templateFiles...))
-	}
-
 	templateCacheMux.RLock()
 	if templateCache[name] != nil {
 		defer templateCacheMux.RUnlock()
@@ -102,9 +89,6 @@ func getFileSysNames(fsys fs.FS, dirname string) ([]string, error) {
 
 func AddTemplateFile(tmpl *template.Template, path string) *template.Template {
 	name := filepath.Base(path)
-	if utils.Config.Frontend.Debug {
-		return template.Must(tmpl.ParseFiles(path))
-	}
 
 	templateCacheMux.RLock()
 	if templateCache[name] != nil {
