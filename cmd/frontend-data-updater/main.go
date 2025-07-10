@@ -25,6 +25,8 @@ import (
 )
 
 func main() {
+	// TODO: make metrics conditional in all imported packages
+	metrics.Init(nil)
 	configPath := flag.String("config", "", "Path to the config file, if empty string defaults will be used")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
