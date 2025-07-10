@@ -72,7 +72,7 @@ func main() {
 	// Initialize BigTable client
 	bt := db.MustInitBigtable(&db.BigtableConfig{
 		Project:      utils.Config.Bigtable.Project,
-		Instance:     utils.Config.Bigtable.Project,
+		Instance:     utils.Config.Bigtable.Instance,
 		ChainId:      utils.Config.Chain.ClConfig.DepositChainID,
 		CacheAddr:    utils.Config.RedisCacheEndpoint,
 		Emulated:     utils.Config.Bigtable.Emulator,
