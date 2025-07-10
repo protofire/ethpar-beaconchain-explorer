@@ -97,7 +97,7 @@ frontend:
   recaptchaSecretKey: your-recaptcha-secret-key
   enabled: false
   blobProviderUrl: https://blobs.example.com
-  siteBrand: YourBrand
+  siteBrand: EthPar Explorer
   keywords: validator,ethereum,explorer
   imprint: imprint.html
   legal:

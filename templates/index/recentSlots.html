@@ -1,0 +1,135 @@
+{{ define "recentSlots" }}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title d-flex justify-content-between align-items-center" style="margin: .5rem 0;">
+        <span><i class="fa fa-clock"></i> Most recent slots</span>
+        <a class="btn btn-primary btn-sm float-right text-white" href="/slots">View more</a>
+      </h3>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Slot</th>
+              <th>Status</th>
+              <th>Time</th>
+              <th>Proposer</th>
+              <th>Attestations</th>
+              <th>Deposits</th>
+              {{ if .Slots }}
+                {{ if gt (len .Slots) 0 }}
+                  {{ if gt (index .Slots 0).ParallelBlocksCount 0 }}
+                    <th>Parallel Blocks</th>
+                  {{ end }}
+                {{ end }}
+              {{ end }}
+            </tr>
+          </thead>
+          <tbody v-if="page && page.slots && page.slots.length">
+            <tr v-for="slot in page.slots">
+              <td>
+                <div v-if="slot.status == 2">
+                  <a v-bind:href="'/slot/0x' + slot.block_root_formatted" v-html="addCommas(slot.slot)"></a>
+                </div>
+                <div v-else>
+                  <a v-bind:href="'/slot/' + slot.slot" v-html="addCommas(slot.slot)"></a>
+                </div>
+              </td>
+              <td v-if="slot.slot === 0">
+                <span class="badge rounded-pill text-bg-info">Genesis</span>
+              </td>
+              <td v-else-if="slot.status === 0">
+                <span class="badge rounded-pill text-bg-warning">Missed</span>
+              </td>
+              <td v-else-if="slot.status === 1">
+                <span class="badge rounded-pill text-bg-success">Proposed</span>
+              </td>
+              <td v-else-if="slot.status === 2">
+                <span class="badge rounded-pill text-bg-light text-dark">Orphaned</span>
+              </td>
+              <td v-else>
+                <span class="badge rounded-pill text-bg-secondary">Unknown</span>
+              </td>
+              <td>
+                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="slot.ts | timestampTooltip">${slot.ts | fromNow}</span>
+              </td>
+              <td v-if="slot.slot !== 0" v-html="slot.proposer_formatted"></td>
+              <td v-else>N/A</td>
+              <td v-html="slot.attestations"></td>
+              <td v-html="slot.deposits"></td>
+              <td v-if="slot.parallel_blocks_count && slot.parallel_blocks_count > 0">
+                <span class="badge rounded-pill text-bg-info" v-text="slot.parallel_blocks_count"></span>
+              </td>
+            </tr>
+          </tbody>
+          
+          <!-- Server-side rendered slots (fallback when no JS data) -->
+          <tbody v-else>
+            {{ if .Slots }}
+              {{ range $i, $slot := .Slots }}
+                <tr>
+                  <td>
+                    {{ if eq $slot.Status 2 }}
+                      <a href="/slot/0x{{ printf "%x" $slot.BlockRoot }}">{{ formatAddCommas $slot.Slot }}</a>
+                    {{ else }}
+                      <a href="/slot/{{ $slot.Slot }}">{{ formatAddCommas $slot.Slot }}</a>
+                    {{ end }}
+                  </td>
+                  <td>
+                    {{ if eq $slot.Slot 0 }}
+                      <span class="badge rounded-pill text-bg-info">Genesis</span>
+                    {{ else if eq $slot.Status 0 }}
+                      <span class="badge rounded-pill text-bg-warning">Missed</span>
+                    {{ else if eq $slot.Status 1 }}
+                      <span class="badge rounded-pill text-bg-success">Proposed</span>
+                    {{ else if eq $slot.Status 2 }}
+                      <span class="badge rounded-pill text-bg-light text-dark">Orphaned</span>
+                    {{ else }}
+                      <span class="badge rounded-pill text-bg-secondary">Unknown</span>
+                    {{ end }}
+                  </td>
+                  <td>
+                    <span aria-ethereum-date="{{ $slot.Ts.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $slot.Ts.Format "2006-01-02T15:04:05" }}</span>
+                  </td>
+                  <td>
+                    {{ if ne $slot.Slot 0 }}
+                      {{ $slot.ProposerFormatted }}
+                    {{ else }}
+                      N/A
+                    {{ end }}
+                  </td>
+                  <td>{{ formatAddCommas $slot.Attestations }}</td>
+                  <td>{{ formatAddCommas $slot.Deposits }}</td>
+                  {{ if gt $slot.ParallelBlocksCount 0 }}
+                    <td>
+                      <span class="badge rounded-pill text-bg-info">{{ $slot.ParallelBlocksCount }}</span>
+                    </td>
+                  {{ end }}
+                </tr>
+              {{ end }}
+            {{ else }}
+              <!-- No slots data available -->
+              <tr>
+                <td colspan="6" class="text-center">
+                  <div class="p-3 text-muted">
+                    <i class="fas fa-clock fa-2x mb-2"></i>
+                    <br>
+                    No recent slots available
+                  </div>
+                </td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Format timestamps after DOM is ready
+    $(document).ready(function() {
+      formatTimestamps();
+    });
+  </script>
+{{ end }}

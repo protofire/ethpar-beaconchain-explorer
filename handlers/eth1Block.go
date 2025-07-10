@@ -22,19 +22,20 @@ import (
 func Eth1Block(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		blockTemplateFiles := append(layoutTemplateFiles,
-			"slot/slot.html",
-			"slot/transactions.html",
-			"slot/attestations.html",
-			"slot/deposits.html",
-			"slot/votes.html",
-			"slot/attesterSlashing.html",
-			"slot/proposerSlashing.html",
-			"slot/exits.html",
-			"components/timestamp.html",
-			"slot/overview.html",
-			"slot/execTransactions.html",
-			"slot/blobs.html",
-			"slot/withdrawals.html")
+      "slot/slot.html",
+      "slot/transactions.html",
+      "slot/withdrawals.html",
+      "slot/attestations.html",
+      "slot/deposits.html",
+      "slot/votes.html",
+      "slot/attesterSlashing.html",
+      "slot/proposerSlashing.html",
+      "slot/exits.html",
+      "slot/blobs.html",
+      "slot/parallel_blocks.html",
+      "components/timestamp.html",
+      "slot/overview.html",
+      "slot/execTransactions.html")
 		var blockTemplate = templates.GetTemplate(
 			blockTemplateFiles...,
 		)

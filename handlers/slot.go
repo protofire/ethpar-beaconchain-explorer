@@ -34,27 +34,28 @@ const MaxSlotValue = 137438953503 // we only render a page for blocks up to this
 // Slot will return the data for a block contained in the slot
 func Slot(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slotTemplateFiles := append(layoutTemplateFiles,
-			"slot/slot.html",
-			"slot/transactions.html",
-			"slot/withdrawals.html",
-			"slot/attestations.html",
-			"slot/deposits.html",
-			"slot/votes.html",
-			"slot/attesterSlashing.html",
-			"slot/proposerSlashing.html",
-			"slot/exits.html",
-			"slot/blobs.html",
-			"components/timestamp.html",
-			"slot/overview.html",
-			"slot/execTransactions.html")
-		slotFutureTemplateFiles := append(layoutTemplateFiles,
-			"slot/slotFuture.html",
-			"components/timestamp.html")
-		blockNotFoundTemplateFiles := append(layoutTemplateFiles, "slotnotfound.html")
-		var slotTemplate = templates.GetTemplate(slotTemplateFiles...)
-		var slotFutureTemplate = templates.GetTemplate(slotFutureTemplateFiles...)
-		var blockNotFoundTemplate = templates.GetTemplate(blockNotFoundTemplateFiles...)
+    slotTemplateFiles := append(layoutTemplateFiles,
+      "slot/slot.html",
+      "slot/transactions.html",
+      "slot/withdrawals.html",
+      "slot/attestations.html",
+      "slot/deposits.html",
+      "slot/votes.html",
+      "slot/attesterSlashing.html",
+      "slot/proposerSlashing.html",
+      "slot/exits.html",
+      "slot/blobs.html",
+      "slot/parallel_blocks.html",
+      "components/timestamp.html",
+      "slot/overview.html",
+      "slot/execTransactions.html")
+    slotFutureTemplateFiles := append(layoutTemplateFiles,
+      "slot/slotFuture.html",
+      "components/timestamp.html")
+    blockNotFoundTemplateFiles := append(layoutTemplateFiles, "slotnotfound.html")
+    var slotTemplate = templates.GetTemplate(slotTemplateFiles...)
+    var slotFutureTemplate = templates.GetTemplate(slotFutureTemplateFiles...)
+    var blockNotFoundTemplate = templates.GetTemplate(blockNotFoundTemplateFiles...)
 
 		w.Header().Set("Content-Type", "text/html")
 

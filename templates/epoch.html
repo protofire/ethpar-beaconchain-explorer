@@ -217,14 +217,15 @@
               </div>
             </div>
           </div>
-          <div class="row border-bottom p-3 mx-0">
+          <!-- Validator info hidden for EthPar Explorer -->
+          <!-- <div class="row border-bottom p-3 mx-0">
             <div class="col-md-3">Validators:</div>
             <div class="col-md-9">{{ formatAddCommas .ValidatorsCount }}</div>
           </div>
           <div class="row border-bottom p-3 mx-0">
             <div class="col-md-3">Avg. Validator Balance:</div>
             <div class="col-md-9">{{ formatBalance .AverageValidatorBalance $.Rates.SelectedCurrency }}</div>
-          </div>
+          </div> -->
           <div class="row p-3 mx-0 collapsed">
             <div style="position:relative" class="col-md-3">Slots:</div>
             <div class="col-md-9">
@@ -248,7 +249,8 @@
                   <th>Slot</th>
                   <th>Status</th>
                   <th>Time</th>
-                  <th>Proposer</th>
+                  <!-- Proposer column hidden for EthPar Explorer -->
+                  <!-- <th>Proposer</th> -->
                   <th>Root Hash</th>
                   <th>Attestations</th>
                   <th>Sync Participation</th>
@@ -265,7 +267,8 @@
                     <td><a href="/slot/{{ .Slot }}">{{ formatAddCommas .Slot }}</a></td>
                     <td class="text-capitalize">{{ formatBlockStatus .Status .Slot }}</td>
                     <td aria-ethereum-date="{{ .Ts.Unix }}" aria-ethereum-date-format="FROMNOW">{{ .Ts.Format "2006-01-02T15:04:05" }}</td>
-                    <td><a href="/validator/{{ .Proposer }}">{{ .ProposerFormatted }}</a></td>
+                    <!-- Proposer data hidden for EthPar Explorer -->
+                    <!-- <td><a href="/validator/{{ .Proposer }}">{{ .ProposerFormatted }}</a></td> -->
                     <td class="d-flex align-items-center text-monospace">
                       {{ if eq .Status 1 }}
                         <a href="/slot/{{ printf "%x" .BlockRoot }}">0x{{ printf "%.4x" .BlockRoot }}...</a>

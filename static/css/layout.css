@@ -95,7 +95,7 @@ table {
 .page-link {
   background-color: var(--bg-color-secondary);
   cursor: pointer;
-  color: var(--link-color, #2d5986);
+  color: var(--link-color, #1d4ed8);
 }
 
 .page-item.disabled .page-link {
@@ -174,7 +174,7 @@ table {
 }
 
 .cls-7 {
-  fill: #4b4fab;
+  fill: #3b82f6;
 }
 
 .cls-8 {
@@ -224,11 +224,11 @@ table {
 }
 
 .cls-18 {
-  fill: #342785;
+  fill: #1d4ed8;
 }
 
 .cls-19 {
-  fill: #6069da;
+  fill: #2563eb;
 }
 
 .cls-20 {
