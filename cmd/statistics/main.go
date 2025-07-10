@@ -363,9 +363,9 @@ func statisticsLoop(client consensus.ConsensusClient, bt *db.Bigtable) {
 		}
 
 		if loopError == nil {
-			services.ReportStatus("statistics", "Running", nil)
+			services.ReportStatus(true, "statistics", "Running", nil)
 		} else {
-			services.ReportStatus("statistics", loopError.Error(), nil)
+			services.ReportStatus(true, "statistics", loopError.Error(), nil)
 		}
 		time.Sleep(time.Minute)
 	}
@@ -381,10 +381,10 @@ func depositsLoop() {
 		err := db.AggregateDeposits()
 		if err != nil {
 			logrus.Errorf("error aggregating deposits: %v", err)
-			services.ReportStatus("deposits_aggregator", err.Error(), nil)
+			services.ReportStatus(true, "deposits_aggregator", err.Error(), nil)
 		} else {
 			logrus.WithFields(logrus.Fields{"duration": time.Since(start)}).Infof("aggregated deposits")
-			services.ReportStatus("deposits_aggregator", "Running", nil)
+			services.ReportStatus(true, "deposits_aggregator", "Running", nil)
 		}
 		time.Sleep(opt.statisticsDepositsInterval)
 	}

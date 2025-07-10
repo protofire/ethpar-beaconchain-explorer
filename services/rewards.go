@@ -37,7 +37,7 @@ func GetValidatorHist(validatorArr []uint64, currency string, start uint64, end 
 	err = db.WriterDb.Select(&pricesDb,
 		`select ts, eur, usd, gbp, cad, jpy, cny, rub, aud from price where ts >= TO_TIMESTAMP($1) and ts <= TO_TIMESTAMP($2) order by ts desc`, start-oneDay, end+oneDay)
 	if err != nil {
-		logger.Errorf("error getting prices: %v", err)
+		log.Errorf("error getting prices: %v", err)
 	}
 
 	lowerBound := utils.TimeToDay(start)
@@ -51,7 +51,7 @@ func GetValidatorHist(validatorArr []uint64, currency string, start uint64, end 
 
 	income, err := db.GetValidatorIncomeHistory(validatorArr, lowerBound, upperBound, LatestFinalizedEpoch(), bt)
 	if err != nil {
-		logger.Errorf("error getting income history for validator hist: %v", err)
+		log.Errorf("error getting income history for validator hist: %v", err)
 	}
 
 	prices := map[string]float64{}
@@ -130,7 +130,7 @@ func GeneratePdfReport(hist rewardHistory, currency string, bt *db.Bigtable) []b
 	data := hist.History
 
 	if !(len(data) > 0) {
-		logger.Warn("Can't generate PDF for Empty Slice")
+		log.Warn("Can't generate PDF for Empty Slice")
 		return []byte{}
 	}
 

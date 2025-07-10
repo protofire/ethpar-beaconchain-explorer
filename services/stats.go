@@ -14,7 +14,7 @@ import (
 func statsUpdater(wg *sync.WaitGroup) {
 	sleepDuration := time.Duration(time.Duration(utils.Config.Chain.ClConfig.SlotsPerEpoch*utils.Config.Chain.ClConfig.SecondsPerSlot) * time.Second)
 
-	logger.Infof("sleep duration is %v", sleepDuration)
+	log.Infof("sleep duration is %v", sleepDuration)
 	firstrun := true
 	for {
 		latestEpoch := LatestEpoch()
@@ -22,22 +22,22 @@ func statsUpdater(wg *sync.WaitGroup) {
 		now := time.Now()
 		statResult, err := calculateStats()
 		if err != nil {
-			logger.WithField("epoch", latestEpoch).Errorf("error updating stats: %v", err)
+			log.WithField("epoch", latestEpoch).Errorf("error updating stats: %v", err)
 			time.Sleep(sleepDuration)
 			continue
 		}
-		logger.WithField("epoch", latestEpoch).WithField("duration", time.Since(now)).Info("stats update completed")
+		log.WithField("epoch", latestEpoch).WithField("duration", time.Since(now)).Info("stats update completed")
 
 		cacheKey := fmt.Sprintf("%d:frontend:latestStats", utils.Config.Chain.ClConfig.DepositChainID)
 		err = cache.TieredCache.Set(cacheKey, statResult, utils.Day)
 		if err != nil {
-			logger.Errorf("error caching latestStats: %v", err)
+			log.Errorf("error caching latestStats: %v", err)
 		}
 		if firstrun {
 			wg.Done()
 			firstrun = false
 		}
-		ReportStatus("statsUpdater", "Running", nil)
+		ReportStatus(true, "statsUpdater", "Running", nil)
 		time.Sleep(sleepDuration)
 	}
 }
@@ -64,27 +64,27 @@ func calculateStats() (*types.Stats, error) {
 
 	totalValidatorCount, err := db.GetTotalValidatorsCount()
 	if err != nil {
-		logger.WithError(err).Error("error getting total validator count")
+		log.WithError(err).Error("error getting total validator count")
 	}
 	stats.TotalValidatorCount = &totalValidatorCount
 
 	activeValidatorCount, err := db.GetActiveValidatorCount()
 	if err != nil {
-		logger.WithError(err).Error("error getting active validator count")
+		log.WithError(err).Error("error getting active validator count")
 	}
 
 	stats.ActiveValidatorCount = &activeValidatorCount
 
 	pendingValidatorCount, err := db.GetPendingValidatorCount()
 	if err != nil {
-		logger.WithError(err).Error("error getting pending validator count")
+		log.WithError(err).Error("error getting pending validator count")
 	}
 
 	stats.PendingValidatorCount = &pendingValidatorCount
 
 	validatorChurnLimit, err := getValidatorChurnLimit(activeValidatorCount)
 	if err != nil {
-		logger.WithError(err).Error("error getting total validator churn limit")
+		log.WithError(err).Error("error getting total validator churn limit")
 	}
 
 	stats.ValidatorChurnLimit = &validatorChurnLimit
@@ -92,49 +92,49 @@ func calculateStats() (*types.Stats, error) {
 	epoch := LatestEpoch()
 	validatorActivationChurnLimit, err := getValidatorActivationChurnLimit(activeValidatorCount, epoch)
 	if err != nil {
-		logger.WithError(err).Error("error getting total validator churn limit")
+		log.WithError(err).Error("error getting total validator churn limit")
 	}
 
 	stats.ValidatorActivationChurnLimit = &validatorActivationChurnLimit
 
 	LatestValidatorWithdrawalIndex, err := db.GetMostRecentWithdrawalValidator()
 	if err != nil {
-		logger.WithError(err).Error("error getting most recent withdrawal validator index")
+		log.WithError(err).Error("error getting most recent withdrawal validator index")
 	}
 
 	stats.LatestValidatorWithdrawalIndex = &LatestValidatorWithdrawalIndex
 
 	WithdrawableValidatorCount, err := db.GetWithdrawableValidatorCount(epoch)
 	if err != nil {
-		logger.WithError(err).Error("error getting withdrawable validator count")
+		log.WithError(err).Error("error getting withdrawable validator count")
 	}
 
 	stats.WithdrawableValidatorCount = &WithdrawableValidatorCount
 
 	PendingBLSChangeValidatorCount, err := db.GetPendingBLSChangeValidatorCount()
 	if err != nil {
-		logger.WithError(err).Error("error getting withdrawable validator count")
+		log.WithError(err).Error("error getting withdrawable validator count")
 	}
 
 	stats.PendingBLSChangeValidatorCount = &PendingBLSChangeValidatorCount
 
 	TotalAmountWithdrawn, WithdrawalCount, err := db.GetTotalAmountWithdrawn()
 	if err != nil {
-		logger.WithError(err).Error("error getting total amount withdrawn")
+		log.WithError(err).Error("error getting total amount withdrawn")
 	}
 	stats.TotalAmountWithdrawn = &TotalAmountWithdrawn
 	stats.WithdrawalCount = &WithdrawalCount
 
 	TotalAmountDeposited, err := db.GetTotalAmountDeposited()
 	if err != nil {
-		logger.WithError(err).Error("error getting total deposited")
+		log.WithError(err).Error("error getting total deposited")
 	}
 
 	stats.TotalAmountDeposited = &TotalAmountDeposited
 
 	BLSChangeCount, err := db.GetBLSChangeCount()
 	if err != nil {
-		logger.WithError(err).Error("error getting bls change count")
+		log.WithError(err).Error("error getting bls change count")
 	}
 
 	stats.BLSChangeCount = &BLSChangeCount

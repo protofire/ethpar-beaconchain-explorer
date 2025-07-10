@@ -30,8 +30,9 @@ var lastStatusUpdate sync.Map // key: string, value: time.Time
 //
 // Any error encountered while writing to the database is logged via
 // `utils.LogError` but does not cause a panic or return an error.
-func ReportStatus(name, status string, metadata *json.RawMessage) {
-	if !utils.Config.ReportServiceStatus {
+// TODO: ReportStatus report hardcoded to true to avoid using global config variable
+func ReportStatus(report bool, name, status string, metadata *json.RawMessage) {
+	if !report {
 		return
 	}
 

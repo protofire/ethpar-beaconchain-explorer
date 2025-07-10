@@ -258,9 +258,9 @@ func main() {
 	if cfg.Frontend.Enabled {
 
 		if cfg.Frontend.OnlyAPI {
-			services.ReportStatus("api", "Running", nil)
+			services.ReportStatus(cfg.ReportServiceStatus, "api", "Running", nil)
 		} else {
-			services.ReportStatus("frontend", "Running", nil)
+			services.ReportStatus(cfg.ReportServiceStatus, "frontend", "Running", nil)
 		}
 
 		router := mux.NewRouter()

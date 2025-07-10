@@ -195,14 +195,14 @@ func main() {
 				if err != nil {
 					logrus.Errorf("error marking rewards_exported as true for epoch %v: %v", e, err)
 				}
-				services.ReportStatus("rewardsExporter", "Running", nil)
+				services.ReportStatus(cfg.ReportServiceStatus, "rewardsExporter", "Running", nil)
 
 				if e > lastExportedEpoch {
 					lastExportedEpoch = e
 				}
 			}
 
-			services.ReportStatus("rewardsExporter", "Running", nil)
+			services.ReportStatus(cfg.ReportServiceStatus, "rewardsExporter", "Running", nil)
 			time.Sleep(*sleepDuration)
 
 		}

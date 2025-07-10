@@ -92,6 +92,7 @@ func main() {
 		Bigtable:          bt,
 		Client:            rpcClient,
 		Log:               log,
+		ReportStatus:      cfg.ReportStatus,
 	}
 
 	// Validate and adjust parameters based on mode

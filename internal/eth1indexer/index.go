@@ -35,6 +35,7 @@ type IndexingParams struct {
 	Bigtable          *db.Bigtable
 	Client            execution.ExecutionClient
 	Log               *logger.Logger
+	ReportStatus      bool
 }
 
 // transforms returns the static, canonical list of transformation functions
@@ -254,6 +255,6 @@ func IndexLive(p IndexingParams) error {
 		}
 
 		p.Log.Info("index run completed")
-		services.ReportStatus("eth1indexer", "Running", nil)
+		services.ReportStatus(p.ReportStatus, "eth1indexer", "Running", nil)
 	}
 }

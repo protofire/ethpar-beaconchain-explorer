@@ -76,7 +76,7 @@ func LatestChartsPageData() []*types.ChartsPageDataChart {
 	if wanted, err := cache.TieredCache.GetWithLocalTimeout(cacheKey, time.Hour, wanted); err == nil {
 		return *wanted.(*[]*types.ChartsPageDataChart)
 	} else {
-		logger.Errorf("error retrieving chartsPageData from cache: %v", err)
+		log.Errorf("error retrieving chartsPageData from cache: %v", err)
 	}
 
 	return nil
@@ -103,12 +103,12 @@ func chartsPageDataUpdater(wg *sync.WaitGroup, client consensus.ConsensusClient)
 
 		data, err := getChartsPageData(client)
 		if err != nil {
-			logger.WithField("epoch", latestEpoch).Errorf("error updating chartPageData: %v", err)
+			log.WithField("epoch", latestEpoch).Errorf("error updating chartPageData: %v", err)
 			time.Sleep(sleepDuration)
 			continue
 		}
 		metrics.TaskDuration.WithLabelValues("service_charts_updater").Observe(time.Since(start).Seconds())
-		logger.WithField("epoch", latestEpoch).WithField("duration", time.Since(start)).Info("chartPageData update completed")
+		log.WithField("epoch", latestEpoch).WithField("duration", time.Since(start)).Info("chartPageData update completed")
 
 		cacheKey := fmt.Sprintf("%d:frontend:chartsPageData", utils.Config.Chain.ClConfig.DepositChainID)
 		cache.TieredCache.Set(cacheKey, data, utils.Day)
@@ -120,7 +120,7 @@ func chartsPageDataUpdater(wg *sync.WaitGroup, client consensus.ConsensusClient)
 			firstun = false
 		}
 		if latestEpoch == 0 {
-			ReportStatus("chartsPageDataUpdater", "Running", nil)
+			ReportStatus(true, "chartsPageDataUpdater", "Running", nil)
 			time.Sleep(time.Minute * 10)
 		}
 	}
@@ -150,7 +150,7 @@ func getChartsPageData(client consensus.ConsensusClient) ([]*types.ChartsPageDat
 			defer wg.Done()
 			start := time.Now()
 			data, err := ch.DataFunc(client)
-			logger.WithField("chart", i).WithField("duration", time.Since(start)).WithField("error", err).Debug("generated chart")
+			log.WithField("chart", i).WithField("duration", time.Since(start)).WithField("error", err).Debug("generated chart")
 			chartHandlerResChan <- &chartHandlerRes{ch.Order, i, data, err}
 		}(i, ch)
 	}
@@ -164,7 +164,7 @@ func getChartsPageData(client consensus.ConsensusClient) ([]*types.ChartsPageDat
 
 	for chart := range chartHandlerResChan {
 		if chart.Error != nil {
-			logger.Errorf("error getting chart data for %v: %v", chart.Path, chart.Error)
+			log.Errorf("error getting chart data for %v: %v", chart.Path, chart.Error)
 			continue
 		}
 		pageCharts = append(pageCharts, &types.ChartsPageDataChart{

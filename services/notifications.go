@@ -22,8 +22,9 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	ethclients "github.com/protofire/ethpar-beaconchain-explorer/ethClients"
-	"github.com/protofire/ethpar-beaconchain-explorer/mail"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/mail"
 	"github.com/protofire/ethpar-beaconchain-explorer/notify"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -48,7 +49,7 @@ func notificationCollector(bt *db.Bigtable) {
 		latestFinalizedEpoch := LatestFinalizedEpoch()
 
 		if latestFinalizedEpoch < 4 {
-			logger.Errorf("pausing notifications until at least 5 epochs have been exported into the db")
+			log.Errorf("pausing notifications until at least 5 epochs have been exported into the db")
 			time.Sleep(time.Minute)
 			continue
 		}
@@ -57,21 +58,21 @@ func notificationCollector(bt *db.Bigtable) {
 		err := db.WriterDb.Get(&lastNotifiedEpoch, "SELECT COALESCE(MAX(epoch), 0) FROM epochs_notified")
 
 		if err != nil {
-			logger.Errorf("error retrieving last notified epoch from the db: %v", err)
+			log.Errorf("error retrieving last notified epoch from the db: %v", err)
 			time.Sleep(time.Minute)
 			continue
 		}
 
-		logger.Infof("latest finalized epoch is %v, latest notified epoch is %v", latestFinalizedEpoch, lastNotifiedEpoch)
+		log.Infof("latest finalized epoch is %v, latest notified epoch is %v", latestFinalizedEpoch, lastNotifiedEpoch)
 
 		if latestFinalizedEpoch < lastNotifiedEpoch {
-			logger.Errorf("notification consistency error, lastest finalized epoch is lower than the last notified epoch!")
+			log.Errorf("notification consistency error, lastest finalized epoch is lower than the last notified epoch!")
 			time.Sleep(time.Minute)
 			continue
 		}
 
 		if latestFinalizedEpoch-lastNotifiedEpoch > 5 {
-			logger.Infof("last notified epoch is more than 5 epochs behind the last finalized epoch, limiting lookback to last 5 epochs")
+			log.Infof("last notified epoch is more than 5 epochs behind the last finalized epoch, limiting lookback to last 5 epochs")
 			lastNotifiedEpoch = latestFinalizedEpoch - 5
 		}
 
@@ -79,31 +80,31 @@ func notificationCollector(bt *db.Bigtable) {
 			var exported uint64
 			err := db.WriterDb.Get(&exported, "SELECT COUNT(*) FROM epochs WHERE epoch <= $1 AND epoch >= $2", epoch, epoch-3)
 			if err != nil {
-				logger.Errorf("error retrieving export status of epoch %v: %v", epoch, err)
-				ReportStatus("notification-collector", "Error", nil)
+				log.Errorf("error retrieving export status of epoch %v: %v", epoch, err)
+				ReportStatus(true, "notification-collector", "Error", nil)
 				break
 			}
 
 			if exported != 4 {
-				logger.Errorf("epoch notification consistency error, epochs %v - %v are not all yet exported into the db (wanted %v, got %v)", epoch, epoch-3, 4, exported)
+				log.Errorf("epoch notification consistency error, epochs %v - %v are not all yet exported into the db (wanted %v, got %v)", epoch, epoch-3, 4, exported)
 			}
 
 			start := time.Now()
-			logger.Infof("collecting notifications for epoch %v", epoch)
+			log.Infof("collecting notifications for epoch %v", epoch)
 
 			// Network DB Notifications (network related)
 			notifications, err := collectNotifications(epoch, bt)
 
 			if err != nil {
-				logger.Errorf("error collection notifications: %v", err)
-				ReportStatus("notification-collector", "Error", nil)
+				log.Errorf("error collection notifications: %v", err)
+				ReportStatus(true, "notification-collector", "Error", nil)
 				break
 			}
 
 			_, err = db.WriterDb.Exec("INSERT INTO epochs_notified VALUES ($1, NOW())", epoch)
 			if err != nil {
-				logger.Errorf("error marking notification status for epoch %v in db: %v", epoch, err)
-				ReportStatus("notification-collector", "Error", nil)
+				log.Errorf("error marking notification status for epoch %v in db: %v", epoch, err)
+				ReportStatus(true, "notification-collector", "Error", nil)
 				break
 			}
 
@@ -111,11 +112,11 @@ func notificationCollector(bt *db.Bigtable) {
 
 			// Network DB Notifications (user related, must only run on one instance ever!!!!)
 			if utils.Config.Notifications.UserDBNotifications {
-				logger.Infof("collecting user db notifications")
+				log.Infof("collecting user db notifications")
 				userNotifications, err := collectUserDbNotifications(epoch, bt)
 				if err != nil {
-					logger.Errorf("error collection user db notifications: %v", err)
-					ReportStatus("notification-collector", "Error", nil)
+					log.Errorf("error collection user db notifications: %v", err)
+					ReportStatus(true, "notification-collector", "Error", nil)
 					time.Sleep(time.Minute * 2)
 					continue
 				}
@@ -123,16 +124,16 @@ func notificationCollector(bt *db.Bigtable) {
 				queueNotifications(userNotifications, db.FrontendWriterDB)
 			}
 
-			logger.
-				WithField("notifications", len(notifications)).
-				WithField("duration", time.Since(start)).
-				WithField("epoch", epoch).
-				Info("notifications completed")
+			log.WithFields(logger.Fields{
+				"notifications": len(notifications),
+				"duration": time.Since(start),
+				"epoch": epoch,
+			}).Info("notifications completed")
 
 			metrics.TaskDuration.WithLabelValues("service_notifications").Observe(time.Since(start).Seconds())
 		}
 
-		ReportStatus("notification-collector", "Running", nil)
+		ReportStatus(true, "notification-collector", "Running", nil)
 		time.Sleep(time.Second * 10)
 	}
 }
@@ -144,44 +145,44 @@ func notificationSender() {
 
 		conn, err := db.FrontendWriterDB.Conn(ctx)
 		if err != nil {
-			logger.WithError(err).Error("error creating connection")
+			log.WithError(err).Error("error creating connection")
 			cancel()
 			continue
 		}
 
 		_, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(500)`)
 		if err != nil {
-			logger.WithError(err).Errorf("error getting advisory lock from db")
+			log.WithError(err).Errorf("error getting advisory lock from db")
 
 			conn.Close()
 			if err != nil {
-				logger.WithError(err).Warn("error returning connection to connection pool (advisory lock)")
+				log.WithError(err).Warn("error returning connection to connection pool (advisory lock)")
 			}
 			cancel()
 			continue
 		}
 
-		logger.Info("lock obtained")
+		log.Info("lock obtained")
 		err = dispatchNotifications(db.FrontendWriterDB)
 		if err != nil {
-			logger.WithError(err).Error("error dispatching notifications")
+			log.WithError(err).Error("error dispatching notifications")
 		}
 
 		err = garbageCollectNotificationQueue(db.FrontendWriterDB)
 		if err != nil {
-			logger.WithError(err).Errorf("error garbage collecting the notification queue")
+			log.WithError(err).Errorf("error garbage collecting the notification queue")
 		}
-		logger.WithField("duration", time.Since(start)).Info("notifications dispatched and garbage collected")
+		log.WithField("duration", time.Since(start)).Info("notifications dispatched and garbage collected")
 		metrics.TaskDuration.WithLabelValues("service_notifications_sender").Observe(time.Since(start).Seconds())
 
 		unlocked := false
 		rows, err := conn.QueryContext(ctx, `SELECT pg_advisory_unlock(500)`)
 		if err != nil {
-			logger.WithError(err).Errorf("error executing advisory unlock")
+			log.WithError(err).Errorf("error executing advisory unlock")
 
 			err = conn.Close()
 			if err != nil {
-				logger.WithError(err).Warn("error returning connection to connection pool (advisory unlock)")
+				log.WithError(err).Warn("error returning connection to connection pool (advisory unlock)")
 			}
 			cancel()
 			continue
@@ -197,11 +198,11 @@ func notificationSender() {
 
 		conn.Close()
 		if err != nil {
-			logger.Warn("error returning connection to connection pool")
+			log.Warn("error returning connection to connection pool")
 		}
 		cancel()
 
-		ReportStatus("notification-sender", "Running", nil)
+		ReportStatus(true, "notification-sender", "Running", nil)
 		time.Sleep(time.Second * 30)
 	}
 }
@@ -224,64 +225,64 @@ func collectNotifications(epoch uint64, bt *db.Bigtable) (map[uint64]map[types.E
 		) coherency`)
 
 	if err != nil {
-		logger.Errorf("failed to do epochs table coherence check, aborting: %v", err)
+		log.Errorf("failed to do epochs table coherence check, aborting: %v", err)
 		return nil, err
 	}
 	if !dbIsCoherent {
-		logger.Errorf("epochs coherence check failed, aborting.")
+		log.Errorf("epochs coherence check failed, aborting.")
 		return nil, fmt.Errorf("epochs coherence check failed, aborting")
 	}
 
-	logger.Infof("started collecting notifications")
+	log.Infof("started collecting notifications")
 
 	err = collectAttestationAndOfflineValidatorNotifications(notificationsByUserID, 0, epoch)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_missed_attestation").Inc()
 		return nil, fmt.Errorf("error collecting validator_attestation_missed notifications: %v", err)
 	}
-	logger.Infof("collecting attestation & offline notifications took: %v", time.Since(start))
+	log.Infof("collecting attestation & offline notifications took: %v", time.Since(start))
 
 	err = collectBlockProposalNotifications(notificationsByUserID, 1, types.ValidatorExecutedProposalEventName, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_executed_block_proposal").Inc()
 		return nil, fmt.Errorf("error collecting validator_proposal_submitted notifications: %v", err)
 	}
-	logger.Infof("collecting block proposal proposed notifications took: %v", time.Since(start))
+	log.Infof("collecting block proposal proposed notifications took: %v", time.Since(start))
 
 	err = collectBlockProposalNotifications(notificationsByUserID, 2, types.ValidatorMissedProposalEventName, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_missed_block_proposal").Inc()
 		return nil, fmt.Errorf("error collecting validator_proposal_missed notifications: %v", err)
 	}
-	logger.Infof("collecting block proposal missed notifications took: %v", time.Since(start))
+	log.Infof("collecting block proposal missed notifications took: %v", time.Since(start))
 
 	err = collectBlockProposalNotifications(notificationsByUserID, 3, types.ValidatorMissedProposalEventName, epoch, bt)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_missed_orphaned_block_proposal").Inc()
 		return nil, fmt.Errorf("error collecting validator_proposal_missed notifications for orphaned slots: %w", err)
 	}
-	logger.Infof("collecting block proposal missed notifications for orphaned slots took: %v", time.Since(start))
+	log.Infof("collecting block proposal missed notifications for orphaned slots took: %v", time.Since(start))
 
 	err = collectValidatorGotSlashedNotifications(notificationsByUserID, epoch)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_validator_got_slashed").Inc()
 		return nil, fmt.Errorf("error collecting validator_got_slashed notifications: %v", err)
 	}
-	logger.Infof("collecting validator got slashed notifications took: %v", time.Since(start))
+	log.Infof("collecting validator got slashed notifications took: %v", time.Since(start))
 
 	err = collectWithdrawalNotifications(notificationsByUserID, epoch)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_validator_withdrawal").Inc()
 		return nil, fmt.Errorf("error collecting withdrawal notifications: %v", err)
 	}
-	logger.Infof("collecting withdrawal notifications took: %v", time.Since(start))
+	log.Infof("collecting withdrawal notifications took: %v", time.Since(start))
 
 	err = collectNetworkNotifications(notificationsByUserID, types.NetworkLivenessIncreasedEventName)
 	if err != nil {
 		metrics.Errors.WithLabelValues("notifications_collect_network").Inc()
 		return nil, fmt.Errorf("error collecting network notifications: %v", err)
 	}
-	logger.Infof("collecting network notifications took: %v", time.Since(start))
+	log.Infof("collecting network notifications took: %v", time.Since(start))
 
 	// Rocketpool
 	{
@@ -290,7 +291,7 @@ func collectNotifications(epoch uint64, bt *db.Bigtable) (map[uint64]map[types.E
 
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				logger.Infof("skipped the collecting of rocketpool notifications, because rocketpool_network_stats is empty")
+				log.Infof("skipped the collecting of rocketpool notifications, because rocketpool_network_stats is empty")
 			} else {
 				metrics.Errors.WithLabelValues("notifications_collect_rocketpool_notifications").Inc()
 				return nil, fmt.Errorf("error collecting rocketpool notifications: %v", err)
@@ -301,28 +302,28 @@ func collectNotifications(epoch uint64, bt *db.Bigtable) (map[uint64]map[types.E
 				metrics.Errors.WithLabelValues("notifications_collect_rocketpool_comission").Inc()
 				return nil, fmt.Errorf("error collecting rocketpool commission: %v", err)
 			}
-			logger.Infof("collecting rocketpool commissions took: %v", time.Since(start))
+			log.Infof("collecting rocketpool commissions took: %v", time.Since(start))
 
 			err = collectRocketpoolRewardClaimRoundNotifications(notificationsByUserID, types.RocketpoolNewClaimRoundStartedEventName)
 			if err != nil {
 				metrics.Errors.WithLabelValues("notifications_collect_rocketpool_reward_claim").Inc()
 				return nil, fmt.Errorf("error collecting new rocketpool claim round: %v", err)
 			}
-			logger.Infof("collecting rocketpool claim round took: %v", time.Since(start))
+			log.Infof("collecting rocketpool claim round took: %v", time.Since(start))
 
 			err = collectRocketpoolRPLCollateralNotifications(notificationsByUserID, types.RocketpoolCollateralMaxReached, epoch)
 			if err != nil {
 				metrics.Errors.WithLabelValues("notifications_collect_rocketpool_rpl_collateral_max_reached").Inc()
 				return nil, fmt.Errorf("error collecting rocketpool max collateral: %v", err)
 			}
-			logger.Infof("collecting rocketpool max collateral took: %v", time.Since(start))
+			log.Infof("collecting rocketpool max collateral took: %v", time.Since(start))
 
 			err = collectRocketpoolRPLCollateralNotifications(notificationsByUserID, types.RocketpoolCollateralMinReached, epoch)
 			if err != nil {
 				metrics.Errors.WithLabelValues("notifications_collect_rocketpool_rpl_collateral_min_reached").Inc()
 				return nil, fmt.Errorf("error collecting rocketpool min collateral: %v", err)
 			}
-			logger.Infof("collecting rocketpool min collateral took: %v", time.Since(start))
+			log.Infof("collecting rocketpool min collateral took: %v", time.Since(start))
 		}
 	}
 
@@ -331,7 +332,7 @@ func collectNotifications(epoch uint64, bt *db.Bigtable) (map[uint64]map[types.E
 		metrics.Errors.WithLabelValues("notifications_collect_sync_committee").Inc()
 		return nil, fmt.Errorf("error collecting sync committee: %v", err)
 	}
-	logger.Infof("collecting sync committee took: %v", time.Since(start))
+	log.Infof("collecting sync committee took: %v", time.Since(start))
 
 	return notificationsByUserID, nil
 }
@@ -410,17 +411,17 @@ func queueNotifications(notificationsByUserID map[uint64]map[types.EventName][]t
 
 	err := queueEmailNotifications(notificationsByUserID, useDB)
 	if err != nil {
-		logger.WithError(err).Error("error queuing email notifications")
+		log.WithError(err).Error("error queuing email notifications")
 	}
 
 	err = queuePushNotification(notificationsByUserID, useDB)
 	if err != nil {
-		logger.WithError(err).Error("error queuing push notifications")
+		log.WithError(err).Error("error queuing push notifications")
 	}
 
 	err = queueWebhookNotifications(notificationsByUserID, useDB)
 	if err != nil {
-		logger.WithError(err).Error("error queuing webhook notifications")
+		log.WithError(err).Error("error queuing webhook notifications")
 	}
 
 	for _, events := range notificationsByUserID {
@@ -439,7 +440,7 @@ func queueNotifications(notificationsByUserID map[uint64]map[types.EventName][]t
 		// update that we've queued the subscription (last sent rather means last queued)
 		err := db.UpdateSubscriptionsLastSent(subIDs, time.Now(), epoch, useDB)
 		if err != nil {
-			logger.Errorf("error updating sent-time of sent notifications: %v", err)
+			log.Errorf("error updating sent-time of sent notifications: %v", err)
 			metrics.Errors.WithLabelValues("notifications_updating_sent_time").Inc()
 		}
 	}
@@ -470,7 +471,7 @@ func queueNotifications(notificationsByUserID map[uint64]map[types.EventName][]t
 		}
 		_, err := db.FrontendWriterDB.Exec(`UPDATE users_subscriptions SET internal_state = $1 WHERE id = ANY($2)`, state, pq.Int64Array(subArray))
 		if err != nil {
-			logger.Errorf("failed to update internal state of notifcations: %v", err)
+			log.Errorf("failed to update internal state of notifcations: %v", err)
 		}
 	}
 }
@@ -510,7 +511,7 @@ func garbageCollectNotificationQueue(useDB *sqlx.DB) error {
 
 	rowsAffected, _ := rows.RowsAffected()
 
-	logger.Infof("deleted %v rows from the notification_queue", rowsAffected)
+	log.Infof("deleted %v rows from the notification_queue", rowsAffected)
 
 	return nil
 }
@@ -578,7 +579,7 @@ func queuePushNotification(notificationsByUserID map[uint64]map[types.EventName]
 
 			_, err = useDB.Exec(`INSERT INTO notification_queue (created, channel, content) VALUES ($1, 'push', $2)`, time.Now(), transitPushContent)
 			if err != nil {
-				logger.WithError(err).Errorf("error writing transit push notification to db")
+				log.WithError(err).Errorf("error writing transit push notification to db")
 				return
 			}
 		}(userTokens, userNotifications)
@@ -600,7 +601,7 @@ func sendPushNotifications(useDB *sqlx.DB) error {
 		return fmt.Errorf("error querying notification queue, err: %w", err)
 	}
 
-	logger.Infof("processing %v push notifications", len(notificationQueueItem))
+	log.Infof("processing %v push notifications", len(notificationQueueItem))
 
 	batchSize := 500
 	for _, n := range notificationQueueItem {
@@ -614,7 +615,7 @@ func sendPushNotifications(useDB *sqlx.DB) error {
 			err = notify.SendPushBatch(n.Content.Messages[start:end], false)
 			if err != nil {
 				metrics.Errors.WithLabelValues("notifications_send_push_batch").Inc()
-				logger.WithError(err).Error("error sending firebase batch job")
+				log.WithError(err).Error("error sending firebase batch job")
 			} else {
 				metrics.NotificationsSent.WithLabelValues("push", "200").Add(float64(len(n.Content.Messages)))
 			}
@@ -642,7 +643,7 @@ func queueEmailNotifications(notificationsByUserID map[uint64]map[types.EventNam
 	for userID, userNotifications := range notificationsByUserID {
 		userEmail, exists := emailsByUserID[userID]
 		if !exists {
-			logger.Warnf("email notification skipping user %v", userID)
+			log.Warnf("email notification skipping user %v", userID)
 			// we don't need this metrics as users can now deactivate email notifications and it would increment the counter
 			// metrics.Errors.WithLabelValues("notifications_mail_not_found").Inc()
 			continue
@@ -683,7 +684,7 @@ func queueEmailNotifications(notificationsByUserID map[uint64]map[types.EventNam
 
 						tx, err := db.FrontendWriterDB.Beginx()
 						if err != nil {
-							logger.WithError(err).Error("error starting transaction")
+							log.WithError(err).Error("error starting transaction")
 						}
 						var sub types.Subscription
 						err = tx.Get(&sub, `
@@ -701,7 +702,7 @@ func queueEmailNotifications(notificationsByUserID map[uint64]map[types.EventNam
 							WHERE id = $1
 						`, id)
 						if err != nil {
-							logger.WithError(err).Error("error getting user subscription by subscription id")
+							log.WithError(err).Error("error getting user subscription by subscription id")
 							tx.Rollback()
 						}
 
@@ -710,13 +711,13 @@ func queueEmailNotifications(notificationsByUserID map[uint64]map[types.EventNam
 
 						_, err = tx.Exec("UPDATE users_subscriptions set unsubscribe_hash = $1 WHERE id = $2", digest[:], id)
 						if err != nil {
-							logger.WithError(err).Error("error updating users subscriptions table with unsubscribe hash")
+							log.WithError(err).Error("error updating users subscriptions table with unsubscribe hash")
 							tx.Rollback()
 						}
 
 						err = tx.Commit()
 						if err != nil {
-							logger.WithError(err).Error("error committing transaction to update users subscriptions with an unsubscribe hash")
+							log.WithError(err).Error("error committing transaction to update users subscriptions with an unsubscribe hash")
 							tx.Rollback()
 						}
 
@@ -767,7 +768,7 @@ func queueEmailNotifications(notificationsByUserID map[uint64]map[types.EventNam
 
 			_, err = useDB.Exec(`INSERT INTO notification_queue (created, channel, content) VALUES ($1, 'email', $2)`, time.Now(), transitEmailContent)
 			if err != nil {
-				logger.WithError(err).Errorf("error writing transit email to db")
+				log.WithError(err).Errorf("error writing transit email to db")
 			}
 		}(userEmail, userNotifications)
 	}
@@ -788,14 +789,14 @@ func sendEmailNotifications(useDb *sqlx.DB) error {
 		return fmt.Errorf("error querying notification queue, err: %w", err)
 	}
 
-	logger.Infof("processing %v email notifications", len(notificationQueueItem))
+	log.Infof("processing %v email notifications", len(notificationQueueItem))
 
 	for _, n := range notificationQueueItem {
 		err = mail.SendMailRateLimited(n.Content.Address, n.Content.Subject, n.Content.Email, n.Content.Attachments)
 		if err != nil {
 			if !strings.Contains(err.Error(), "rate limit has been exceeded") {
 				metrics.Errors.WithLabelValues("notifications_send_email").Inc()
-				logger.WithError(err).Error("error sending email notification")
+				log.WithError(err).Error("error sending email notification")
 			} else {
 				metrics.NotificationsSent.WithLabelValues("email", "200").Inc()
 			}
@@ -851,11 +852,11 @@ func queueWebhookNotifications(notificationsByUserID map[uint64]map[types.EventN
 						if w.Retries > 5 && w.LastSent.Valid && w.LastSent.Time.Add(time.Hour).Before(time.Now()) {
 							_, err = useDB.Exec(`UPDATE users_webhooks SET retries = 0 WHERE id = $1;`, w.ID)
 							if err != nil {
-								logger.WithError(err).Errorf("error updating users_webhooks table; setting retries to zero")
+								log.WithError(err).Errorf("error updating users_webhooks table; setting retries to zero")
 								continue
 							}
 						} else if w.Retries > 5 && !w.LastSent.Valid {
-							logger.Warnf("webhook '%v' has more than 5 retries and does not have a valid last_sent timestamp", w.Url)
+							log.Warnf("webhook '%v' has more than 5 retries and does not have a valid last_sent timestamp", w.Url)
 							continue
 						}
 
@@ -928,7 +929,7 @@ func queueWebhookNotifications(notificationsByUserID map[uint64]map[types.EventN
 		for _, n := range notifs {
 			_, err = useDB.Exec(`INSERT INTO notification_queue (created, channel, content) VALUES (now(), $1, $2);`, n.Channel, n.Content)
 			if err != nil {
-				logger.WithError(err).Errorf("error inserting into webhooks_queue")
+				log.WithError(err).Errorf("error inserting into webhooks_queue")
 			} else {
 				metrics.NotificationsQueued.WithLabelValues(n.Channel, n.Content.Event.Name).Inc()
 			}
@@ -938,7 +939,7 @@ func queueWebhookNotifications(notificationsByUserID map[uint64]map[types.EventN
 			for _, n := range dNotifs {
 				_, err = useDB.Exec(`INSERT INTO notification_queue (created, channel, content) VALUES (now(), 'webhook_discord', $1);`, n)
 				if err != nil {
-					logger.WithError(err).Errorf("error inserting into webhooks_queue (discord)")
+					log.WithError(err).Errorf("error inserting into webhooks_queue (discord)")
 					continue
 				} else {
 					metrics.NotificationsQueued.WithLabelValues("webhook_discord", "multi").Inc()
@@ -964,7 +965,7 @@ func sendWebhookNotifications(useDB *sqlx.DB) error {
 	}
 	client := &http.Client{Timeout: time.Second * 30}
 
-	logger.Infof("processing %v webhook notifications", len(notificationQueueItem))
+	log.Infof("processing %v webhook notifications", len(notificationQueueItem))
 
 	for _, n := range notificationQueueItem {
 		// do not retry after 5 attempts
@@ -980,7 +981,7 @@ func sendWebhookNotifications(useDB *sqlx.DB) error {
 
 		err := json.NewEncoder(reqBody).Encode(n.Content)
 		if err != nil {
-			logger.WithError(err).Errorf("error marschalling webhook event")
+			log.WithError(err).Errorf("error marschalling webhook event")
 		}
 
 		_, err = url.Parse(n.Content.Webhook.Url)
@@ -998,21 +999,21 @@ func sendWebhookNotifications(useDB *sqlx.DB) error {
 			}
 			resp, err := client.Post(n.Content.Webhook.Url, "application/json", reqBody)
 			if err != nil {
-				logger.WithError(err).Warnf("error sending request")
+				log.WithError(err).Warnf("error sending request")
 			} else {
 				metrics.NotificationsSent.WithLabelValues("webhook", resp.Status).Inc()
 			}
 
 			_, err = useDB.Exec(`UPDATE notification_queue SET sent = now() WHERE id = $1`, n.Id)
 			if err != nil {
-				logger.WithError(err).Errorf("error updating notification_queue table")
+				log.WithError(err).Errorf("error updating notification_queue table")
 				return
 			}
 
 			if resp != nil && resp.StatusCode < 400 {
 				_, err = useDB.Exec(`UPDATE users_webhooks SET retries = 0, last_sent = now() WHERE id = $1;`, n.Content.Webhook.ID)
 				if err != nil {
-					logger.WithError(err).Errorf("error updating users_webhooks table; setting retries to zero")
+					log.WithError(err).Errorf("error updating users_webhooks table; setting retries to zero")
 					return
 				}
 			} else {
@@ -1021,7 +1022,7 @@ func sendWebhookNotifications(useDB *sqlx.DB) error {
 				if resp != nil {
 					b, err := io.ReadAll(resp.Body)
 					if err != nil {
-						logger.WithError(err).Warn("error reading body")
+						log.WithError(err).Warn("error reading body")
 					} else {
 						errResp.Status = resp.Status
 						errResp.Body = string(b)
@@ -1030,7 +1031,7 @@ func sendWebhookNotifications(useDB *sqlx.DB) error {
 
 				_, err = useDB.Exec(`UPDATE users_webhooks SET retries = retries + 1, last_sent = now(), request = $2, response = $3 WHERE id = $1;`, n.Content.Webhook.ID, n.Content, errResp)
 				if err != nil {
-					logger.WithError(err).Errorf("error updating users_webhooks table; increasing retries")
+					log.WithError(err).Errorf("error updating users_webhooks table; increasing retries")
 					return
 				}
 			}
@@ -1055,7 +1056,7 @@ func sendDiscordNotifications(useDB *sqlx.DB) error {
 	}
 	client := &http.Client{Timeout: time.Second * 30}
 
-	logger.Infof("processing %v discord webhook notifications", len(notificationQueueItem))
+	log.Infof("processing %v discord webhook notifications", len(notificationQueueItem))
 	webhookMap := make(map[uint64]types.UserWebhook)
 
 	notifMap := make(map[uint64][]types.TransitDiscord)
@@ -1081,7 +1082,7 @@ func sendDiscordNotifications(useDB *sqlx.DB) error {
 				// update retries counters in db based on end result
 				_, err = useDB.Exec(`UPDATE users_webhooks SET retries = $1, last_sent = now() WHERE id = $2;`, webhook.Retries, webhook.ID)
 				if err != nil {
-					logger.Warnf("failed to update retries counter to %v for webhook %v: %v", webhook.Retries, webhook.ID, err)
+					log.Warnf("failed to update retries counter to %v for webhook %v: %v", webhook.Retries, webhook.ID, err)
 				}
 
 				// mark notifcations as sent in db
@@ -1091,13 +1092,13 @@ func sendDiscordNotifications(useDB *sqlx.DB) error {
 				}
 				_, err = db.FrontendWriterDB.Exec(`UPDATE notification_queue SET sent = now() where id = ANY($1)`, pq.Array(ids))
 				if err != nil {
-					logger.Warnf("failed to update sent for notifcations in queue: %v", err)
+					log.Warnf("failed to update sent for notifcations in queue: %v", err)
 				}
 			}()
 
 			_, err = url.Parse(webhook.Url)
 			if err != nil {
-				logger.Errorf("invalid url for webhook id %v: %v", webhook.ID, err)
+				log.Errorf("invalid url for webhook id %v: %v", webhook.ID, err)
 				return
 			}
 
@@ -1111,13 +1112,13 @@ func sendDiscordNotifications(useDB *sqlx.DB) error {
 				reqBody := new(bytes.Buffer)
 				err := json.NewEncoder(reqBody).Encode(reqs[i].Content.DiscordRequest)
 				if err != nil {
-					logger.Errorf("error marschalling discord webhook event: %v", err)
+					log.Errorf("error marschalling discord webhook event: %v", err)
 					continue // skip
 				}
 
 				resp, err := client.Post(webhook.Url, "application/json", reqBody)
 				if err != nil {
-					logger.Errorf("error sending discord webhook request: %v", err)
+					log.Errorf("error sending discord webhook request: %v", err)
 				} else {
 					metrics.NotificationsSent.WithLabelValues("webhook_discord", resp.Status).Inc()
 				}
@@ -1130,7 +1131,7 @@ func sendDiscordNotifications(useDB *sqlx.DB) error {
 					if resp != nil {
 						b, err := io.ReadAll(resp.Body)
 						if err != nil {
-							logger.Errorf("error reading body for discord webhook response: %v", err)
+							log.Errorf("error reading body for discord webhook response: %v", err)
 						} else {
 							errResp.Body = string(b)
 						}
@@ -1138,13 +1139,13 @@ func sendDiscordNotifications(useDB *sqlx.DB) error {
 					}
 
 					if strings.Contains(errResp.Body, "You are being rate limited") {
-						logger.Warnf("could not push to discord webhook due to rate limit. %v url: %v", errResp.Body, webhook.Url)
+						log.Warnf("could not push to discord webhook due to rate limit. %v url: %v", errResp.Body, webhook.Url)
 					} else {
 						utils.LogWarn(nil, "error pushing discord webhook", 0, map[string]interface{}{"errResp.Body": errResp.Body, "webhook.Url": webhook.Url})
 					}
 					_, err = useDB.Exec(`UPDATE users_webhooks SET request = $2, response = $3 WHERE id = $1;`, webhook.ID, reqs[i].Content.DiscordRequest, errResp)
 					if err != nil {
-						logger.Errorf("error storing failure data in users_webhooks table: %v", err)
+						log.Errorf("error storing failure data in users_webhooks table: %v", err)
 					}
 
 					i-- // retry, IMPORTANT to be at the END of the ELSE, otherwise the wrong index will be used in the commands above!
@@ -1180,7 +1181,7 @@ func collectBlockProposalNotifications(notificationsByUserID map[uint64]map[type
 		return fmt.Errorf("error retrieving slots for epoch %v: %w", epoch, err)
 	}
 
-	logger.Infof("retrieved %v events", len(events))
+	log.Infof("retrieved %v events", len(events))
 
 	// Get Execution reward for proposed blocks
 	if status == 1 { // if proposed
@@ -1194,7 +1195,7 @@ func collectBlockProposalNotifications(notificationsByUserID map[uint64]map[type
 		if len(blockList) > 0 {
 			blocks, err := bt.GetBlocksIndexedMultiple(blockList, 10000)
 			if err != nil {
-				logger.WithError(err).Errorf("can not load blocks from bigtable for notification")
+				log.WithError(err).Errorf("can not load blocks from bigtable for notification")
 				return err
 			}
 			var execBlockNrToExecBlockMap = map[uint64]*types.Eth1BlockIndexed{}
@@ -1240,7 +1241,7 @@ func collectBlockProposalNotifications(notificationsByUserID map[uint64]map[type
 					continue
 				}
 			}
-			logger.Infof("creating %v notification for validator %v in epoch %v", eventName, event.Proposer, epoch)
+			log.Infof("creating %v notification for validator %v in epoch %v", eventName, event.Proposer, epoch)
 			n := &validatorProposalNotification{
 				SubscriptionID: *sub.ID,
 				ValidatorIndex: event.Proposer,
@@ -1386,7 +1387,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 		return fmt.Errorf("error getting validator attestations from db %w", err)
 	}
 
-	logger.Infof("retrieved validator attestation history data")
+	log.Infof("retrieved validator attestation history data")
 
 	events := make([]dbResult, 0)
 
@@ -1411,7 +1412,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 						EventFilter:    pubkey,
 					})
 				} else {
-					logger.Errorf("error retrieving pubkey for validator %v: %v", validatorIndex, err)
+					log.Errorf("error retrieving pubkey for validator %v: %v", validatorIndex, err)
 				}
 			} else {
 				epochAttested[currentEpoch] = epochAttested[currentEpoch] + 1 // count the total attested attestation for each epoch (exlude missing)
@@ -1432,12 +1433,12 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 			if sub.LastEpoch != nil {
 				lastSentEpoch := *sub.LastEpoch
 				if lastSentEpoch >= event.Epoch || event.Epoch < sub.CreatedEpoch {
-					// logger.Infof("skipping creating %v for validator %v (lastSentEpoch: %v, createdEpoch: %v)", types.ValidatorMissedAttestationEventName, event.ValidatorIndex, lastSentEpoch, sub.CreatedEpoch)
+					// log.Infof("skipping creating %v for validator %v (lastSentEpoch: %v, createdEpoch: %v)", types.ValidatorMissedAttestationEventName, event.ValidatorIndex, lastSentEpoch, sub.CreatedEpoch)
 					continue
 				}
 			}
 
-			logger.Infof("creating %v notification for validator %v in epoch %v", types.ValidatorMissedAttestationEventName, event.ValidatorIndex, event.Epoch)
+			log.Infof("creating %v notification for validator %v in epoch %v", types.ValidatorMissedAttestationEventName, event.ValidatorIndex, event.Epoch)
 			n := &validatorAttestationNotification{
 				SubscriptionID: *sub.ID,
 				ValidatorIndex: event.ValidatorIndex,
@@ -1506,7 +1507,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 
 	for _, validator := range validators {
 		if participationPerEpoch[epochNMinus3][types.ValidatorIndex(validator)] && !participationPerEpoch[epochNMinus2][types.ValidatorIndex(validator)] && !participationPerEpoch[epochNMinus1][types.ValidatorIndex(validator)] && !participationPerEpoch[types.Epoch(epoch)][types.ValidatorIndex(validator)] {
-			logger.Infof("validator %v detected as offline in epoch %v (did not attest since epoch %v)", validator, epoch, epochNMinus2)
+			log.Infof("validator %v detected as offline in epoch %v (did not attest since epoch %v)", validator, epoch, epochNMinus2)
 			pubkey, err := GetPubkeyForIndex(validator)
 			if err != nil {
 				return err
@@ -1515,7 +1516,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 		}
 
 		if !participationPerEpoch[epochNMinus3][types.ValidatorIndex(validator)] && !participationPerEpoch[epochNMinus2][types.ValidatorIndex(validator)] && !participationPerEpoch[epochNMinus1][types.ValidatorIndex(validator)] && participationPerEpoch[types.Epoch(epoch)][types.ValidatorIndex(validator)] {
-			logger.Infof("validator %v detected as online in epoch %v (attested again in epoch %v)", validator, epoch, epoch)
+			log.Infof("validator %v detected as online in epoch %v (attested again in epoch %v)", validator, epoch, epoch)
 			pubkey, err := GetPubkeyForIndex(validator)
 			if err != nil {
 				return err
@@ -1555,7 +1556,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 			if sub.UserID == nil || sub.ID == nil {
 				return fmt.Errorf("error expected userId and subId to be defined but got user: %v, sub: %v", sub.UserID, sub.ID)
 			}
-			logger.Infof("new event: validator %v detected as offline since epoch %v", validator.Index, epoch)
+			log.Infof("new event: validator %v detected as offline since epoch %v", validator.Index, epoch)
 
 			n := validatorIsOfflineNotification{
 				SubscriptionID: *sub.ID,
@@ -1581,7 +1582,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 				}
 			}
 			if isDuplicate {
-				logger.Infof("duplicate offline notification detected")
+				log.Infof("duplicate offline notification detected")
 				continue
 			}
 			notificationsByUserID[*sub.UserID][n.GetEventName()] = append(notificationsByUserID[*sub.UserID][n.GetEventName()], &n)
@@ -1613,7 +1614,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 				return fmt.Errorf("error expected userId and subId to be defined but got user: %v, sub: %v", sub.UserID, sub.ID)
 			}
 
-			logger.Infof("new event: validator %v detected as online again at epoch %v", validator.Index, epoch)
+			log.Infof("new event: validator %v detected as online again at epoch %v", validator.Index, epoch)
 
 			n := validatorIsOfflineNotification{
 				SubscriptionID: *sub.ID,
@@ -1640,7 +1641,7 @@ func collectAttestationAndOfflineValidatorNotifications(notificationsByUserID ma
 				}
 			}
 			if isDuplicate {
-				logger.Infof("duplicate online notification detected")
+				log.Infof("duplicate online notification detected")
 				continue
 			}
 			notificationsByUserID[*sub.UserID][n.GetEventName()] = append(notificationsByUserID[*sub.UserID][n.GetEventName()], &n)
@@ -1905,7 +1906,7 @@ func collectValidatorGotSlashedNotifications(notificationsByUserID map[uint64]ma
 	for _, sub := range subscribers {
 		event := dbResult[sub.Ref]
 
-		logger.Infof("creating %v notification for validator %v in epoch %v", event.SlashedValidatorPubkey, event.Reason, epoch)
+		log.Infof("creating %v notification for validator %v in epoch %v", event.SlashedValidatorPubkey, event.Reason, epoch)
 
 		n := &validatorGotSlashedNotification{
 			SubscriptionID:  sub.Id,
@@ -2004,7 +2005,7 @@ func collectWithdrawalNotifications(notificationsByUserID map[uint64]map[types.E
 		return fmt.Errorf("error getting withdrawals from database, err: %w", err)
 	}
 
-	// logger.Infof("retrieved %v events", len(events))
+	// log.Infof("retrieved %v events", len(events))
 	for _, event := range events {
 		subscribers, ok := subMap[hex.EncodeToString(event.Pubkey)]
 		if ok {
@@ -2018,7 +2019,7 @@ func collectWithdrawalNotifications(notificationsByUserID map[uint64]map[types.E
 						continue
 					}
 				}
-				// logger.Infof("creating %v notification for validator %v in epoch %v", types.ValidatorReceivedWithdrawalEventName, event.ValidatorIndex, epoch)
+				// log.Infof("creating %v notification for validator %v in epoch %v", types.ValidatorReceivedWithdrawalEventName, event.ValidatorIndex, epoch)
 				n := &validatorWithdrawalNotification{
 					SubscriptionID:  *sub.ID,
 					ValidatorIndex:  event.ValidatorIndex,
@@ -2520,7 +2521,7 @@ func (n *taxReportNotification) GetEmailAttachment(bt *db.Bigtable) *types.Email
 	q, err := url.ParseQuery(n.EventFilter)
 
 	if err != nil {
-		logger.Warn("Failed to parse rewards report eventfilter")
+		log.Warn("Failed to parse rewards report eventfilter")
 		return nil
 	}
 
@@ -2537,7 +2538,7 @@ func (n *taxReportNotification) GetEmailAttachment(bt *db.Bigtable) *types.Email
 			validators = append(validators, v)
 		}
 	} else {
-		logger.Warn("Validators Not found in rewards report eventfilter")
+		log.Warn("Validators Not found in rewards report eventfilter")
 		return nil
 	}
 
@@ -3188,12 +3189,12 @@ func getSyncCommitteeSoonInfo(ns []types.Notification) string {
 	for i, n := range ns {
 		n, ok := n.(*rocketpoolNotification)
 		if !ok {
-			logger.Errorf("Sync committee notification not of type rocketpoolNotification")
+			log.Errorf("Sync committee notification not of type rocketpoolNotification")
 			return ""
 		}
 		extras := strings.Split(n.ExtraData, "|")
 		if len(extras) != 3 {
-			logger.Errorf("Invalid number of arguments passed to sync committee extra data. Notification will not be sent until code is corrected.")
+			log.Errorf("Invalid number of arguments passed to sync committee extra data. Notification will not be sent until code is corrected.")
 			return ""
 		}
 

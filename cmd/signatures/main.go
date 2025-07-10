@@ -187,7 +187,7 @@ func ImportSignatures(bt *db.Bigtable, st types.SignatureType) {
 			}
 		}
 		metrics.TaskDuration.WithLabelValues(fmt.Sprintf("%v_signatures_page_imported", st)).Observe(time.Since(start).Seconds())
-		services.ReportStatus(fmt.Sprintf("%v_signatures", st), "Running", nil)
+		services.ReportStatus(true, fmt.Sprintf("%v_signatures", st), "Running", nil)
 	}
 }
 
