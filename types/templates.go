@@ -181,6 +181,7 @@ type IndexPageData struct {
 	NetworkStartTs            int64                  `json:"network_start_ts"`
 	MinGenesisTime            int64                  `json:"minGenesisTime"`
 	Blocks                    []*IndexPageDataBlocks `json:"blocks"`
+	Slots                     []*IndexPageDataSlots  `json:"slots"`
 	Epochs                    []*IndexPageDataEpochs `json:"epochs"`
 	StakedEtherChartData      [][]float64            `json:"staked_ether_chart_data"`
 	ActiveValidatorsChartData [][]float64            `json:"active_validators_chart_data"`
@@ -217,6 +218,27 @@ type IndexPageDataEpochs struct {
 	GlobalParticipationRateFormatted template.HTML `json:"globalparticipationrate_formatted"`
 	VotedEther                       uint64        `json:"votedether"`
 	VotedEtherFormatted              template.HTML `json:"votedether_formatted"`
+}
+
+// IndexPageDataSlots is a struct to hold slot data for the main web page
+type IndexPageDataSlots struct {
+	Epoch                uint64        `json:"epoch"`
+	Slot                 uint64        `json:"slot"`
+	Ts                   time.Time     `json:"ts"`
+	Status               uint64        `db:"status" json:"status"`
+	StatusFormatted      template.HTML `json:"status_formatted"`
+	Proposer             int64         `db:"proposer" json:"proposer"`
+	ProposerFormatted    template.HTML `json:"proposer_formatted"`
+	ProposerName         string        `db:"name" json:"proposer_name"`
+	BlockRoot            []byte        `db:"blockroot" json:"block_root"`
+	BlockRootFormatted   string        `json:"block_root_formatted"`
+	Attestations         uint64        `db:"attestationscount" json:"attestations"`
+	Deposits             uint64        `db:"depositscount" json:"deposits"`
+	Withdrawals          uint64        `db:"withdrawalcount" json:"withdrawals"`
+	Exits                uint64        `db:"voluntaryexitscount" json:"exits"`
+	SyncAggParticipation float64       `db:"syncaggregate_participation" json:"sync_aggregate_participation"`
+	ExecutionBlockNumber int           `db:"exec_block_number" json:"exec_block_number"`
+	ParallelBlocksCount  uint64        `json:"parallel_blocks_count"` // For EthPar - number of parallel blocks in this slot
 }
 
 // IndexPageDataBlocks is a struct to hold detail data for the main web page
@@ -641,6 +663,7 @@ type BlockPageData struct {
 	SlashingsCount         uint64
 	VotesCount             uint64
 	VotingValidatorsCount  uint64
+	ParallelBlocksCount    uint64  // Number of parallel blocks in this slot
 	Mainnet                bool
 
 	ExecParentHash        []byte        `db:"exec_parent_hash"`
@@ -671,6 +694,7 @@ type BlockPageData struct {
 	ProposerSlashings []*BlockPageProposerSlashing
 	SyncCommittee     []uint64 // TODO: Setting it to contain the validator index
 	BlobSidecars      []*BlockPageBlobSidecar
+	ParallelBlocks    []*BlockPageParallelBlock // Parallel blocks included in this slot
 
 	Tags       TagMetadataSlice `db:"tags"`
 	IsValidMev bool             `db:"is_valid_mev"`
@@ -807,6 +831,26 @@ type BlockPageBlobSidecar struct {
 	KzgCommitment     []byte `db:"kzg_commitment"`
 	KzgProof          []byte `db:"kzg_proof"`
 	BlobVersionedHash []byte `db:"blob_versioned_hash"`
+}
+
+// BlockPageParallelBlock holds data of parallel blocks in a slot (for EthPar chain)
+type BlockPageParallelBlock struct {
+	Rank              uint64    `json:"rank"`
+	ParentHash        []byte    `json:"parent_hash"`
+	FeeRecipient      []byte    `json:"fee_recipient"`
+	StateRoot         []byte    `json:"state_root"`
+	ReceiptsRoot      []byte    `json:"receipts_root"`
+	LogsBloom         []byte    `json:"logs_bloom"`
+	Random            []byte    `json:"random"`
+	GasLimit          uint64    `json:"gas_limit"`
+	GasUsed           uint64    `json:"gas_used"`
+	Timestamp         uint64    `json:"timestamp"`
+	Time              time.Time `json:"time"`
+	ExtraData         []byte    `json:"extra_data"`
+	BaseFeePerGas     uint64    `json:"base_fee_per_gas"`
+	BlockHash         []byte    `json:"block_hash"`
+	BlockNumber       uint64    `json:"block_number"`
+	TransactionsCount uint64    `json:"transactions_count"`
 }
 
 // DataTableResponse is a struct to hold data for data table responses

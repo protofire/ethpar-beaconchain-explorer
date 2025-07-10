@@ -63,6 +63,7 @@
                 ` + element.AggregationBits + `
               </DIV>
             </DIV>
+            <!--
             <DIV class='row border-bottom p-1 mx-0'>
               <DIV class='col-md-2'>
                 <SPAN data-toggle="tooltip" data-placement="top" title="Validators who have submitted their attestation and have been included by the block proposer">
@@ -73,6 +74,7 @@
                 ` + element.Validators + `
               </DIV>
             </DIV>
+            -->
             <DIV class='row border-bottom p-1 mx-0'>
               <DIV class='col-md-2'>
                 <SPAN data-toggle="tooltip" data-placement="top" title="Points to the block to which validators are attesting">
@@ -380,6 +382,11 @@
         <li class="nav-item">
           <a class="nav-link active" id="overview-tab" data-toggle="tab" href="#overview" role="tab" aria-controls="overview" aria-selected="true">Overview</a>
         </li>
+        {{ if gt .ParallelBlocksCount 0 }}
+          <li class="nav-item">
+            <a class="nav-link" id="parallel-blocks-tab" data-toggle="tab" href="#parallel-blocksTabPanel" role="tab" aria-controls="parallel-blocksTabPanel" aria-selected="false">Parallel Blocks <span class="badge bg-secondary text-white">{{ .ParallelBlocksCount }}</span></a>
+          </li>
+        {{ end }}
         {{ with .ExecutionData }}
           <li class="nav-item">
             <a class="nav-link" id="transactions-tab" data-toggle="tab" href="#transactions" role="tab" aria-controls="transactions" aria-selected="false">Transactions <span class="badge bg-secondary text-white">{{ .TxCount }}</span></a>
@@ -439,6 +446,18 @@
             {{ template "block_overview" $ }}
           </div>
         </div>
+        {{ if gt .ParallelBlocksCount 0 }}
+          <div class="tab-pane fade" id="parallel-blocksTabPanel" role="tabpanel" aria-labelledby="parallel-blocks-tab">
+            <div class="card block-card">
+              <div style="margin-bottom: -.25rem;" class="card-body px-0 py-1">
+                <div class="row p-1 mx-0">
+                  <h3 class="h5 col-md-12 text-center"><b>Showing {{ .ParallelBlocksCount }} Parallel Blocks</b></h3>
+                </div>
+              </div>
+            </div>
+            {{ template "parallel_blocks" . }}
+          </div>
+        {{ end }}
         {{ if gt .VotesCount 0 }}
           <div class="tab-pane fade" id="votesTabPanel" role="tabpanel" aria-labelledby="votes-tab">
             <div class="card block-card">

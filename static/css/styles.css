@@ -1,58 +1,58 @@
 :root {
   --linear-gradient: linear-gradient(
     to right bottom,
-    #ffc0b6,
-    #ffbdb0,
-    #ffbba9,
-    #ffb8a2,
-    #ffb69b,
-    #ffb495,
-    #feb18e,
-    #fdaf88,
-    #fdad81,
-    #fdaa79,
-    #fca871,
-    #fba669
+    #1e3a8a,
+    #1d4ed8,
+    #2563eb,
+    #3b82f6,
+    #60a5fa,
+    #93c5fd,
+    #dbeafe,
+    #eff6ff,
+    #f0f9ff,
+    #e0f2fe,
+    #b3e5fc,
+    #81d4fa
   );
 
-  --genesis: rgba(196, 174, 77, 0.8)
+  --genesis: rgba(59, 130, 246, 0.8);
 
-  --rhino: #274253;
-  --terracotta: #dd765e;
+  --rhino: #1e293b;
+  --terracotta: #f59e0b;
 
-  --manhattan: #f5b498;
-  --charade: #2f2e42;
-  --bg: #fbf0e822;
+  --manhattan: #fbbf24;
+  --charade: #0f172a;
+  --bg: #f8fafc22;
 
   --banner-background: var(--charade);
   --banner-text: var(--manhattan);
-  --highlight: rgba(251, 166, 105, 0.5);
+  --highlight: rgba(251, 191, 36, 0.5);
   --shadow-only-light: 0 1px 4px var(--shadow-light);
 }
 
 [data-theme='dark'] {
   --linear-gradient: linear-gradient(
     to right top,
-    #444359,
-    #403f55,
-    #3c3b50,
-    #38374c,
-    #343348,
-    #313045,
-    #2f2e42,
-    #2c2b3f,
-    #2a293d,
-    #27263a,
-    #252438,
-    #232236
+    #020617,
+    #0c1426,
+    #111827,
+    #1f2937,
+    #374151,
+    #4b5563,
+    #6b7280,
+    #9ca3af,
+    #d1d5db,
+    #e5e7eb,
+    #f3f4f6,
+    #f9fafb
   );
   --banner-background: var(--charade);
   --banner-text: var(--manhattan);
-  --highlight: rgba(248, 184, 139, 0.2);
+  --highlight: rgba(251, 191, 36, 0.3);
   --bg: var(--bg-color);
   --shadow-only-light: none;
 
-  --nav-bg: #353135;
+  --nav-bg: #1e293b;
 }
 
 

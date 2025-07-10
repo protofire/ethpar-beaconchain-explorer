@@ -1,8 +1,13 @@
 {{ define "mainNavigation" }}
   <nav id="nav" class="main-navigation navbar navbar-expand-lg navbar-light">
     <div class="container">
-      <a class="navbar-brand" href="/">
-        {{ includeSvg "brand_svg" }}
+      <a class="navbar-brand d-flex align-items-center" href="/">
+        <div class="d-flex align-items-center">
+          <img src="/img/ethpar-logo-official.svg" alt="EthPar Logo" class="navbar-logo me-2" style="height: 30px;">
+          <div class="logo-divider mx-2" style="width: 1px; height: 24px; background-color: var(--border-color); opacity: 0.3;"></div>
+          <img src="/img/protofire-logo.png" alt="Protofire Logo" class="navbar-logo-protofire" style="height: 26px; width: 26px; border-radius: 50%;">
+          <div class="logo-divider mx-2" style="width: 1px; height: 24px; background-color: var(--border-color); opacity: 0.3;"></div>
+        </div>
         <span class="brand-text">{{ config.Frontend.SiteBrand }}</span>
       </a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">

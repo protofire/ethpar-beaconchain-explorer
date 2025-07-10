@@ -1,0 +1,212 @@
+:root[data-theme="light"] {
+  /* EthPar brand colors from logo - professional light theme */
+  --ethpar-primary: #7c5fb0;     /* Deep purple from logo */
+  --ethpar-secondary: #4a7bc7;   /* Professional blue */
+  --ethpar-accent: #e8a370;      /* Warm orange accent */
+  --ethpar-success: #5cb89a;     /* Sophisticated teal */
+  --ethpar-warning: #d4a855;     /* Refined gold */
+  --ethpar-danger: #c76584;      /* Muted pink */
+  --ethpar-dark: #1f1825;        /* Deep brand purple */
+  --ethpar-light: #6b8dd4;       /* Soft blue */
+  
+  /* Override Bootstrap/main theme colors */
+  --bs-primary: var(--ethpar-primary);
+  --bs-secondary: var(--ethpar-secondary);
+  --bs-success: var(--ethpar-success);
+  --bs-info: var(--ethpar-light);
+  --bs-warning: var(--ethpar-warning);
+  --bs-danger: var(--ethpar-danger);
+  
+  /* Background colors */
+  --bs-body-bg: #ffffff;
+  --bs-body-color: #2c3e50;
+  --bs-border-color: #e9ecef;
+}
+
+/* Button overrides */
+.btn-primary {
+  background-color: var(--ethpar-primary) !important;
+  border-color: var(--ethpar-primary) !important;
+  color: white !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--ethpar-danger) !important;
+  border-color: var(--ethpar-danger) !important;
+}
+
+.btn-secondary {
+  background-color: var(--ethpar-secondary) !important;
+  border-color: var(--ethpar-secondary) !important;
+  color: white !important;
+}
+
+.btn-secondary:hover {
+  background-color: var(--ethpar-light) !important;
+  border-color: var(--ethpar-light) !important;
+}
+
+.btn-success {
+  background-color: var(--ethpar-success) !important;
+  border-color: var(--ethpar-success) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+/* Navigation and header - more subtle */
+.navbar {
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+  border-bottom: 1px solid rgba(124, 95, 176, 0.2) !important;
+}
+
+.navbar-brand {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.navbar-nav .nav-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.navbar-nav .nav-link:hover {
+  color: var(--ethpar-accent) !important;
+}
+
+/* Links - more subtle */
+a {
+  color: var(--ethpar-secondary) !important;
+  text-decoration: none !important;
+}
+
+a:hover {
+  color: var(--ethpar-primary) !important;
+  text-decoration: none !important;
+}
+
+/* Cards and panels - very subtle */
+.card {
+  border: 1px solid rgba(124, 95, 176, 0.15) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+.card-header {
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.05) 0%, rgba(74, 123, 199, 0.05) 100%) !important;
+  border-bottom: 1px solid rgba(124, 95, 176, 0.15) !important;
+  border-radius: 7px 7px 0 0 !important;
+}
+
+/* Tables - subtle stripes */
+.table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: rgba(124, 95, 176, 0.03) !important;
+}
+
+.table th {
+  border-color: rgba(124, 95, 176, 0.15) !important;
+  background-color: rgba(124, 95, 176, 0.08) !important;
+}
+
+/* Progress bars */
+.progress-bar {
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+}
+
+/* Badges */
+.badge-primary {
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+}
+
+.badge-secondary {
+  background-color: var(--ethpar-secondary) !important;
+}
+
+.badge-success {
+  background-color: var(--ethpar-success) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+.badge-warning {
+  background-color: var(--ethpar-warning) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+/* Tabs */
+.nav-tabs .nav-link.active {
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+  border-color: var(--ethpar-primary) !important;
+  color: white !important;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: rgba(124, 95, 176, 0.4) !important;
+}
+
+/* Forms */
+.form-control:focus {
+  border-color: var(--ethpar-primary) !important;
+  box-shadow: 0 0 0 0.2rem rgba(124, 95, 176, 0.15) !important;
+}
+
+/* Alerts - very subtle */
+.alert-primary {
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.08) 0%, rgba(74, 123, 199, 0.08) 100%) !important;
+  border-color: rgba(124, 95, 176, 0.2) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+.alert-success {
+  background-color: rgba(92, 184, 154, 0.08) !important;
+  border-color: rgba(92, 184, 154, 0.2) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(124, 95, 176, 0.15) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dropdown-item {
+  color: var(--bs-body-color) !important;
+}
+
+.dropdown-item:hover {
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.08) 0%, rgba(74, 123, 199, 0.08) 100%) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+/* Pagination */
+.page-link {
+  background-color: #ffffff !important;
+  border-color: rgba(124, 95, 176, 0.15) !important;
+  color: var(--ethpar-secondary) !important;
+}
+
+.page-link:hover {
+  background: linear-gradient(135deg, rgba(124, 95, 176, 0.08) 0%, rgba(74, 123, 199, 0.08) 100%) !important;
+  border-color: rgba(124, 95, 176, 0.3) !important;
+  color: var(--ethpar-dark) !important;
+}
+
+.page-item.active .page-link {
+  background: linear-gradient(135deg, var(--ethpar-primary) 0%, var(--ethpar-secondary) 100%) !important;
+  border-color: var(--ethpar-primary) !important;
+}
+
+/* Logo theme switching */
+[data-theme="light"] #ethpar-logo-light {
+  display: block !important;
+}
+
+[data-theme="light"] #ethpar-logo-dark {
+  display: none !important;
+}
+
+[data-theme="dark"] #ethpar-logo-light {
+  display: none !important;
+}
+
+[data-theme="dark"] #ethpar-logo-dark {
+  display: block !important;
+}

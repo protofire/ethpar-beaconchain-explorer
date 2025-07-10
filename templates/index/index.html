@@ -30,6 +30,8 @@
                     windowWidth: window.innerWidth,
                     updateIn: -1,
                     page: {{.}},
+                    // Network History chart options commented out for EthPar Explorer MVP
+                    /*
                     chartOptions: {
                         credits: { enabled: creditsEnabled },
                         rangeSelector: {enabled: false},
@@ -113,6 +115,7 @@
                             },
                         ],
                     },
+                    */
                 }
             },
             computed: {
@@ -193,54 +196,216 @@
   <style>
     .hero-container {
       position: relative;
-      min-height: 250px;
+      min-height: 200px;
       width: 100%;
       display: flex;
-      flex-direction: row-reverse;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
+      margin-bottom: 2rem;
       margin-top: 1rem;
+      background: linear-gradient(135deg, var(--bg-color) 0%, var(--light) 100%);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: var(--shadow-only-light);
+      /* Ensure clean background without large SVG elements */
+      background-image: none !important;
     }
 
+    /* Navbar logo styling */
+    .navbar-logo {
+      height: 30px;
+      width: auto;
+      opacity: 0.9;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+
+    .navbar-logo:hover {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+
+    .navbar-logo-protofire {
+      height: 26px;
+      width: 26px;
+      opacity: 0.9;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+      border-radius: 50%;
+    }
+
+    .navbar-logo-protofire:hover {
+      opacity: 1;
+      transform: scale(1.1) rotate(5deg);
+    }
+
+    .hero-header {
+      width: 100%;
+      margin-bottom: 2rem;
+    }
+
+    .hero-logos {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .hero-logo {
+      height: 40px;
+      width: auto;
+      opacity: 0.9;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+
+    .hero-logo:hover {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+
+    .hero-logo-protofire {
+      height: 35px;
+      width: 35px;
+      opacity: 0.9;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+      border-radius: 50%;
+    }
+
+    .hero-logo-protofire:hover {
+      opacity: 1;
+      transform: scale(1.1) rotate(5deg);
+    }
+
+    .logo-divider {
+      width: 1px;
+      height: 30px;
+      background-color: var(--border-color);
+      opacity: 0.5;
+    }
+
+    .hero-content {
+      text-align: center;
+    }
+
+    .eth-logo-container {
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-actions {
+      margin-top: 1.5rem;
+      gap: 1rem;
+    }
+
+    .hero-actions .btn {
+      border-radius: 8px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .hero-actions .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    /* Hide the original large background elements */
     .hero-image {
-      overflow: hidden;
-      flex: 1;
-      max-width: 500px;
-      min-width: 320px;
-      max-height: 400px;
-      min-height: 200px;
-      position: relative;
-    }
-
-    .hero-image svg {
-      overflow: hidden;
-      width: inherit;
-      height: inherit;
-    }
-
-    .hero-text {
-      font-size: 2rem;
-      flex: 1;
-      min-width: 305px;
-      max-width: 500px;
-      position: relative;
+      display: none !important;
     }
 
     .hero-text-background {
-      position: absolute;
-      width: 100%;
-      height: 98%;
-      /* bottom: -40%; */
-      /* transform: scale(.5) translateY(20%); */
-      border-radius: 65% 35% 70% 30% / 50% 50% 50% 50%;
-      background-image: var(--linear-gradient);
-      box-shadow: 5px 15px 30px var(--shadow-light);
-      z-index: -50;
-      -webkit-animation: slide-bottom 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-      animation: slide-bottom 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-      opacity: 0.6;
+      display: none !important;
+    }
+
+    /* Hide any large SVG backgrounds that might appear */
+    .hero-container svg:not(.eth-logo-container svg) {
+      display: none !important;
+    }
+
+    /* Ensure countdown styling is professional */
+    .countdown-compact {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Professional button styling */
+    .hero-actions .btn-primary {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      border: none;
+      color: white;
+    }
+
+    .hero-actions .btn-outline-primary {
+      border: 2px solid var(--primary);
+      color: var(--primary);
+      background: transparent;
+    }
+
+    .hero-actions .btn-outline-primary:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    .hero-actions .btn-outline-secondary {
+      border: 2px solid var(--secondary);
+      color: var(--secondary);
+      background: transparent;
+    }
+
+    .hero-actions .btn-outline-secondary:hover {
+      background: var(--secondary);
+      color: white;
+    }
+
+    /* Mobile-first responsive design improvements */
+    @media (max-width: 768px) {
+      .hero-container {
+        padding: 1.5rem;
+        margin-top: 0.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .hero-header {
+        margin-bottom: 1.5rem;
+      }
+
+      .hero-logos {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .hero-logo {
+        height: 32px;
+      }
+
+      .hero-logo-protofire {
+        height: 28px;
+        width: 28px;
+      }
+
+      .logo-divider {
+        height: 24px;
+      }
+
+      .hero-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+        width: 100%;
+      }
+
+      .hero-actions .btn {
+        width: 100%;
+        max-width: 280px;
+      }
+
+      .countdown-compact {
+        display: none !important;
+      }
     }
 
     /* ----------------------------------------------

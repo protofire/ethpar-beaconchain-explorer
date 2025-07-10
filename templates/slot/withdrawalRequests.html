@@ -13,8 +13,8 @@
         <tr style="background-color: var(--bg-color-light);">
           <th class="border-0">Index</th>
           <th class="border-0">Source Address</th>
-          <th class="border-0">Index</th>
-          <th class="border-0">Pubkey</th>
+          <!-- <th class="border-0">Index</th> -->
+          <!-- <th class="border-0">Pubkey</th> -->
           <th class="border-0">Amount</th>
           <th class="border-0">Type</th>
         </tr>
@@ -22,8 +22,8 @@
           <tr class="border-bottom">
             <td class="border-0">{{ .Index }}</td>
             <td class="border-0">{{ formatEth1Address .SourceAddress }}</td>
-            <td class="border-0">{{ formatValidatorInt64 .ValidatorIndex }}</td>
-            <td class="border-0">{{ formatPublicKey .ValidatorPubkey }}</td>
+            <!-- <td class="border-0">{{ formatValidatorInt64 .ValidatorIndex }}</td> -->
+            <!-- <td class="border-0">{{ formatPublicKey .ValidatorPubkey }}</td> -->
             <td class="border-0">{{ formatClCurrency .Amount config.Frontend.MainCurrency 5 true false false false }}</td>
             <td class="border-0">{{ .Type }}</td>
           </tr>

@@ -1,0 +1,98 @@
+{{ define "parallel_blocks" }}
+  {{ range $i, $parallel_block := .Block.ParallelBlocks }}
+    <div class="card my-2">
+      <div class="card-body px-0 py-1">
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-12 text-center"><b>Block Rank {{ $parallel_block.Rank }}</b></div>
+        </div>
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Block Number, the height, not the slot">Block Number:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">
+            <a href="/block/{{ $parallel_block.BlockNumber }}">{{ formatAddCommas $parallel_block.BlockNumber }}</a>
+          </div>
+        </div>
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="The Execution Block Hash">Block Hash:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">
+            <a href="/block/0x{{ printf "%x" $parallel_block.BlockHash }}">0x{{ printf "%x" $parallel_block.BlockHash }}</a>
+          </div>
+        </div>
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Parent Execution Block Hash">Parent Hash:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">
+            0x{{ printf "%x" $parallel_block.ParentHash }}
+          </div>
+        </div>
+
+        {{ if $parallel_block.FeeRecipient }}
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Fee recipient">Fee Recipient:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">
+            <a href="/address/0x{{ printf "%x" $parallel_block.FeeRecipient }}">0x{{ printf "%x" $parallel_block.FeeRecipient }}</a>
+          </div>
+        </div>
+        {{ end }}
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Gas Used">Gas Used:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">{{ formatAddCommas $parallel_block.GasUsed }}</div>
+        </div>
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Gas Limit">Gas Limit:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">{{ formatAddCommas $parallel_block.GasLimit }}</div>
+        </div>
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Base fee per gas">Base fee per gas:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">{{ $parallel_block.BaseFeePerGas }} wei</div>
+        </div>
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Transactions">Transactions:</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break">{{ formatAddCommas $parallel_block.TransactionsCount }}</div>
+        </div>
+
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Timestamp">Timestamp:</span>
+          </div>
+          <div class="col-md-5 text-monospace text-break">
+            <span aria-ethereum-date="{{ $parallel_block.Time.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $parallel_block.Time.Format "2006-01-02T15:04:05" }}</span>
+            (<span id="timestamp" aria-ethereum-date="{{ $parallel_block.Time.Unix }}" aria-ethereum-date-format="LOCAL" data-timer="{{ $parallel_block.Time.Unix }}">{{ $parallel_block.Time.Format "2006-01-02T15:04:05" }}</span>)
+          </div>
+        </div>
+
+        {{ if $parallel_block.ExtraData }}
+        <div class="row p-1 mx-0">
+          <div class="col-md-2">
+            <span data-toggle="tooltip" data-placement="top" title="Block Extra Data">Block Extra Data</span>
+          </div>
+          <div class="col-md-10 text-monospace text-break d-flex justify-between flex-wrap">
+            <div id="extra-data" class="mw-100" aria-hex-data="0x{{ printf "%x" $parallel_block.ExtraData }}" data-graffiti="{{ printf "%x" $parallel_block.ExtraData }}">{{ formatGraffiti $parallel_block.ExtraData }}</div>
+          </div>
+        </div>
+        {{ end }}
+      </div>
+    </div>
+  {{ end }}
+{{ end }}

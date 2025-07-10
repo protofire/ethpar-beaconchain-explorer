@@ -87,7 +87,9 @@
       preDrawCallback: function () {
         try {
           $("#minipools").find('[data-toggle="tooltip"]').tooltip("dispose")
-        } catch (e) {}
+        } catch (e) {
+          // Intentionally ignore tooltip disposal errors
+        }
       },
       drawCallback: function () {
         formatTimestamps()
@@ -189,7 +191,9 @@
       preDrawCallback: function () {
         try {
           $("#nodes").find('[data-toggle="tooltip"]').tooltip("dispose")
-        } catch (e) {}
+        } catch (e) {
+          // Intentionally ignore tooltip disposal errors
+        }
       },
       drawCallback: function () {
         formatTimestamps()
@@ -267,7 +271,9 @@
       preDrawCallback: function () {
         try {
           $("#dao_members").find('[data-toggle="tooltip"]').tooltip("dispose")
-        } catch (e) {}
+        } catch (e) {
+          // Intentionally ignore tooltip disposal errors
+        }
       },
       drawCallback: function () {
         formatTimestamps()
@@ -423,7 +429,9 @@
       preDrawCallback: function () {
         try {
           $("#dao_proposals").find('[data-toggle="tooltip"]').tooltip("dispose")
-        } catch (e) {}
+        } catch (e) {
+          // Intentionally ignore tooltip disposal errors
+        }
       },
       drawCallback: function () {
         formatTimestamps()
