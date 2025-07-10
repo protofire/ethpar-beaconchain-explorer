@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
+	"strings"
 	"fmt"
 	"html/template"
 	"math/big"
@@ -13,8 +13,6 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/templates"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -22,15 +20,29 @@ const (
 	minimumTransactionsPerUpdate = 25
 )
 
+var (
+	eth1TransactionsTemplate = templates.GetTemplate(
+		append(layoutTemplateFiles,
+			"execution/transactions.html",
+		)...)
+)
+
+// Eth1Transactions returns an HTTP handler that renders a list of execution-layer transactions.
+//
+// The handler initializes standard page metadata and injects a list of transactions
+// starting from the first available page token. The result is rendered into the
+// "execution/transactions.html" template within the base layout.
+//
+// Parameters:
+//   - bt: reference to the Bigtable client used to retrieve transaction data
+//
+// TODO: implement pagination
 func Eth1Transactions(bt *db.Bigtable) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		templateFiles := append(layoutTemplateFiles, "execution/transactions.html")
-		var eth1TransactionsTemplate = templates.GetTemplate(templateFiles...)
-
 		w.Header().Set("Content-Type", "text/html")
 
-		data := InitPageData(w, r, "blockchain", "/eth1transactions", "Transactions", templateFiles)
-		data.Data = getTransactionDataStartingWithPageToken("", bt)
+		data := InitPageData(w, r, "blockchain", "/eth1transactions", "Transactions", nil)
+		data.Data = getTransactionsFromCursor("", bt)
 
 		if handleTemplateError(w, r, "eth1Transactions.go", "Eth1Transactions", "", eth1TransactionsTemplate.ExecuteTemplate(w, "layout", data)) != nil {
 			return // an error has occurred and was processed
@@ -38,120 +50,132 @@ func Eth1Transactions(bt *db.Bigtable) http.HandlerFunc {
 	}
 }
 
-func Eth1TransactionsData(bt *db.Bigtable) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		err := json.NewEncoder(w).Encode(getTransactionDataStartingWithPageToken(r.URL.Query().Get("pageToken"), bt))
-		if err != nil {
-			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
-	}
+// cursor represents a paging position in EthPar.
+type cursor struct {
+	Block uint64
+	Rank  uint32
+	Idx   int // next tx index to read in block.Rank (0-based)
 }
 
-func getTransactionDataStartingWithPageToken(pageToken string, bt *db.Bigtable) *types.DataTableResponse {
-	pageTokenId := uint64(0)
-	{
-		if len(pageToken) > 0 {
-			v, err := strconv.ParseUint(pageToken, 10, 64)
-			if err == nil && v > 0 {
-				pageTokenId = v
-			}
-		}
+// parseCursor converts "number:rank:idx" into cursor.
+// Empty string or "latest" returns cursor at latest block, rank 4, idx 0.
+func parseCursor(s string, latest uint64) (cursor, error) {
+	if s == "" || s == "latest" {
+		return cursor{Block: latest, Rank: 4, Idx: 0}, nil
 	}
-	if pageTokenId == 0 && pageToken != "0" {
-		pageTokenId = services.LatestEth1BlockNumber()
+	parts := strings.Split(s, ":")
+	if len(parts) != 3 {
+		return cursor{}, fmt.Errorf("invalid cursor")
+	}
+	n, err1 := strconv.ParseUint(parts[0], 10, 64)
+	r, err2 := strconv.ParseUint(parts[1], 10, 32)
+	i, err3 := strconv.Atoi(parts[2])
+	if err1 != nil || err2 != nil || err3 != nil || r > 4 || i < 0 {
+		return cursor{}, fmt.Errorf("invalid cursor")
+	}
+	return cursor{Block: n, Rank: uint32(r), Idx: i}, nil
+}
+
+// nextCursor moves to the next logical position (rank decreases 4→0, then block-1).
+func nextCursor(c cursor) cursor {
+	if c.Rank > 0 {
+		return cursor{Block: c.Block, Rank: c.Rank - 1, Idx: 0}
+	}
+	return cursor{Block: c.Block - 1, Rank: 4, Idx: 0}
+}
+
+// formatCursor formats a cursor into a string that can be used
+// for paging requests.
+//
+// The result is of the form "block:rank:index" (e.g., "12345:2:17").
+func formatCursor(c cursor) string {
+	return fmt.Sprintf("%d:%d:%d", c.Block, c.Rank, c.Idx)
+}
+
+// getTransactionsFromCursor retrieves a page of execution-layer transactions,
+// starting from the specified cursor position.
+//
+// The cursor string must be in the format "block:rank:index" (e.g., "12345:2:0"),
+// where:
+//   - block: execution block number,
+//   - rank: block rank within the slot (0 = beacon, 4 = latest execution payload),
+//   - index: transaction index within that block.
+//
+// If the cursor is empty or "latest", the iteration starts from the latest block,
+// rank 4, index 0. The function traverses blocks and ranks in descending order,
+// collecting up to minimumTransactionsPerUpdate transactions.
+// It returns a DataTableResponse with the rows and the next paging cursor.
+func getTransactionsFromCursor(cursorStr string, bt *db.Bigtable) *types.DataTableResponse {
+	const limit = minimumTransactionsPerUpdate
+
+	start, err := parseCursor(cursorStr, services.LatestEth1BlockNumber())
+	if err != nil {
+		log.Errorf("invalid page cursor: %v", err)
+		return nil
 	}
 
-	tableData := make([][]interface{}, 0, minimumTransactionsPerUpdate)
-	for len(tableData) < minimumTransactionsPerUpdate && pageTokenId != 0 {
-		b, n, err := getEth1BlockAndNext(pageTokenId, bt)
-		if err != nil {
-			logger.Errorf("error getting transaction from block %v", err)
-			return nil
-		}
-		t := b.GetTransactions()
-		contractInteractionTypes, err := bt.GetAddressContractInteractionsAtBlock(b)
-		if err != nil {
-			utils.LogError(err, "error getting contract states", 0)
+	rows := make([][]interface{}, 0, limit)
+	cur := start
+
+	for len(rows) < limit && cur.Block > 0 {
+		blk, err := bt.GetBlockFromBlocksTable(cur.Block, cur.Rank)
+		if err != nil || blk == nil {
+			cur = nextCursor(cur)
+			continue
 		}
 
-		// retrieve metadata
+		txs := blk.GetTransactions()
+		if cur.Idx >= len(txs) {
+			cur = nextCursor(cur)
+			continue
+		}
+
+		interaction, _ := bt.GetAddressContractInteractionsAtBlock(blk)
+
 		names := make(map[string]string)
-		{
-			for _, v := range t {
-				names[string(v.GetFrom())] = ""
-				names[string(v.GetTo())] = ""
-			}
-			names, _, err = bt.GetAddressesNamesArMetadata(&names, nil)
-			if err != nil {
-				logger.Errorf("error getting name for addresses: %v", err)
-				return nil
+		for _, tx := range txs {
+			names[string(tx.GetFrom())] = ""
+			if to := tx.GetTo(); to != nil {
+				names[string(to)] = ""
 			}
 		}
+		names, _, _ = bt.GetAddressesNamesArMetadata(&names, nil)
 
-		var wg errgroup.Group
-		for i := len(t) - 1; i >= 0; i-- {
-			v := t[i]
-			wg.Go(func() error {
-				if v.GetTo() == nil {
-					v.To = v.ContractAddress
-				}
-				var contractInteraction types.ContractInteractionType
-				if len(contractInteractionTypes) > i {
-					contractInteraction = contractInteractionTypes[i]
-				}
-				tableData = append(tableData, []interface{}{
-					utils.FormatAddressWithLimits(v.GetHash(), "", false, "tx", visibleDigitsForHash+5, 18, true),
-					utils.FormatMethod(bt.GetMethodLabel(v.GetData(), contractInteraction)),
-					template.HTML(fmt.Sprintf(`<A href="block/%d">%v</A>`, b.GetNumber(), utils.FormatAddCommas(b.GetNumber()))),
-					utils.FormatTimestamp(b.GetTime().AsTime().Unix()),
-					utils.FormatAddressWithLimits(v.GetFrom(), names[string(v.GetFrom())], false, "address", visibleDigitsForHash+5, 18, true),
-					utils.FormatAddressWithLimits(v.GetTo(), bt.GetAddressLabel(names[string(v.GetTo())], contractInteraction), contractInteraction != types.CONTRACT_NONE, "address", 15, 20, true),
-					utils.FormatAmountFormatted(new(big.Int).SetBytes(v.GetValue()), utils.Config.Frontend.ElCurrency, 8, 4, true, true, false),
-					utils.FormatAmountFormatted(db.CalculateTxFeeFromTransaction(v, new(big.Int).SetBytes(b.GetBaseFee())), utils.Config.Frontend.ElCurrency, 8, 4, true, true, false),
-				})
-				return nil
+		for ; cur.Idx < len(txs) && len(rows) < limit; cur.Idx++ {
+			tx := txs[cur.Idx]
+			if tx.GetTo() == nil {
+				tx.To = tx.ContractAddress
+			}
+			ctype := types.CONTRACT_NONE
+			if len(interaction) > cur.Idx {
+				ctype = interaction[cur.Idx]
+			}
+			rows = append(rows, []interface{}{
+				utils.FormatAddressWithLimits(tx.GetHash(), "", false, "tx", visibleDigitsForHash+5, 18, true),
+				utils.FormatMethod(bt.GetMethodLabel(tx.GetData(), ctype)),
+				template.HTML(fmt.Sprintf(`<a href="/block/%d/rank/%d">%v</a>`,
+					blk.GetNumber(), blk.GetRank(), utils.FormatAddCommas(blk.GetNumber()))),
+				utils.FormatTimestamp(blk.GetTime().AsTime().Unix()),
+				utils.FormatAddressWithLimits(tx.GetFrom(), names[string(tx.GetFrom())], false,
+					"address", visibleDigitsForHash+5, 18, true),
+				utils.FormatAddressWithLimits(tx.GetTo(),
+					bt.GetAddressLabel(names[string(tx.GetTo())], ctype),
+					ctype != types.CONTRACT_NONE, "address", 15, 20, true),
+				utils.FormatAmountFormatted(new(big.Int).SetBytes(tx.GetValue()),
+					utils.Config.Frontend.ElCurrency, 8, 4, true, true, false),
+				utils.FormatAmountFormatted(
+					db.CalculateTxFeeFromTransaction(tx, new(big.Int).SetBytes(blk.GetBaseFee())),
+					utils.Config.Frontend.ElCurrency, 8, 4, true, true, false),
 			})
-			wg.Wait()
 		}
 
-		pageTokenId = n
+		if cur.Idx >= len(txs) {
+			cur = nextCursor(cur)
+		}
 	}
 
 	return &types.DataTableResponse{
-		Data:        tableData,
-		PagingToken: fmt.Sprintf("%d", pageTokenId),
+		Data:        rows,
+		PagingToken: formatCursor(cur),
 	}
-}
-
-// Returns the block requested via number and the number of the next block in our bigtable schema (i.e. the block that came chronologically before the requested block)
-//
-// If nextBlock doesn't exists nil, 0, nil is returned
-func getEth1BlockAndNext(number uint64, bt *db.Bigtable) (*types.Eth1Block, uint64, error) {
-	block, err := bt.GetBlockFromBlocksTable(number)
-	if err != nil {
-		return nil, 0, err
-	}
-	if block == nil {
-		return nil, 0, fmt.Errorf("block %d not found", number)
-	}
-
-	if number == 0 {
-		return block, 0, nil
-	}
-
-	nextBlock := uint64(0)
-	{
-		blocks, err := bt.GetBlocksDescending(number, 2)
-		if err != nil {
-			return nil, 0, err
-		}
-		if len(blocks) > 1 {
-			nextBlock = blocks[1].GetNumber()
-		}
-	}
-
-	return block, nextBlock, nil
 }

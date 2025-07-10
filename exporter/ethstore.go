@@ -297,7 +297,7 @@ DBCHECK:
 			}
 		}
 
-		services.ReportStatus("ethstoreExporter", "Running", nil)
+		services.ReportStatus(true, "ethstoreExporter", "Running", nil)
 		<-t.C
 	}
 }

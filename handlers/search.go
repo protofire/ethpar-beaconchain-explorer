@@ -73,7 +73,7 @@ func SearchAhead(bt *db.Bigtable) http.HandlerFunc {
 		searchType := vars["type"]
 		search := vars["search"]
 		var err error
-		logger := logger.WithField("searchType", searchType)
+		log := log.WithField("searchType", searchType)
 		var result interface{}
 
 		strippedSearch := strings.Replace(search, "0x", "", -1)
@@ -115,7 +115,8 @@ func SearchAhead(bt *db.Bigtable) http.HandlerFunc {
 			if parseErr != nil {
 				break
 			}
-			block, blockErr := bt.GetBlockFromBlocksTable(number)
+			// TODO: make sure that beacon block suits here
+			block, blockErr := bt.GetBlockFromBlocksTable(number, 0)
 			if blockErr != nil {
 				if blockErr != db.ErrBlockNotFound {
 					err = blockErr
@@ -385,13 +386,13 @@ func SearchAhead(bt *db.Bigtable) http.HandlerFunc {
 		}
 
 		if err != nil {
-			logger.WithError(err).WithField("searchType", searchType).Error("error doing query for searchAhead")
+			log.WithError(err).WithField("searchType", searchType).Error("error doing query for searchAhead")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		err = json.NewEncoder(w).Encode(result)
 		if err != nil {
-			logger.WithError(err).Error("error encoding searchAhead")
+			log.WithError(err).Error("error encoding searchAhead")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 	}

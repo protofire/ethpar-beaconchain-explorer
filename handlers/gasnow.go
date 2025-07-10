@@ -29,7 +29,7 @@ func GasNow(bt *db.Bigtable) http.HandlerFunc {
 
 		history, err := bt.GetGasNowHistory(now, lastWeek)
 		if err != nil {
-			logger.Errorf("error retrieving gas price histors: %v", err)
+			log.Errorf("error retrieving gas price histors: %v", err)
 			return
 		}
 
@@ -89,7 +89,7 @@ func GasNowData(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewEncoder(w).Encode(gasnowData)
 	if err != nil {
-		logger.Errorf("error serializing json data for API %v route: %v", r.URL.String(), err)
+		log.Errorf("error serializing json data for API %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

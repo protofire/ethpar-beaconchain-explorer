@@ -22,7 +22,7 @@ func StakingServices(w http.ResponseWriter, r *http.Request) {
 	pageData.RecaptchaKey = utils.Config.Frontend.RecaptchaSiteKey
 	pageData.FlashMessage, err = utils.GetFlash(w, r, "stake_flash")
 	if err != nil {
-		logger.Errorf("error retrieving flashes for advertisewithusform %v", err)
+		log.Errorf("error retrieving flashes for advertisewithusform %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

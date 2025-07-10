@@ -29,11 +29,11 @@ func latestBlockUpdater(wg *sync.WaitGroup, bt *db.Bigtable) {
 		}
 
 		if firstRun {
-			logger.Info("initialized eth1 block updater")
+			log.Info("initialized eth1 block updater")
 			wg.Done()
 			firstRun = false
 		}
-		ReportStatus("latestBlockUpdater", "Running", nil)
+		ReportStatus(true, "latestBlockUpdater", "Running", nil)
 		time.Sleep(time.Second * 10)
 	}
 }
@@ -73,11 +73,11 @@ func headBlockRootHashUpdater(wg *sync.WaitGroup) {
 		}
 
 		if firstRun {
-			logger.Info("initialized eth1 head block root hash updater")
+			log.Info("initialized eth1 head block root hash updater")
 			wg.Done()
 			firstRun = false
 		}
-		ReportStatus("headBlockRootHashUpdater", "Running", nil)
+		ReportStatus(true, "headBlockRootHashUpdater", "Running", nil)
 		time.Sleep(time.Second * 10)
 	}
 }

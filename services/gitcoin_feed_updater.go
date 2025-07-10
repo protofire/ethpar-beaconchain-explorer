@@ -25,7 +25,7 @@ func fetchFeedData() *gitcoinfeed {
 	resp, err := http.Get(utils.Config.Frontend.ShowDonors.URL)
 
 	if err != nil {
-		logger.Errorf("error retrieving gitcoin feed Data: %v", err)
+		log.Errorf("error retrieving gitcoin feed Data: %v", err)
 		return nil
 	}
 
@@ -34,7 +34,7 @@ func fetchFeedData() *gitcoinfeed {
 	err = json.NewDecoder(resp.Body).Decode(&api)
 
 	if err != nil {
-		logger.Errorf("error decoding gitcoin feed json response to struct: %v: <Is config correct?>", err)
+		log.Errorf("error decoding gitcoin feed json response to struct: %v: <Is config correct?>", err)
 		return nil
 	}
 
@@ -46,7 +46,7 @@ func updateFeed() {
 	defer feedMux.Unlock()
 	tempFeed := fetchFeedData()
 	if tempFeed == nil { // don't delete the existing users
-		logger.Infoln("Gitcoin feed: empty respons")
+		log.Info("Gitcoin feed: empty respons")
 		return
 	}
 	feed = tempFeed
@@ -57,7 +57,7 @@ func InitGitCoinFeed() {
 	defer feedOnMux.Unlock()
 	feedOn = true
 	go func() {
-		logger.Infoln("Started GitcoinFeed service")
+		log.Info("Started GitcoinFeed service")
 		for {
 			updateFeed()
 			time.Sleep(time.Minute * 2)

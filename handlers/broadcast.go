@@ -28,7 +28,7 @@ func Broadcast(w http.ResponseWriter, r *http.Request) {
 	var err error
 	pageData.FlashMessage, err = utils.GetFlash(w, r, "info_flash")
 	if err != nil {
-		logger.Errorf("error retrieving flashes for broadcast %v", err)
+		log.Errorf("error retrieving flashes for broadcast %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -51,7 +51,7 @@ func BroadcastPost(w http.ResponseWriter, r *http.Request) {
 
 	if len(utils.Config.Frontend.RecaptchaSecretKey) > 0 && len(utils.Config.Frontend.RecaptchaSiteKey) > 0 {
 		if len(r.FormValue("g-recaptcha-response")) == 0 {
-			logger.Warnf("no recaptca response present %v route: %v", r.URL.String(), r.FormValue("g-recaptcha-response"))
+			log.Warnf("no recaptca response present %v route: %v", r.URL.String(), r.FormValue("g-recaptcha-response"))
 			utils.SetFlash(w, r, "info_flash", "Error: Failed to create request")
 			http.Redirect(w, r, "/tools/broadcast", http.StatusSeeOther)
 			return
@@ -59,7 +59,7 @@ func BroadcastPost(w http.ResponseWriter, r *http.Request) {
 
 		valid, err := utils.ValidateReCAPTCHA(r.FormValue("g-recaptcha-response"))
 		if err != nil || !valid {
-			logger.Warnf("failed validating recaptcha %v route: %v", r.URL.String(), err)
+			log.Warnf("failed validating recaptcha %v route: %v", r.URL.String(), err)
 			utils.SetFlash(w, r, "info_flash", "Error: Failed to create request")
 			http.Redirect(w, r, "/tools/broadcast", http.StatusSeeOther)
 			return
@@ -74,7 +74,7 @@ func BroadcastPost(w http.ResponseWriter, r *http.Request) {
 		if !errors.As(err, &userErr) {
 			// only send error-message if its a UserError, otherwise just tell the user that something is wrong without details
 			errMsg = "Sorry something went wrong :("
-			logger.WithError(err).Errorf("failed creating a node-job")
+			log.WithError(err).Errorf("failed creating a node-job")
 		}
 		utils.SetFlash(w, r, "info_flash", errMsg)
 		http.Redirect(w, r, "/tools/broadcast", http.StatusSeeOther)
@@ -99,7 +99,7 @@ func BroadcastStatus(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Not found", http.StatusNotFound)
 		} else {
-			logger.WithError(err).Errorf("error retrieving node-job")
+			log.WithError(err).Errorf("error retrieving node-job")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 		return
@@ -113,7 +113,7 @@ func BroadcastStatus(w http.ResponseWriter, r *http.Request) {
 
 	validators, err := db.GetNodeJobValidatorInfos(job)
 	if err != nil {
-		logger.WithError(err).Errorf("error retrieving validator infos")
+		log.WithError(err).Errorf("error retrieving validator infos")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

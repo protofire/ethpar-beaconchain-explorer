@@ -14,7 +14,7 @@ var pubkeyCacheDb *leveldb.DB
 
 func initPubkeyCache(path string) error {
 	if path == "" {
-		logger.Infof("no last pubkey cache path provided, using temporary directory %v", os.TempDir()+"/pubkeyCache")
+		log.Infof("no last pubkey cache path provided, using temporary directory %v", os.TempDir()+"/pubkeyCache")
 		path = os.TempDir() + "/pubkeyCache"
 	}
 	db, err := leveldb.OpenFile(path, nil)
@@ -43,7 +43,7 @@ func GetPubkeyForIndex(index uint64) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		logger.Infof("serving pubkey %x for validator %v from db", pubkey, index)
+		log.Infof("serving pubkey %x for validator %v from db", pubkey, index)
 		return pubkey, nil
 	} else if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func GetIndexForPubkey(pubkey []byte) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		logger.Infof("serving index %d for validator %x from db", index, pubkey)
+		log.Infof("serving index %d for validator %x from db", index, pubkey)
 		return index, nil
 	} else if err != nil {
 		return 0, err

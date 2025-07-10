@@ -41,7 +41,7 @@ func startClDataMonitoringService(bt *db.Bigtable) {
 		var maxAttestationSlot uint64
 		lastAttestationSlots, err := bt.GetLastAttestationSlots([]uint64{})
 		if err != nil {
-			logger.Errorf("error retrieving max attestation slot data from bigtable: %v", err)
+			log.Errorf("error retrieving max attestation slot data from bigtable: %v", err)
 			continue
 		}
 
@@ -54,7 +54,7 @@ func startClDataMonitoringService(bt *db.Bigtable) {
 		if time.Since(utils.SlotToTime(maxAttestationSlot)) > time.Minute*15 {
 			errorMsg := fmt.Errorf("error: max attestation slot is older than 15 minutes: %v", time.Since(utils.SlotToTime(maxAttestationSlot)))
 			utils.LogError(nil, errorMsg, 0)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 
@@ -62,14 +62,14 @@ func startClDataMonitoringService(bt *db.Bigtable) {
 		var maxSlot uint64
 		err = db.WriterDb.Get(&maxSlot, "SELECT MAX(slot) FROM blocks;")
 		if err != nil {
-			logger.Errorf("error retrieving max slot from blocks table: %v", err)
+			log.Errorf("error retrieving max slot from blocks table: %v", err)
 			continue
 		}
 
 		if time.Since(utils.SlotToTime(maxSlot)) > time.Minute*15 {
 			errorMsg := fmt.Errorf("error: max slot in blocks table is older than 15 minutes: %v", time.Since(utils.SlotToTime(maxAttestationSlot)))
 			utils.LogError(nil, errorMsg, 0)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 
@@ -77,18 +77,18 @@ func startClDataMonitoringService(bt *db.Bigtable) {
 		var maxEpoch uint64
 		err = db.WriterDb.Get(&maxEpoch, "SELECT MAX(epoch) FROM epochs;")
 		if err != nil {
-			logger.Errorf("error retrieving max slot from blocks table: %v", err)
+			log.Errorf("error retrieving max slot from blocks table: %v", err)
 			continue
 		}
 
 		if time.Since(utils.EpochToTime(maxEpoch)) > time.Minute*15 {
 			errorMsg := fmt.Errorf("error: max epoch in epochs table is older than 15 minutes: %v", time.Since(utils.SlotToTime(maxAttestationSlot)))
 			utils.LogError(nil, errorMsg, 0)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 
-		ReportStatus(name, "OK", nil)
+		ReportStatus(true, name, "OK", nil)
 	}
 }
 
@@ -106,18 +106,18 @@ func startElDataMonitoringService(bt *db.Bigtable) {
 		numberBlocksTable, err := bt.GetLastBlockInBlocksTable()
 		if err != nil {
 			errorMsg := fmt.Errorf("error: could not retrieve latest block number from the blocks table: %v", err)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
-		blockBlocksTable, err := bt.GetBlockFromBlocksTable(uint64(numberBlocksTable))
+		blockBlocksTable, err := bt.GetBlockFromBlocksTable(uint64(numberBlocksTable),0) // TODO: implement for Ethpar
 		if err != nil {
 			errorMsg := fmt.Errorf("error: could not retrieve latest block (%d) from the blocks table: %v", numberBlocksTable, err)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 		if blockBlocksTable.Time.AsTime().Before(time.Now().Add(time.Minute * -13)) {
 			errorMsg := fmt.Errorf("error: last block in blocks table is more than 13 minutes old (check eth1 indexer)")
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 
@@ -125,16 +125,16 @@ func startElDataMonitoringService(bt *db.Bigtable) {
 		numberDataTable, err := bt.GetLastBlockInDataTable()
 		if err != nil {
 			errorMsg := fmt.Errorf("error: could not retrieve latest block number from the data table: %v", err)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 
 		if numberDataTable < numberBlocksTable-32 {
 			errorMsg := fmt.Errorf("error: data table is lagging behind the blocks table (check eth1 indexer)")
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
-		ReportStatus(name, "OK", nil)
+		ReportStatus(true, name, "OK", nil)
 	}
 }
 
@@ -155,13 +155,13 @@ func startRedisMonitoringService() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		if err := rdc.Ping(ctx).Err(); err != nil {
 			cancel()
-			ReportStatus(name, err.Error(), nil)
+			ReportStatus(true, name, err.Error(), nil)
 			rdc.Close()
 			continue
 		}
 		cancel()
 		rdc.Close()
-		ReportStatus(name, "OK", nil)
+		ReportStatus(true, name, "OK", nil)
 	}
 }
 
@@ -189,18 +189,18 @@ func startApiMonitoringService() {
 		resp, err := client.Get(url)
 		if err != nil {
 			utils.LogError(err, "getting client error", 0, errFields)
-			ReportStatus(name, strings.ReplaceAll(err.Error(), utils.Config.Monitoring.ApiKey, ""), nil)
+			ReportStatus(true, name, strings.ReplaceAll(err.Error(), utils.Config.Monitoring.ApiKey, ""), nil)
 			continue
 		}
 
 		if resp.StatusCode != 200 {
 			errorMsg := fmt.Errorf("error: api epoch / latest endpoint returned a non 200 status: %v", resp.StatusCode)
 			utils.LogError(nil, errorMsg, 0, errFields)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 
-		ReportStatus(name, "OK", nil)
+		ReportStatus(true, name, "OK", nil)
 	}
 }
 
@@ -228,18 +228,18 @@ func startAppMonitoringService() {
 		resp, err := client.Post(url, "application/json", strings.NewReader(`{"indicesOrPubkey": "1,2"}`))
 		if err != nil {
 			utils.LogError(err, "POST to dashboard URL error", 0, errFields)
-			ReportStatus(name, strings.ReplaceAll(err.Error(), utils.Config.Monitoring.ApiKey, ""), nil)
+			ReportStatus(true, name, strings.ReplaceAll(err.Error(), utils.Config.Monitoring.ApiKey, ""), nil)
 			continue
 		}
 
 		if resp.StatusCode != 200 {
 			errorMsg := fmt.Errorf("error: api app endpoint returned a non 200 status: %v", resp.StatusCode)
 			utils.LogError(nil, errorMsg, 0, errFields)
-			ReportStatus(name, errorMsg.Error(), nil)
+			ReportStatus(true, name, errorMsg.Error(), nil)
 			continue
 		}
 
-		ReportStatus(name, "OK", nil)
+		ReportStatus(true, name, "OK", nil)
 	}
 }
 
@@ -275,10 +275,10 @@ func startServicesMonitoringService() {
 		for _, service := range utils.Config.Monitoring.ServiceMonitoringConfigurations {
 			if service.Duration == 0 {
 				delete(servicesToCheck, service.Name)
-				logger.Infof("Removing %v from monitoring service", service.Name)
+				log.Infof("Removing %v from monitoring service", service.Name)
 			} else {
 				servicesToCheck[service.Name] = service.Duration
-				logger.Infof("Change timeout for %v to %v", service.Name, service.Duration)
+				log.Infof("Change timeout for %v to %v", service.Name, service.Duration)
 			}
 		}
 	}
@@ -300,12 +300,12 @@ func startServicesMonitoringService() {
 				if err == sql.ErrNoRows {
 					errorMsg := fmt.Errorf("error: missing status entry for service %v", serviceName)
 					utils.LogError(err, errorMsg, 0)
-					ReportStatus(name, errorMsg.Error(), nil)
+					ReportStatus(true, name, errorMsg.Error(), nil)
 					hasError = true
 					break
 				} else {
 					errorMsg := fmt.Errorf("error: could not retrieve service status from the service_status table: %v", err)
-					ReportStatus(name, errorMsg.Error(), nil)
+					ReportStatus(true, name, errorMsg.Error(), nil)
 					hasError = true
 					break
 				}
@@ -313,20 +313,20 @@ func startServicesMonitoringService() {
 
 			if status != "Running" {
 				errorMsg := fmt.Errorf("error: service %v has unexpected state %v", serviceName, status)
-				ReportStatus(name, errorMsg.Error(), nil)
+				ReportStatus(true, name, errorMsg.Error(), nil)
 				hasError = true
 				break
 			}
 		}
 
 		if !hasError {
-			ReportStatus(name, "OK", nil)
+			ReportStatus(true, name, "OK", nil)
 		}
 
 		_, err := db.WriterDb.Exec("DELETE FROM service_status WHERE last_update < NOW() - INTERVAL '1 WEEK'")
 
 		if err != nil {
-			logger.Errorf("error cleaning up service_status table")
+			log.Errorf("error cleaning up service_status table")
 		}
 	}
 

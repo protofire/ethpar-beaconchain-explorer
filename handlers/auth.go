@@ -17,7 +17,7 @@ import (
 
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -45,10 +45,10 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 // RegisterPost handles the register-formular to register a new user.
 func RegisterPost(w http.ResponseWriter, r *http.Request) {
-	logger := logger.WithField("route", r.URL.String())
+	log := log.WithField("route", r.URL.String())
 	session, err := utils.SessionStore.Get(r, authSessionName)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 	}
 
 	err = r.ParseForm()
@@ -73,7 +73,7 @@ func RegisterPost(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.FrontendWriterDB.Beginx()
 	if err != nil {
-		logger.Errorf("error creating db-tx for registering user: %v", err)
+		log.Errorf("error creating db-tx for registering user: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -90,7 +90,7 @@ func RegisterPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		logger.Errorf("error retrieving existing emails: %v", err)
+		log.Errorf("error retrieving existing emails: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -99,7 +99,7 @@ func RegisterPost(w http.ResponseWriter, r *http.Request) {
 
 	pHash, err := bcrypt.GenerateFromPassword([]byte(pwd), 10)
 	if err != nil {
-		logger.Errorf("error generating hash for password: %v", err)
+		log.Errorf("error generating hash for password: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -108,7 +108,7 @@ func RegisterPost(w http.ResponseWriter, r *http.Request) {
 
 	apiKey, err := utils.GenerateRandomAPIKey()
 	if err != nil {
-		logger.Errorf("error generating hash for api_key: %v", err)
+		log.Errorf("error generating hash for api_key: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -122,7 +122,7 @@ func RegisterPost(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		logger.Errorf("error saving new user into db: %v", err)
+		log.Errorf("error saving new user into db: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -131,7 +131,7 @@ func RegisterPost(w http.ResponseWriter, r *http.Request) {
 
 	err = tx.Commit()
 	if err != nil {
-		logger.Errorf("error committing db-tx when registering user: %v", err)
+		log.Errorf("error committing db-tx when registering user: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -140,7 +140,7 @@ func RegisterPost(w http.ResponseWriter, r *http.Request) {
 
 	err = sendConfirmationEmail(email)
 	if err != nil {
-		logger.Errorf("error sending confirmation-email: %v", err)
+		log.Errorf("error sending confirmation-email: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 	} else {
 		session.AddFlash("Your account has been created! Please verify your email by clicking the link in the email we just sent you.")
@@ -197,12 +197,12 @@ func LoginPost(w http.ResponseWriter, r *http.Request) {
 
 	session, err := utils.SessionStore.Get(r, authSessionName)
 	if err != nil {
-		logger.Errorf("Error retrieving session for login route: %v", err)
+		log.Errorf("Error retrieving session for login route: %v", err)
 	}
 
 	err = session.SCS.RenewToken(r.Context())
 	if err != nil {
-		logger.Errorf("error renewing session token: %v", err)
+		log.Errorf("error renewing session token: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
@@ -268,7 +268,7 @@ func LoginPost(w http.ResponseWriter, r *http.Request) {
 		WHERE email = $1`, email)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			logger.Errorf("error retrieving password for user %v: %v", email, err)
+			log.Errorf("error retrieving password for user %v: %v", email, err)
 		}
 		session.AddFlash("Error: Invalid email or password!")
 		session.Save(r, w)
@@ -312,11 +312,11 @@ func LoginPost(w http.ResponseWriter, r *http.Request) {
 				if len(trimK) > 0 {
 					err := db.SaveDataTableState(user.ID, trimK, state)
 					if err != nil {
-						logger.WithError(err).Error("error saving datatable state from session")
+						log.WithError(err).Error("error saving datatable state from session")
 					}
 				}
 			} else {
-				logger.Errorf("error could not parse datatable state from session, state: %+v", state)
+				log.Errorf("error could not parse datatable state from session, state: %+v", state)
 			}
 			session.DeleteValue(k)
 		}
@@ -325,8 +325,8 @@ func LoginPost(w http.ResponseWriter, r *http.Request) {
 
 	session.Save(r, w)
 
-	logger.WithFields(
-		logrus.Fields{
+	log.WithFields(
+		logger.Fields{
 			"authenticated": session.GetValue("authenticated"),
 			"user_id":       session.GetValue("user_id"),
 			"subscription":  session.GetValue("subscription"),
@@ -348,7 +348,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 
 	_, session, err := getUserSession(r)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -359,7 +359,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 
 	err = session.SCS.Destroy(r.Context())
 	if err != nil {
-		logger.Errorf("error destroying session tokent user: %v", err)
+		log.Errorf("error destroying session tokent user: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -525,7 +525,7 @@ func RequestResetPassword(w http.ResponseWriter, r *http.Request) {
 
 // RequestResetPasswordPost sends a password-reset-link to the provided (via form) email.
 func RequestResetPasswordPost(w http.ResponseWriter, r *http.Request) {
-	logger := logger.WithField("route", r.URL.String())
+	log := log.WithField("route", r.URL.String())
 
 	err := r.ParseForm()
 	if err != nil {
@@ -547,7 +547,7 @@ func RequestResetPasswordPost(w http.ResponseWriter, r *http.Request) {
 	var exists int
 	err = db.FrontendWriterDB.Get(&exists, "SELECT COUNT(*) FROM users WHERE email = $1", email)
 	if err != nil {
-		logger.Errorf("error retrieving user-count: %v", err)
+		log.Errorf("error retrieving user-count: %v", err)
 		utils.SetFlash(w, r, authSessionName, authInternalServerErrorFlashMsg)
 		http.Redirect(w, r, "/requestReset", http.StatusSeeOther)
 		return
@@ -569,7 +569,7 @@ func RequestResetPasswordPost(w http.ResponseWriter, r *http.Request) {
 		case errors.As(err, &rateLimitError):
 			utils.SetFlash(w, r, authSessionName, fmt.Sprintf("Error: The ratelimit for sending emails has been exceeded, please try again in %v.", err.(*types.RateLimitError).TimeLeft.Round(time.Second)))
 		default:
-			logger.Errorf("error sending reset-email: %v", err)
+			log.Errorf("error sending reset-email: %v", err)
 			utils.SetFlash(w, r, authSessionName, authInternalServerErrorFlashMsg)
 		}
 	} else {
@@ -616,7 +616,7 @@ func ResendConfirmationPost(w http.ResponseWriter, r *http.Request) {
 	var exists int
 	err = db.FrontendWriterDB.Get(&exists, "SELECT COUNT(*) FROM users WHERE email = $1", email)
 	if err != nil {
-		logger.Errorf("error checking if user exists for email-confirmation: %v", err)
+		log.Errorf("error checking if user exists for email-confirmation: %v", err)
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong :( Please retry later")
 		http.Redirect(w, r, "/resend", http.StatusSeeOther)
 		return
@@ -631,7 +631,7 @@ func ResendConfirmationPost(w http.ResponseWriter, r *http.Request) {
 	var rateLimitError *types.RateLimitError
 	err = sendConfirmationEmail(email)
 	if err != nil && !errors.As(err, &rateLimitError) {
-		logger.Errorf("error sending confirmation-email: %v", err)
+		log.Errorf("error sending confirmation-email: %v", err)
 		utils.SetFlash(w, r, authSessionName, authInternalServerErrorFlashMsg)
 	} else if err != nil && errors.As(err, &rateLimitError) {
 		utils.SetFlash(w, r, authSessionName, fmt.Sprintf("Error: The ratelimit for sending emails has been exceeded, please try again in %v.", err.(*types.RateLimitError).TimeLeft.Round(time.Second)))

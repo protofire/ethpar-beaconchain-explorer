@@ -11,7 +11,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 )
 
-// HandleChainReorgs checks the latest blocks in the chain against what's stored
+// handleChainReorgs checks the latest blocks in the chain against what's stored
 // in the database to detect chain reorganizations (reorgs).
 // If a reorg is detected, it rolls back and deletes inconsistent blocks.
 //
@@ -23,7 +23,7 @@ import (
 //
 // Returns:
 //   - error: if any unexpected issue occurs during validation or rollback.
-func HandleChainReorgs(bt *db.Bigtable, client execution.ExecutionClient, depth int, log *logger.Logger) error {
+func handleChainReorgs(bt *db.Bigtable, client execution.ExecutionClient, depth int, log *logger.Logger) error {
 	ctx := context.Background()
 
 	latestNodeBlock, err := client.GetNativeClient().BlockByNumber(ctx, nil)
@@ -73,7 +73,8 @@ func fetchAndCompareBlock(ctx context.Context, bt *db.Bigtable, client execution
 		return false, err
 	}
 
-	dbBlock, err := bt.GetBlockFromBlocksTable(height)
+	// Only blocks with rank == 0 are taken into account to detect reorgs
+	dbBlock, err := bt.GetBlockFromBlocksTable(height, 0)
 	if err != nil {
 		if err == db.ErrBlockNotFound {
 			log.Infof("block %d not found in DB, skipping reorg check", height)
@@ -117,18 +118,9 @@ func rollbackFork(bt *db.Bigtable, forkHeight, latest uint64, log *logger.Logger
 	}
 
 	for height := forkHeight; height <= latest; height++ {
-		dbBlock, err := bt.GetBlockFromBlocksTable(height)
-		if err != nil {
-			if err == db.ErrBlockNotFound {
-				log.Infof("stopped deletion at height %d — block not found in DB", height)
-				return nil
-			}
-			return fmt.Errorf("error fetching block at height %d: %w", height, err)
-		}
-
-		log.Infof("deleting block %d with hash %x", dbBlock.Number, dbBlock.Hash)
-		if err := bt.DeleteBlock(dbBlock.Number, dbBlock.Hash); err != nil {
-			return fmt.Errorf("failed to delete block at height %d: %w", dbBlock.Number, err)
+		log.Infof("deleting block %d", height)
+		if err := bt.DeleteBlock(height); err != nil {
+			return fmt.Errorf("failed to delete block at height %d: %w", height, err)
 		}
 	}
 

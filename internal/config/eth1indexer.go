@@ -85,8 +85,9 @@ type Eth1IndexerConfig struct {
 		Address string `mapstructure:"address,omitempty" validate:"required_if=Enabled true,omitempty,hostname|ip"`
 		Port    uint16 `mapstructure:"port,omitempty" validate:"required_if=Enabled true,omitempty,gte=1,lte=65535"`
 	} `mapstructure:"pprof,omitempty"`
-	Config  string `mapstructure:"config,omitempty" validate:"omitempty,file"`
-	Version bool   `mapstructure:"version,omitempty"`
+	ReportStatus bool `mapstructure:"report,omitempty"`
+	Config       string `mapstructure:"config,omitempty" validate:"omitempty,file"`
+	Version      bool   `mapstructure:"version,omitempty"`
 }
 
 var (
@@ -201,6 +202,7 @@ func LoadEth1IndexerConfig(args []string) (*Eth1IndexerConfig, error) {
 	flags.String("pprof.address", "localhost", "Address to expose profilig endpoints on")
 	flags.Uint16("pprof.port", 6060, "Port to expose profiling endpoints on")
 
+	flags.Bool("report", false, "Report service status")
 	flags.String("config", "", "Path to the config file, if empty string defaults will be used")
 	flags.Bool("version", false, "Print version and exit")
 

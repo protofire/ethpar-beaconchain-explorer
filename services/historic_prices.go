@@ -105,7 +105,7 @@ func updateHistoricPrices() error {
 }
 
 func fetchHistoricPrice(ts time.Time) (*types.HistoricEthPrice, error) {
-	logger.Infof("fetching historic prices for day %v", ts)
+	log.Infof("fetching historic prices for day %v", ts)
 	client := &http.Client{Timeout: time.Second * 10}
 
 	chain := "ethereum"

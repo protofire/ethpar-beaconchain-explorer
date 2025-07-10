@@ -9,7 +9,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 )
 
-// ProcessMetadataUpdates processes metadata entries discovered in Bigtable,
+// processMetadataUpdates processes metadata entries discovered in Bigtable,
 // retrieves current ETH1 balances from the execution node, and persists
 // the results back to Bigtable.
 //

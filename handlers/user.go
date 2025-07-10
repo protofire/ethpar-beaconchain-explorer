@@ -28,7 +28,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -56,14 +56,14 @@ func UserSettings(w http.ResponseWriter, r *http.Request) {
 
 	user, session, err := getUserSession(r)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	premiumSubscription, err := db.GetUserPremiumSubscription(user.UserID)
 	if err != nil && err != sql.ErrNoRows {
-		logger.Errorf("Error retrieving the premium subscriptions for user: %v %v", user.UserID, err)
+		log.Errorf("Error retrieving the premium subscriptions for user: %v %v", user.UserID, err)
 		utils.SetFlash(w, r, "", "Error: Something went wrong.")
 		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
 		return
@@ -71,7 +71,7 @@ func UserSettings(w http.ResponseWriter, r *http.Request) {
 
 	subscription, err := db.StripeGetUserSubscription(user.UserID, utils.GROUP_API)
 	if err != nil && err != sql.ErrNoRows {
-		logger.Errorf("Error retrieving the subscriptions for user: %v %v", user.UserID, err)
+		log.Errorf("Error retrieving the subscriptions for user: %v %v", user.UserID, err)
 		utils.SetFlash(w, r, "", "Error: Something went wrong.")
 		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
 		return
@@ -80,18 +80,18 @@ func UserSettings(w http.ResponseWriter, r *http.Request) {
 	var pairedDevices []types.PairedDevice = nil
 	pairedDevices, err = db.GetUserDevicesByUserID(user.UserID)
 	if err != nil && err != sql.ErrNoRows {
-		logger.Errorf("Error retrieving the paired devices for user: %v %v", user.UserID, err)
+		log.Errorf("Error retrieving the paired devices for user: %v %v", user.UserID, err)
 		pairedDevices = nil
 	}
 	statsSharing, err := db.GetUserMonitorSharingSetting(user.UserID)
 	if err != nil {
-		logger.Errorf("Error retrieving stats sharing setting: %v %v", user.UserID, err)
+		log.Errorf("Error retrieving stats sharing setting: %v %v", user.UserID, err)
 		statsSharing = false
 	}
 
 	rl, err := ratelimit.DBGetUserApiRateLimit(int64(user.UserID))
 	if err != nil {
-		logger.Errorf("Error retrieving the api-ratelimit for user: %v %v", user.UserID, err)
+		log.Errorf("Error retrieving the api-ratelimit for user: %v %v", user.UserID, err)
 		utils.SetFlash(w, r, "", "Error: Something went wrong.")
 		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
 		return
@@ -108,7 +108,7 @@ func UserSettings(w http.ResponseWriter, r *http.Request) {
 	if subscription.ApiKey != nil && len(*subscription.ApiKey) > 0 {
 		apiStats, err := db.GetUserAPIKeyStatistics(subscription.ApiKey)
 		if err != nil {
-			logger.Errorf("Error retrieving user api key usage: %v %v", user.UserID, err)
+			log.Errorf("Error retrieving user api key usage: %v %v", user.UserID, err)
 		}
 		if apiStats != nil {
 			userSettingsData.ApiStatistics = apiStats
@@ -152,7 +152,7 @@ func GenerateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	err := db.CreateAPIKey(user.UserID)
 	if err != nil {
-		logger.WithError(err).Error("Could not create API key for user")
+		log.WithError(err).Error("Could not create API key for user")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -170,7 +170,7 @@ func UserAuthorizeConfirm(w http.ResponseWriter, r *http.Request) {
 
 	user, session, err := getUserSession(r)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
@@ -201,8 +201,8 @@ func UserAuthorizeConfirm(w http.ResponseWriter, r *http.Request) {
 
 	appData, err := db.GetAppDataFromRedirectUri(redirectURI)
 	if err != nil {
-		logger.WithFields(
-			logrus.Fields{
+		log.WithFields(
+			logger.Fields{
 				"user.UserID": user.UserID,
 				"appData":     appData,
 				"redirectURI": redirectURI,
@@ -224,7 +224,7 @@ func UserAuthorizeConfirm(w http.ResponseWriter, r *http.Request) {
 
 	err = authorizeTemplate.ExecuteTemplate(w, "layout", data)
 	if err != nil {
-		logger.Errorf("error executing template [user.go / UserAuthorizeConfirm] for %v route: %v", r.URL.String(), err)
+		log.Errorf("error executing template [user.go / UserAuthorizeConfirm] for %v route: %v", r.URL.String(), err)
 		callback := appData.RedirectURI + "?error=temporarily_unaviable&error_description=err_template&state=" + state
 		http.Redirect(w, r, callback, http.StatusSeeOther)
 		return
@@ -253,7 +253,7 @@ func UserNotifications(w http.ResponseWriter, r *http.Request) {
 	WHERE user_id = $1 and tag = $2
 	`, user.UserID, types.ValidatorTagsWatchlist)
 	if err != nil {
-		logger.Errorf("error retrieving watchlist validator count %v route: %v", r.URL.String(), err)
+		log.Errorf("error retrieving watchlist validator count %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -265,7 +265,7 @@ func UserNotifications(w http.ResponseWriter, r *http.Request) {
 	WHERE user_id = $1
 	`, user.UserID)
 	if err != nil {
-		logger.Errorf("error retrieving subscription count %v route: %v", r.URL.String(), err)
+		log.Errorf("error retrieving subscription count %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -347,7 +347,7 @@ func RemoveAllValidatorsAndUnsubscribe(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		logger.Errorf("error reading body of request: %v, %v", r.URL.String(), err)
+		log.Errorf("error reading body of request: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -355,14 +355,14 @@ func RemoveAllValidatorsAndUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	pubkeys := make([]string, 0)
 	err = json.Unmarshal(body, &pubkeys)
 	if err != nil {
-		logger.Errorf("error parsing request body: %v, %v", r.URL.String(), err)
+		log.Errorf("error parsing request body: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	for _, item := range pubkeys {
 		err = db.RemoveFromWatchlist(user.UserID, item, utils.GetNetwork())
 		if err != nil {
-			logger.Errorf("error removing from  watchlist: %v, %v", r.URL.String(), err)
+			log.Errorf("error removing from  watchlist: %v, %v", r.URL.String(), err)
 			continue
 		}
 	}
@@ -388,7 +388,7 @@ func UserNotificationsCenter(bt *db.Bigtable) http.HandlerFunc {
 		WHERE user_id = $1 and tag = $2
 		`, user.UserID, utils.GetNetwork()+":"+string(types.ValidatorTagsWatchlist))
 		if err != nil && err != sql.ErrNoRows {
-			logger.Errorf("error retrieving pubkeys from watchlist validator count %v route: %v", r.URL.String(), err)
+			log.Errorf("error retrieving pubkeys from watchlist validator count %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -410,7 +410,7 @@ func UserNotificationsCenter(bt *db.Bigtable) http.HandlerFunc {
 		WHERE pubkey = ANY($1)
 		`, pq.ByteaArray(watchlistPubkeys))
 		if err != nil {
-			logger.Errorf("error retrieving watchlist indices validator count %v route: %v", r.URL.String(), err)
+			log.Errorf("error retrieving watchlist indices validator count %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -423,7 +423,7 @@ func UserNotificationsCenter(bt *db.Bigtable) http.HandlerFunc {
 		WHERE user_id = $1 AND (event_name like $2 OR event_name like 'monitoring%') AND event_name != $3
 		`, user.UserID, utils.GetNetwork()+":%", utils.GetNetwork()+":"+"validator_balance_decreased")
 		if err != nil {
-			logger.Errorf("error retrieving subscriptions for user %v route: %v", r.URL.String(), err)
+			log.Errorf("error retrieving subscriptions for user %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -561,7 +561,7 @@ func UserNotificationsCenter(bt *db.Bigtable) http.HandlerFunc {
 				if event == string(types.NetworkLivenessIncreasedEventName) {
 					networkData, err = getUserNetworkEvents(user.UserID)
 					if err != nil {
-						logger.Errorf("error retrieving network data for user %v: %v ", user.UserID, err)
+						log.Errorf("error retrieving network data for user %v: %v ", user.UserID, err)
 						http.Error(w, "Internal server error", http.StatusInternalServerError)
 						return
 					}
@@ -600,7 +600,7 @@ func UserNotificationsCenter(bt *db.Bigtable) http.HandlerFunc {
 
 		machines, err := bt.GetMachineMetricsMachineNames(user.UserID)
 		if err != nil {
-			logger.Errorf("error retrieving user machines for user %v: %v ", user.UserID, err)
+			log.Errorf("error retrieving user machines for user %v: %v ", user.UserID, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -617,7 +617,7 @@ func UserNotificationsCenter(bt *db.Bigtable) http.HandlerFunc {
 				user_id = $1
 		`, user.UserID)
 		if err != nil {
-			logger.Errorf("error retrieving notification channels for user %v: %v ", user.UserID, err)
+			log.Errorf("error retrieving notification channels for user %v: %v ", user.UserID, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -730,7 +730,7 @@ func UserNotificationsData(bt *db.Bigtable) http.HandlerFunc {
 
 		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 		if err != nil {
-			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 			return
 		}
@@ -760,7 +760,7 @@ func UserNotificationsData(bt *db.Bigtable) http.HandlerFunc {
 			GROUP BY users_validators_tags.user_id, users_validators_tags.validator_publickey, validators.validatorindex;
 			`, user.UserID)
 		if err != nil {
-			logger.Errorf("error retrieving subscriptions for users: %v validators: %v", user.UserID, err)
+			log.Errorf("error retrieving subscriptions for users: %v validators: %v", user.UserID, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -788,7 +788,7 @@ func UserNotificationsData(bt *db.Bigtable) http.HandlerFunc {
 
 		balances, err := bt.GetValidatorBalanceHistory(indices, services.LatestEpoch(), services.LatestEpoch())
 		if err != nil {
-			logger.WithError(err).WithField("route", r.URL.String()).Errorf("error retrieving validator balance data")
+			log.WithError(err).WithField("route", r.URL.String()).Errorf("error retrieving validator balance data")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -828,7 +828,7 @@ func UserNotificationsData(bt *db.Bigtable) http.HandlerFunc {
 
 		err = json.NewEncoder(w).Encode(data)
 		if err != nil {
-			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			log.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -842,14 +842,14 @@ func UserSubscriptionsData(w http.ResponseWriter, r *http.Request) {
 
 	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+		log.Warnf("error converting datatables draw parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
 		return
 	}
 
 	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
 	if err != nil {
-		logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+		log.Warnf("error converting datatables length parameter from string to int: %v", err)
 		http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
 		return
 	}
@@ -866,7 +866,7 @@ func UserSubscriptionsData(w http.ResponseWriter, r *http.Request) {
 			WHERE user_id = $1
 	`, user.UserID)
 	if err != nil {
-		logger.Errorf("error retrieving subscriptions for users %v: %v", user.UserID, err)
+		log.Errorf("error retrieving subscriptions for users %v: %v", user.UserID, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -882,7 +882,7 @@ func UserSubscriptionsData(w http.ResponseWriter, r *http.Request) {
 		if len(sub.EventFilter) == 96 {
 			h, err := hex.DecodeString(sub.EventFilter)
 			if err != nil {
-				logger.Errorf("Could not decode Pubkey %v", err)
+				log.Errorf("Could not decode Pubkey %v", err)
 			} else {
 				pubkey = utils.FormatPublicKey(h)
 			}
@@ -911,7 +911,7 @@ func UserSubscriptionsData(w http.ResponseWriter, r *http.Request) {
 
 	err = json.NewEncoder(w).Encode(data)
 	if err != nil {
-		logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+		log.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -919,7 +919,7 @@ func UserSubscriptionsData(w http.ResponseWriter, r *http.Request) {
 }
 
 func UserAuthorizeConfirmPost(w http.ResponseWriter, r *http.Request) {
-	logger := logger.WithField("route", r.URL.String())
+	log := log.WithField("route", r.URL.String())
 
 	redirectURI := r.FormValue("redirect_uri")
 	state := r.FormValue("state")
@@ -930,7 +930,7 @@ func UserAuthorizeConfirmPost(w http.ResponseWriter, r *http.Request) {
 
 	appData, err := db.GetAppDataFromRedirectUri(redirectURI)
 	if err != nil {
-		logger.Errorf("error app no found: %v %v", appData, err)
+		log.Errorf("error app no found: %v %v", appData, err)
 		callback := redirectURI + "?error=invalid_request&error_description=missing_redirect_uri" + stateAppend
 		http.Redirect(w, r, callback, http.StatusSeeOther)
 		return
@@ -938,7 +938,7 @@ func UserAuthorizeConfirmPost(w http.ResponseWriter, r *http.Request) {
 
 	user, session, err := getUserSession(r)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 		callback := appData.RedirectURI + "?error=access_denied&error_description=no_session" + stateAppend
 		http.Redirect(w, r, callback, http.StatusSeeOther)
 		return
@@ -947,7 +947,7 @@ func UserAuthorizeConfirmPost(w http.ResponseWriter, r *http.Request) {
 	if user.Authenticated {
 		codeBytes, err1 := utils.GenerateRandomBytesSecure(32)
 		if err1 != nil {
-			logger.Errorf("error creating secure random bytes for user: %v %v", user.UserID, err1)
+			log.Errorf("error creating secure random bytes for user: %v %v", user.UserID, err1)
 			callback := appData.RedirectURI + "?error=server_error&error_description=err_random_number" + stateAppend
 			http.Redirect(w, r, callback, http.StatusSeeOther)
 			return
@@ -959,7 +959,7 @@ func UserAuthorizeConfirmPost(w http.ResponseWriter, r *http.Request) {
 
 		err2 := db.AddAuthorizeCode(user.UserID, codeHashed, clientID, appData.ID)
 		if err2 != nil {
-			logger.Errorf("error adding authorization code for user: %v %v", user.UserID, err2)
+			log.Errorf("error adding authorization code for user: %v %v", user.UserID, err2)
 			callback := appData.RedirectURI + "?error=server_error&error_description=err_db_storefail" + stateAppend
 			http.Redirect(w, r, callback, http.StatusSeeOther)
 			return
@@ -979,17 +979,17 @@ func UserAuthorizeConfirmPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func UserDeletePost(w http.ResponseWriter, r *http.Request) {
-	logger := logger.WithField("route", r.URL.String())
+	log := log.WithField("route", r.URL.String())
 	user, session, err := getUserSession(r)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if user.Authenticated {
 		err := db.DeleteUserById(user.UserID)
 		if err != nil {
-			logger.Errorf("error deleting user by email for user: %v %v", user.UserID, err)
+			log.Errorf("error deleting user by email for user: %v %v", user.UserID, err)
 			http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
 			utils.SetFlash(w, r, "", "Error: Could not delete user.")
 			session.Save(r, w)
@@ -1015,14 +1015,14 @@ func UserDeletePost(w http.ResponseWriter, r *http.Request) {
 func UserUpdateFlagsPost(w http.ResponseWriter, r *http.Request) {
 	user, _, err := getUserSession(r)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	err = db.SetUserMonitorSharingSetting(user.UserID, FormValueOrJSON(r, "shareStats") == "true")
 	if err != nil {
-		logger.Errorf("error setting user monitor sharing settings: %v", err)
+		log.Errorf("error setting user monitor sharing settings: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1033,7 +1033,7 @@ func UserUpdateFlagsPost(w http.ResponseWriter, r *http.Request) {
 func UserUpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	user, session, err := getUserSession(r)
 	if err != nil {
-		logger.Errorf("error retrieving session: %v", err)
+		log.Errorf("error retrieving session: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1060,7 +1060,7 @@ func UserUpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	err = db.FrontendWriterDB.Get(&currentUser, "SELECT id, email, password, email_confirmed, password_reset_not_allowed FROM users WHERE id = $1", user.UserID)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			logger.Errorf("error retrieving password for user %v: %v", user.UserID, err)
+			log.Errorf("error retrieving password for user %v: %v", user.UserID, err)
 		}
 		session.AddFlash("Error: Invalid password!")
 		session.Save(r, w)
@@ -1084,7 +1084,7 @@ func UserUpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 
 	err = bcrypt.CompareHashAndPassword([]byte(currentUser.Password), []byte(pwdOld))
 	if err != nil {
-		logger.Errorf("error verifying password for user %v: %v", currentUser.Email, err)
+		log.Errorf("error verifying password for user %v: %v", currentUser.Email, err)
 		session.AddFlash("Error: Invalid password!")
 		session.Save(r, w)
 		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
@@ -1093,7 +1093,7 @@ func UserUpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 
 	err = db.UpdatePassword(user.UserID, pwdNew)
 	if err != nil {
-		logger.Errorf("error updating password for user: %v", err)
+		log.Errorf("error updating password for user: %v", err)
 		session.AddFlash("Error: Something went wrong updating your password. If this error persists please contact <a href=\"https://support.bitfly.at/support/home\">support</a>")
 		session.Save(r, w)
 		http.Redirect(w, r, "/user/settings", http.StatusSeeOther)
@@ -1102,7 +1102,7 @@ func UserUpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 
 	err = purgeAllSessionsForUser(r.Context(), user.UserID)
 	if err != nil {
-		logger.Errorf("error purging sessions for user %v: %v", user.UserID, err)
+		log.Errorf("error purging sessions for user %v: %v", user.UserID, err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/confirmation", http.StatusSeeOther)
@@ -1111,7 +1111,7 @@ func UserUpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 
 	err = session.SCS.RenewToken(r.Context())
 	if err != nil {
-		logger.Errorf("error renewing session token for user: %v", err)
+		log.Errorf("error renewing session token for user: %v", err)
 		session.AddFlash(authInternalServerErrorFlashMsg)
 		session.Save(r, w)
 		http.Redirect(w, r, "/confirmation", http.StatusSeeOther)
@@ -1386,7 +1386,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	if balance == "on" {
 		err := db.AddSubscription(user.UserID, utils.GetNetwork(), types.ValidatorBalanceDecreasedEventName, pubKey, 0)
 		if err != nil {
-			logger.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorBalanceDecreasedEventName, pubKey, err)
+			log.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorBalanceDecreasedEventName, pubKey, err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1395,7 +1395,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	if slashed == "on" {
 		err := db.AddSubscription(user.UserID, utils.GetNetwork(), types.ValidatorGotSlashedEventName, pubKey, 0)
 		if err != nil {
-			logger.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
+			log.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1404,7 +1404,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	if proposalSubmitted == "on" {
 		err := db.AddSubscription(user.UserID, utils.GetNetwork(), types.ValidatorExecutedProposalEventName, pubKey, 0)
 		if err != nil {
-			logger.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
+			log.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1413,7 +1413,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	if proposalMissed == "on" {
 		err := db.AddSubscription(user.UserID, utils.GetNetwork(), types.ValidatorMissedProposalEventName, pubKey, 0)
 		if err != nil {
-			logger.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
+			log.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1422,7 +1422,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	if attestationMissed == "on" {
 		err := db.AddSubscription(user.UserID, utils.GetNetwork(), types.ValidatorMissedAttestationEventName, pubKey, 0)
 		if err != nil {
-			logger.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
+			log.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.ValidatorGotSlashedEventName, pubKey, err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1431,7 +1431,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	if syncCommittee == "on" {
 		err := db.AddSubscription(user.UserID, utils.GetNetwork(), types.SyncCommitteeSoon, pubKey, 0)
 		if err != nil {
-			logger.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.SyncCommitteeSoon, pubKey, err)
+			log.Errorf("error could not ADD subscription for user %v eventName %v eventfilter %v: %v", user.UserID, types.SyncCommitteeSoon, pubKey, err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1455,7 +1455,7 @@ func UserValidatorWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	err := db.AddToWatchlist(watchlistEntries, utils.GetNetwork())
 	if err != nil {
-		logger.Errorf("error adding validator to watchlist to db: %v", err)
+		log.Errorf("error adding validator to watchlist to db: %v", err)
 		FlashRedirectOrJSONErrorResponse(w, r,
 			validatorEditFlash,
 			"Error: Could not follow validator.",
@@ -1484,7 +1484,7 @@ func UserDashboardWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		logger.Errorf("error reading body of request: %v, %v", r.URL.String(), err)
+		log.Errorf("error reading body of request: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1492,7 +1492,7 @@ func UserDashboardWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	indices := make([]string, 0)
 	err = json.Unmarshal(body, &indices)
 	if err != nil {
-		logger.Errorf("error parsing request body: %v, %v", r.URL.String(), err)
+		log.Errorf("error parsing request body: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1500,7 +1500,7 @@ func UserDashboardWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	for _, i := range indices {
 		parsed, err := strconv.ParseInt(i, 10, 64)
 		if err != nil {
-			logger.Errorf("error could not parse validator indices: %v, %v", r.URL.String(), err)
+			log.Errorf("error could not parse validator indices: %v, %v", r.URL.String(), err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1524,7 +1524,7 @@ func UserDashboardWatchlistAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	err = db.AddToWatchlist(watchListEntries, utils.GetNetwork())
 	if err != nil {
-		logger.Errorf("error could not add validators to watchlist: %v, %v", r.URL.String(), err)
+		log.Errorf("error could not add validators to watchlist: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1548,7 +1548,7 @@ func UserDashboardWatchlistRemove(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		logger.Errorf("error reading body of request: %v, %v", r.URL.String(), err)
+		log.Errorf("error reading body of request: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1556,7 +1556,7 @@ func UserDashboardWatchlistRemove(w http.ResponseWriter, r *http.Request) {
 	indices := make([]string, 0)
 	err = json.Unmarshal(body, &indices)
 	if err != nil {
-		logger.Errorf("error parsing request body: %v, %v", r.URL.String(), err)
+		log.Errorf("error parsing request body: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1564,7 +1564,7 @@ func UserDashboardWatchlistRemove(w http.ResponseWriter, r *http.Request) {
 	for _, i := range indices {
 		parsed, err := strconv.ParseInt(i, 10, 64)
 		if err != nil {
-			logger.Errorf("error could not parse validator indices: %v, %v", r.URL.String(), err)
+			log.Errorf("error could not parse validator indices: %v, %v", r.URL.String(), err)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -1580,7 +1580,7 @@ func UserDashboardWatchlistRemove(w http.ResponseWriter, r *http.Request) {
 
 	err = db.RemoveFromWatchlistBatch(user.UserID, publicKeys, utils.GetNetwork())
 	if err != nil {
-		logger.Errorf("error could not remove validators from watchlist: %v, %v", r.URL.String(), err)
+		log.Errorf("error could not remove validators from watchlist: %v, %v", r.URL.String(), err)
 		ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1627,7 +1627,7 @@ func UserValidatorWatchlistRemove(w http.ResponseWriter, r *http.Request) {
 
 	err := db.RemoveFromWatchlist(user.UserID, pubKey, utils.GetNetwork())
 	if err != nil {
-		logger.Errorf("error deleting subscription: %v", err)
+		log.Errorf("error deleting subscription: %v", err)
 		FlashRedirectOrJSONErrorResponse(w, r,
 			validatorEditFlash,
 			"Error: Could not remove bookmark.",
@@ -1721,14 +1721,14 @@ func MultipleUsersNotificationsSubscribeWeb(bt *db.Bigtable) http.HandlerFunc {
 		var jsonObjects []SubIntent
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Errorf("error reading body %v URL: %v", err, r.URL.String())
+			log.Errorf("error reading body %v URL: %v", err, r.URL.String())
 			SendBadRequestResponse(w, r.URL.String(), "could not parse body")
 			return
 		}
 
 		err = json.Unmarshal(b, &jsonObjects)
 		if err != nil {
-			logger.Errorf("Could not parse multiple notification subscription intent | %v", err)
+			log.Errorf("Could not parse multiple notification subscription intent | %v", err)
 			SendBadRequestResponse(w, r.URL.String(), "could not parse request")
 			return
 		}
@@ -2067,7 +2067,7 @@ func UserNotificationsUnsubscribe(bt *db.Bigtable) http.HandlerFunc {
 
 		eventName, err := types.EventNameFromString(event)
 		if err != nil {
-			logger.Errorf("error invalid event name: %v event: %v", err, event)
+			log.Errorf("error invalid event name: %v event: %v", err, event)
 			ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -2112,7 +2112,7 @@ func UserNotificationsUnsubscribe(bt *db.Bigtable) http.HandlerFunc {
 			for i, v := range myValidators {
 				err = db.DeleteSubscription(user.UserID, utils.GetNetwork(), eventName, fmt.Sprintf("%v", hex.EncodeToString(v.ValidatorPublickey)))
 				if err != nil {
-					logger.Errorf("error could not REMOVE subscription for user %v eventName %v eventfilter %v: %v", user.UserID, eventName, filter, err)
+					log.Errorf("error could not REMOVE subscription for user %v eventName %v eventfilter %v: %v", user.UserID, eventName, filter, err)
 					ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 					return
 				}
@@ -2129,7 +2129,7 @@ func UserNotificationsUnsubscribe(bt *db.Bigtable) http.HandlerFunc {
 			// filtered one only
 			err = db.DeleteSubscription(user.UserID, network, eventName, filter)
 			if err != nil {
-				logger.Errorf("error could not REMOVE subscription for user %v eventName %v eventfilter %v: %v", user.UserID, eventName, filter, err)
+				log.Errorf("error could not REMOVE subscription for user %v eventName %v eventfilter %v: %v", user.UserID, eventName, filter, err)
 				ErrorOrJSONResponse(w, r, "Internal server error", http.StatusInternalServerError)
 				return
 			}
@@ -2205,7 +2205,7 @@ func UserNotificationsUnsubscribeByHash(w http.ResponseWriter, r *http.Request) 
 
 	hashes, ok := q["hash"]
 	if !ok {
-		logger.Warn("error no query params given")
+		log.Warn("error no query params given")
 		http.Error(w, "Error: Missing parameter hash.", http.StatusBadRequest)
 		return
 	}
@@ -2213,7 +2213,7 @@ func UserNotificationsUnsubscribeByHash(w http.ResponseWriter, r *http.Request) 
 	tx, err := db.FrontendWriterDB.Beginx()
 	if err != nil {
 		//  return fmt.Errorf("error beginning transaction")
-		logger.WithError(err).Errorf("error committing transacton")
+		log.WithError(err).Errorf("error committing transacton")
 		http.Error(w, "error processing request", http.StatusInternalServerError)
 		return
 	}
@@ -2223,7 +2223,7 @@ func UserNotificationsUnsubscribeByHash(w http.ResponseWriter, r *http.Request) 
 	for _, hash := range hashes {
 		hash = strings.Replace(hash, "0x", "", -1)
 		if !utils.HashLikeRegex.MatchString(hash) {
-			logger.Warn("error validating unsubscribe digest hashes")
+			log.Warn("error validating unsubscribe digest hashes")
 			http.Error(w, "Error: Invalid parameter hash entry.", http.StatusBadRequest)
 		}
 		b, _ := hex.DecodeString(hash)
@@ -2232,14 +2232,14 @@ func UserNotificationsUnsubscribeByHash(w http.ResponseWriter, r *http.Request) 
 
 	_, err = tx.ExecContext(ctx, `DELETE from users_subscriptions where unsubscribe_hash = ANY($1)`, pq.ByteaArray(bHashes))
 	if err != nil {
-		logger.Errorf("error deleting from users_subscriptions %v", err)
+		log.Errorf("error deleting from users_subscriptions %v", err)
 		http.Error(w, "error processing request", http.StatusInternalServerError)
 		return
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		logger.WithError(err).Errorf("error committing transacton")
+		log.WithError(err).Errorf("error committing transacton")
 		http.Error(w, "error processing request", http.StatusInternalServerError)
 		return
 	}
@@ -2281,7 +2281,7 @@ func UserNotificationsSubscribed(w http.ResponseWriter, r *http.Request) {
 
 	err := decoder.Decode(req)
 	if err != nil && err != io.EOF {
-		logger.WithError(err).Error("error decoding request body")
+		log.WithError(err).Error("error decoding request body")
 		SendBadRequestResponse(w, r.URL.String(), "error decoding request body")
 		return
 	}
@@ -2335,7 +2335,7 @@ func UserNotificationsSubscribed(w http.ResponseWriter, r *http.Request) {
 	for _, en := range names {
 		n, err := types.EventNameFromString(en)
 		if err != nil {
-			logger.WithError(err).Errorf("error parsing provided event %v to a known event name type", en)
+			log.WithError(err).Errorf("error parsing provided event %v to a known event name type", en)
 			SendBadRequestResponse(w, r.URL.String(), "error invalid event name provided")
 		}
 		eventNames = append(eventNames, n)
@@ -2376,7 +2376,7 @@ func MobileDeviceDeletePOST(w http.ResponseWriter, r *http.Request) {
 		customDeviceID := FormValueOrJSON(r, "id")
 		temp, err := strconv.ParseUint(customDeviceID, 10, 64)
 		if err != nil {
-			logger.Errorf("error parsing id %v | err: %v", customDeviceID, err)
+			log.Errorf("error parsing id %v | err: %v", customDeviceID, err)
 			SendBadRequestResponse(w, r.URL.String(), "could not parse id")
 			return
 		}
@@ -2394,7 +2394,7 @@ func MobileDeviceDeletePOST(w http.ResponseWriter, r *http.Request) {
 
 	err := db.MobileDeviceDelete(userID, userDeviceID)
 	if err != nil {
-		logger.Errorf("could not retrieve db results err: %v", err)
+		log.Errorf("could not retrieve db results err: %v", err)
 		SendBadRequestResponse(w, r.URL.String(), "could not retrieve db results")
 		return
 	}
@@ -2421,7 +2421,7 @@ func NotificationWebhookPage(w http.ResponseWriter, r *http.Request) {
 	var webhookCount uint64
 	err := db.FrontendReaderDB.GetContext(ctx, &webhookCount, `SELECT count(*) from users_webhooks where user_id = $1`, user.UserID)
 	if err != nil {
-		logger.WithError(err).Errorf("error getting webhook count")
+		log.WithError(err).Errorf("error getting webhook count")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2433,7 +2433,7 @@ func NotificationWebhookPage(w http.ResponseWriter, r *http.Request) {
 	var activeAPP uint64
 	err = db.FrontendReaderDB.GetContext(ctx, &activeAPP, `SELECT count(*) from users_app_subscriptions where active = 't' and user_id = $1;`, user.UserID)
 	if err != nil {
-		logger.WithError(err).Errorf("error getting app subscription count")
+		log.WithError(err).Errorf("error getting app subscription count")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2445,7 +2445,7 @@ func NotificationWebhookPage(w http.ResponseWriter, r *http.Request) {
 	var activeAPI uint64
 	err = db.FrontendReaderDB.GetContext(ctx, &activeAPI, `SELECT count(*) from users_stripe_subscriptions us join users u on u.stripe_customer_id = us.customer_id where active = 't' and u.id = $1;`, user.UserID)
 	if err != nil {
-		logger.WithError(err).Errorf("error getting api subscription count")
+		log.WithError(err).Errorf("error getting api subscription count")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2471,7 +2471,7 @@ func NotificationWebhookPage(w http.ResponseWriter, r *http.Request) {
 		WHERE user_id = $1;
 	`, user.UserID)
 	if err != nil {
-		logger.Errorf("error querying for webhooks for %v route: %v", r.URL.String(), err)
+		log.Errorf("error querying for webhooks for %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2481,7 +2481,7 @@ func NotificationWebhookPage(w http.ResponseWriter, r *http.Request) {
 
 		url, err := r.URL.Parse(wh.Url)
 		if err != nil {
-			logger.WithError(err).Error("error parsing URL for webhook")
+			log.WithError(err).Error("error parsing URL for webhook")
 			wh.Url = "Invalid URL"
 		}
 		// events := template.HTML{}
@@ -2592,7 +2592,7 @@ func NotificationWebhookPage(w http.ResponseWriter, r *http.Request) {
 	pageData.Webhooks = webhooks
 	pageData.WebhookRows = webhookRows
 
-	// logger.Infof("events: %+v", webhooks)
+	// log.Infof("events: %+v", webhooks)
 
 	events := make([]types.EventNameCheckbox, 0, 10)
 
@@ -2717,7 +2717,7 @@ func UsersAddWebhook(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.FrontendWriterDB.BeginTxx(ctx, &sql.TxOptions{})
 	if err != nil {
-		logger.WithError(err).Errorf("error beginning transaction")
+		log.WithError(err).Errorf("error beginning transaction")
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong adding your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2727,7 +2727,7 @@ func UsersAddWebhook(w http.ResponseWriter, r *http.Request) {
 	var webhookCount uint64
 	err = tx.Get(&webhookCount, `SELECT count(*) from users_webhooks where user_id = $1`, user.UserID)
 	if err != nil {
-		logger.WithError(err).Errorf("error getting webhook count")
+		log.WithError(err).Errorf("error getting webhook count")
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong adding your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2738,7 +2738,7 @@ func UsersAddWebhook(w http.ResponseWriter, r *http.Request) {
 	var activeAPP uint64
 	err = tx.Get(&activeAPP, `SELECT count(*) from users_app_subscriptions where active = 't' and user_id = $1;`, user.UserID)
 	if err != nil {
-		logger.WithError(err).Errorf("error getting app subscription count")
+		log.WithError(err).Errorf("error getting app subscription count")
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong adding your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2751,7 +2751,7 @@ func UsersAddWebhook(w http.ResponseWriter, r *http.Request) {
 	var activeAPI uint64
 	err = db.FrontendWriterDB.GetContext(ctx, &activeAPI, `SELECT count(*) from users_stripe_subscriptions us join users u on u.stripe_customer_id = us.customer_id where active = 't' and u.id = $1;`, user.UserID)
 	if err != nil {
-		logger.WithError(err).Errorf("error getting api subscription count")
+		log.WithError(err).Errorf("error getting api subscription count")
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong adding your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2770,7 +2770,7 @@ func UsersAddWebhook(w http.ResponseWriter, r *http.Request) {
 
 	_, err = tx.Exec(`INSERT INTO users_webhooks (user_id, url, event_names, destination) VALUES ($1, $2, $3, $4)`, user.UserID, urlForm, pq.StringArray(eventNames), destination)
 	if err != nil {
-		logger.WithError(err).Errorf("error inserting a new webhook for user")
+		log.WithError(err).Errorf("error inserting a new webhook for user")
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong adding your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2778,7 +2778,7 @@ func UsersAddWebhook(w http.ResponseWriter, r *http.Request) {
 
 	err = tx.Commit()
 	if err != nil {
-		logger.WithError(err).Errorf("error for %v route: %v", r.URL.String(), err)
+		log.WithError(err).Errorf("error for %v route: %v", r.URL.String(), err)
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
 	}
@@ -2852,7 +2852,7 @@ func UsersEditWebhook(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.FrontendWriterDB.BeginTxx(ctx, &sql.TxOptions{})
 	if err != nil {
-		logger.WithError(err).Errorf("error beginning transaction")
+		log.WithError(err).Errorf("error beginning transaction")
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong editing your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2863,7 +2863,7 @@ func UsersEditWebhook(w http.ResponseWriter, r *http.Request) {
 
 	urlParsed, err := url.Parse(urlForm)
 	if err != nil {
-		logger.WithError(err).Errorf("could not parse url: %v", urlForm)
+		log.WithError(err).Errorf("could not parse url: %v", urlForm)
 		utils.SetFlash(w, r, authSessionName, "Error: the URL you have provided is invalid.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2875,7 +2875,7 @@ func UsersEditWebhook(w http.ResponseWriter, r *http.Request) {
 
 	_, err = tx.Exec(`UPDATE users_webhooks set url = $1, event_names = $2, destination = $3 where user_id = $4 and id = $5`, urlValid, pq.StringArray(eventNames), destination, user.UserID, webhookID)
 	if err != nil {
-		logger.WithError(err).Errorf("error update webhook for user")
+		log.WithError(err).Errorf("error update webhook for user")
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong editing your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2883,7 +2883,7 @@ func UsersEditWebhook(w http.ResponseWriter, r *http.Request) {
 
 	err = tx.Commit()
 	if err != nil {
-		logger.WithError(err).Errorf("error for %v route: %v", r.URL.String(), err)
+		log.WithError(err).Errorf("error for %v route: %v", r.URL.String(), err)
 		utils.SetFlash(w, r, authSessionName, "Error: Something went wrong editing your webhook, please try again in a bit.")
 		http.Redirect(w, r, "/user/webhooks", http.StatusSeeOther)
 		return
@@ -2903,7 +2903,7 @@ func UsersDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.FrontendWriterDB.BeginTxx(ctx, &sql.TxOptions{})
 	if err != nil {
-		logger.WithError(err).Errorf("error beginning transaction")
+		log.WithError(err).Errorf("error beginning transaction")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2911,14 +2911,14 @@ func UsersDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 
 	_, err = tx.Exec(`DELETE FROM users_webhooks where user_id = $1 and id = $2`, user.UserID, webhookID)
 	if err != nil {
-		logger.WithError(err).Errorf("error update webhook for user")
+		log.WithError(err).Errorf("error update webhook for user")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		logger.WithError(err).Errorf("error for %v route: %v", r.URL.String(), err)
+		log.WithError(err).Errorf("error for %v route: %v", r.URL.String(), err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2943,7 +2943,7 @@ func UsersNotificationChannels(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.FrontendWriterDB.Beginx()
 	if err != nil {
-		logger.WithError(err).Error("error beginning transaction")
+		log.WithError(err).Error("error beginning transaction")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2951,26 +2951,26 @@ func UsersNotificationChannels(w http.ResponseWriter, r *http.Request) {
 
 	_, err = tx.Exec(`INSERT INTO users_notification_channels (user_id, channel, active) VALUES ($1, $2, $3) ON CONFLICT (user_id, channel) DO UPDATE SET active = $3`, user.UserID, types.EmailNotificationChannel, channelEmail == "on")
 	if err != nil {
-		logger.WithError(err).Error("error updating users_notification_channels")
+		log.WithError(err).Error("error updating users_notification_channels")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	_, err = tx.Exec(`INSERT INTO users_notification_channels (user_id, channel, active) VALUES ($1, $2, $3) ON CONFLICT (user_id, channel) DO UPDATE SET active = $3`, user.UserID, types.PushNotificationChannel, channelPush == "on")
 	if err != nil {
-		logger.WithError(err).Error("error updating users_notification_channels")
+		log.WithError(err).Error("error updating users_notification_channels")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	_, err = tx.Exec(`INSERT INTO users_notification_channels (user_id, channel, active) VALUES ($1, $2, $3) ON CONFLICT (user_id, channel) DO UPDATE SET active = $3`, user.UserID, types.WebhookNotificationChannel, channelWebhook == "on")
 	if err != nil {
-		logger.WithError(err).Error("error updating users_notification_channels")
+		log.WithError(err).Error("error updating users_notification_channels")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		logger.WithError(err).Error("error committing transaction")
+		log.WithError(err).Error("error committing transaction")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -3000,7 +3000,7 @@ func UserGlobalNotification(w http.ResponseWriter, r *http.Request) {
 
 	err := db.WriterDb.Select(&configs, "SELECT target, content, enabled FROM global_notifications WHERE target = $1 ORDER BY target", utils.Config.Chain.Name)
 	if err != nil {
-		logger.Errorf("error retrieving globalNotificationMessage: %v", err)
+		log.Errorf("error retrieving globalNotificationMessage: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -3008,7 +3008,7 @@ func UserGlobalNotification(w http.ResponseWriter, r *http.Request) {
 	if len(configs) == 0 {
 		_, err = db.WriterDb.Exec("INSERT INTO global_notifications VALUES ($1, '', false)", utils.Config.Chain.Name)
 		if err != nil {
-			logger.Errorf("error creating default global notification entry: %v", err)
+			log.Errorf("error creating default global notification entry: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -3052,7 +3052,7 @@ func UserGlobalNotificationPost(w http.ResponseWriter, r *http.Request) {
 	var targets []string
 	err = db.WriterDb.Select(&targets, "SELECT target FROM global_notifications WHERE target = $1", utils.Config.Chain.Name)
 	if err != nil {
-		logger.Errorf("error retrieving targets: %v", err)
+		log.Errorf("error retrieving targets: %v", err)
 		http.Redirect(w, r, "/user/global_notification", http.StatusSeeOther)
 		return
 	}
@@ -3068,7 +3068,7 @@ func UserGlobalNotificationPost(w http.ResponseWriter, r *http.Request) {
 		_, err = db.WriterDb.Exec("UPDATE global_notifications SET content = $1, enabled = $2 WHERE target = $3", content, enabled, target)
 
 		if err != nil {
-			logger.Errorf("error setting globalNotificationMessage: %v", err)
+			log.Errorf("error setting globalNotificationMessage: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}

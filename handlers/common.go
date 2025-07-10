@@ -26,7 +26,8 @@ import (
 	"github.com/gorilla/mux"
 	utilMath "github.com/protolambda/zrnt/eth2/util/math"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -66,7 +67,7 @@ func GetValidatorEarnings(validators []uint64, currency string, bt *db.Bigtable)
 	g.Go(func() error {
 		latestBalances, err := bt.GetValidatorBalanceHistory(validators, latestFinalizedEpoch, latestFinalizedEpoch)
 		if err != nil {
-			logger.Errorf("error getting validator balance data in GetValidatorEarnings: %v", err)
+			log.Errorf("error getting validator balance data in GetValidatorEarnings: %v", err)
 			return err
 		}
 
@@ -483,7 +484,7 @@ func LatestState(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewEncoder(w).Encode(data)
 	if err != nil {
-		logger.Errorf("error sending latest index page data: %v", err)
+		log.Errorf("error sending latest index page data: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -501,7 +502,7 @@ func GetCurrency(r *http.Request) string {
 func GetCurrencySymbol(r *http.Request) string {
 	cookie, err := r.Cookie("currency")
 	if err != nil {
-		logger.WithError(err).Tracef("error in handlers.GetCurrencySymbol")
+		log.WithError(err).Tracef("error in handlers.GetCurrencySymbol")
 		return "$"
 	}
 	if cookie.Value == utils.Config.Frontend.MainCurrency {
@@ -658,7 +659,7 @@ func SetDataTableStateChanges(w http.ResponseWriter, r *http.Request) {
 	settings := types.DataTableSaveState{}
 	err = json.NewDecoder(r.Body).Decode(&settings)
 	if err != nil {
-		logger.Warnf(errMsgPrefix+", could not parse body for tableKey %v: %v", tableKey, err)
+		log.Warnf(errMsgPrefix+", could not parse body for tableKey %v: %v", tableKey, err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -686,7 +687,7 @@ func SetDataTableStateChanges(w http.ResponseWriter, r *http.Request) {
 func handleTemplateError(w http.ResponseWriter, r *http.Request, fileIdentifier string, functionIdentifier string, infoIdentifier string, err error) error {
 	// ignore network related errors
 	if err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ETIMEDOUT) {
-		logger.WithFields(logrus.Fields{
+		log.WithFields(logger.Fields{
 			"file":       fileIdentifier,
 			"function":   functionIdentifier,
 			"info":       infoIdentifier,
@@ -785,4 +786,71 @@ func getExecutionChartData(indices []uint64, currency string, lowerBoundDay uint
 	})
 
 	return chartData, nil
+}
+
+// renderNotFound renders a 404 Not Found page using the provided HTML template.
+//
+// It sets the HTTP status code to 404, logs the reason for the error, and renders the response
+// using the specified template and standard page data initialized by InitPageData.
+//
+// Parameters:
+//   - w: the http.ResponseWriter to write the response to
+//   - r: the incoming HTTP request
+//   - page: the page category identifier (e.g. "blockchain", "beacon")
+//   - path: the request path (used for logging and metadata)
+//   - reason: the human-readable reason why the resource was not found
+//   - tmpl: the precompiled HTML template to use for rendering
+func renderNotFound(w http.ResponseWriter, r *http.Request, page, path, reason string, tmpl *template.Template) {
+	log.Warnf("404 Not Found [%s]: %s", path, reason)
+
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusNotFound)
+
+	data := InitPageData(w, r, page, path, "Not Found", nil)
+	data.Data = reason
+
+	err := tmpl.ExecuteTemplate(w, "layout", data)
+	if err != nil {
+		log.Errorf("RenderNotFound template error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+
+// parseRankParam extracts and validates the optional "rank" parameter from the URL variables.
+//
+// Returns rank as uint32 (default is 0 if not provided) or an error if rank is out of range [0–4]
+// or not a valid unsigned integer.
+func parseRankParam(vars map[string]string) (uint32, error) {
+	rankStr, ok := vars["rank"]
+	if !ok {
+		return 0, nil // default - beacon block with rank 0
+	}
+
+	rank64, err := strconv.ParseUint(rankStr, 10, 32)
+	if err != nil || rank64 > 4 {
+		return 0, fmt.Errorf("invalid rank: %s", rankStr)
+	}
+
+	return uint32(rank64), nil
+}
+
+// parseBlockNumber parses the "block" parameter from the URL variables as either:
+//   - a block hash (64 hex characters), resolved via RPC
+//   - or a decimal block number.
+//
+// Returns the resolved block number or an error if parsing fails.
+func parseBlockNumber(vars map[string]string, rpc execution.ExecutionClient) (uint64, error) {
+	blockStr := strings.TrimPrefix(vars["block"], "0x")
+	if len(blockStr) == 64 {
+		return rpc.GetBlockNumberByHash(blockStr)
+	}
+	return strconv.ParseUint(blockStr, 10, 64)
+}
+
+// isPostMergeBlock determines if the given block should be treated as a post-Merge (PoS) block.
+//
+// It checks whether the block has zero difficulty (typical for PoS blocks)
+// or if the block is block 0 in a network that launched directly into PoS.
+func isPostMergeBlock(number uint64, ts int64, difficulty *big.Int) bool {
+	return difficulty.Cmp(big.NewInt(0)) == 0 || utils.IsPoSBlock0(number, ts)
 }

@@ -97,7 +97,7 @@ func (client *ErigonClient) GetRPCClient() *geth_rpc.Client {
 	return client.rpcClient
 }
 
-func (ec *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth1Block, *types.GetBlockTimings, error) {
+func (ec *ErigonClient) GetBlock(number int64, traceMode string, rank uint32) (*types.Eth1Block, *types.GetBlockTimings, error) {
 	startTime := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("rpc_el_get_block").Observe(time.Since(startTime).Seconds())
@@ -109,9 +109,17 @@ func (ec *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth1Blo
 	start := time.Now()
 	timings := &types.GetBlockTimings{}
 
-	block, err := ec.client.BlockByNumber(ctx, big.NewInt(int64(number)))
+	block, err := ec.client.BlockByNumberAndRank(ctx, big.NewInt(number), uint64(rank))
 	if err != nil {
-		return nil, nil, err
+		if rank == 0 {
+			// fallback to standard GetBlockByNumber for rank 0
+			block, err = ec.client.BlockByNumber(ctx, big.NewInt(number))
+			if err != nil {
+				return nil, nil, fmt.Errorf("fallback GetBlockByNumber failed for block %d: %w", number, err)
+			}
+		} else {
+			return nil, nil, fmt.Errorf("error fetching block %d with rank %d: %w", number, rank, err)
+		}
 	}
 
 	timings.Headers = time.Since(start)
@@ -136,6 +144,7 @@ func (ec *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth1Blo
 		Uncles:       []*types.Eth1Block{},
 		Transactions: []*types.Eth1Transaction{},
 		Withdrawals:  []*types.Eth1Withdrawal{},
+		Rank:         rank,
 	}
 	blobGasUsed := block.BlobGasUsed()
 	if blobGasUsed != nil {
@@ -167,6 +176,7 @@ func (ec *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth1Blo
 			Extra:       uncle.Extra,
 			MixDigest:   uncle.MixDigest.Bytes(),
 			Bloom:       uncle.Bloom.Bytes(),
+			Rank:        0, // TODO: make sure 0 suits here
 		}
 
 		c.Uncles = append(c.Uncles, pbUncle)

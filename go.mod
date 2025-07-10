@@ -300,3 +300,5 @@ replace github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a 
 replace github.com/rocket-pool/rocketpool-go v1.8.2 => github.com/gobitfly/rocketpool-go v0.0.0-20240105082836-5bb7c83a2d08
 
 // replace github.com/ethereum/go-ethereum => github.com/gobitfly/go-ethereum v1.8.13-0.20230227100926-e78d720a0bf6
+
+replace github.com/ethereum/go-ethereum => github.com/ethpar/go-ethereum.par v0.0.0-20250701102112-92c94765f9f9

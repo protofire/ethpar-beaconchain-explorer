@@ -45,14 +45,14 @@ func ValidatorRewards(w http.ResponseWriter, r *http.Request) {
 			from information_schema.columns 
 			where table_name = 'price'`)
 	if err != nil {
-		logger.Errorf("error getting eth1-deposits-distribution for stake pools: %v", err)
+		log.Errorf("error getting eth1-deposits-distribution for stake pools: %v", err)
 	}
 
 	var minTime time.Time
 	err = db.ReaderDb.Get(&minTime,
 		`select ts from price order by ts asc limit 1`)
 	if err != nil {
-		logger.Errorf("error getting min ts: %v", err)
+		log.Errorf("error getting min ts: %v", err)
 	}
 
 	data.Data = rewardsResp{Currencies: supportedCurrencies, CsrfField: csrf.TemplateField(r), MinDateTimestamp: uint64(minTime.Unix()), ShowSubscriptions: data.User.Authenticated}
@@ -68,7 +68,7 @@ func getUserRewardSubscriptions(uid uint64) [][]string {
 	err := db.FrontendWriterDB.Select(&dbResp,
 		`select id, user_id, event_name, event_filter, last_sent_ts, last_sent_epoch, created_ts, created_epoch, event_threshold, unsubscribe_hash, internal_state from users_subscriptions where event_name=$1 AND user_id=$2`, strings.ToLower(utils.GetNetwork())+":"+string(types.TaxReportEventName), uid)
 	if err != nil {
-		logger.Errorf("error getting prices: %v", err)
+		log.Errorf("error getting prices: %v", err)
 	}
 
 	res := make([][]string, len(dbResp))
@@ -95,7 +95,7 @@ func isValidCurrency(currency string) bool {
 		from information_schema.columns 
 		where table_name = 'price' AND column_name=$1;`, currency)
 	if err != nil {
-		logger.Errorf("error checking currency: %v", err)
+		log.Errorf("error checking currency: %v", err)
 		return false
 	}
 
@@ -129,13 +129,13 @@ func RewardsHistoricalData(bt *db.Bigtable) http.HandlerFunc {
 		if len(dateRange) == 2 {
 			start, err = strconv.ParseUint(dateRange[0], 10, 32) //Limit to uint32 for postgres
 			if err != nil || start < startGenesisDay {
-				logger.Warnf("error parsing days range: %v", err)
+				log.Warnf("error parsing days range: %v", err)
 				http.Error(w, "Error: Invalid parameter days.", http.StatusBadRequest)
 				return
 			}
 			end, err = strconv.ParseUint(dateRange[1], 10, 32) //Limit to uint32 for postgres
 			if err != nil || end < startGenesisDay {
-				logger.Warnf("error parsing days range: %v", err)
+				log.Warnf("error parsing days range: %v", err)
 				http.Error(w, "Error: Invalid parameter days.", http.StatusBadRequest)
 				return
 			}
@@ -145,7 +145,7 @@ func RewardsHistoricalData(bt *db.Bigtable) http.HandlerFunc {
 
 		err = json.NewEncoder(w).Encode(data)
 		if err != nil {
-			logger.WithError(err).WithField("route", r.URL.String()).Error("error encoding json response")
+			log.WithError(err).WithField("route", r.URL.String()).Error("error encoding json response")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -173,13 +173,13 @@ func DownloadRewardsHistoricalData(bt *db.Bigtable) http.HandlerFunc {
 		if len(dateRange) == 2 {
 			start, err = strconv.ParseUint(dateRange[0], 10, 32) //Limit to uint32 for postgres
 			if err != nil || start < startGenesisDay {
-				logger.Warnf("error parsing days range: %v", err)
+				log.Warnf("error parsing days range: %v", err)
 				http.Error(w, "Error: Invalid parameter days.", http.StatusBadRequest)
 				return
 			}
 			end, err = strconv.ParseUint(dateRange[1], 10, 32) //Limit to uint32 for postgres
 			if err != nil || end < startGenesisDay {
-				logger.Warnf("error parsing days range: %v", err)
+				log.Warnf("error parsing days range: %v", err)
 				http.Error(w, "Error: Invalid parameter days.", http.StatusBadRequest)
 				return
 			}
@@ -200,7 +200,7 @@ func DownloadRewardsHistoricalData(bt *db.Bigtable) http.HandlerFunc {
 
 		_, err = w.Write(services.GeneratePdfReport(hist, currency, bt))
 		if err != nil {
-			logger.WithError(err).WithField("route", r.URL.String()).Error("error writing response")
+			log.WithError(err).WithField("route", r.URL.String()).Error("error writing response")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -339,7 +339,7 @@ func RewardGetUserSubscriptions(w http.ResponseWriter, r *http.Request) {
 	SetAutoContentType(w, r)
 	user := getUser(r)
 	if !user.Authenticated {
-		logger.WithField("route", r.URL.String()).Error("User not Authenticated")
+		log.WithField("route", r.URL.String()).Error("User not Authenticated")
 		http.Error(w, "Internal server error, User Not Authenticated", http.StatusUnauthorized)
 		return
 	}
@@ -351,7 +351,7 @@ func RewardGetUserSubscriptions(w http.ResponseWriter, r *http.Request) {
 		where user_id=$1 AND event_name=$2;`, user.UserID, strings.ToLower(utils.GetNetwork())+":"+string(types.TaxReportEventName))
 
 	if err != nil {
-		logger.WithField("route", r.URL.String()).Error("Failed to get User Subscriptions Count")
+		log.WithField("route", r.URL.String()).Error("Failed to get User Subscriptions Count")
 		http.Error(w, "Internal server error, Failed to get User Subscriptions Count", http.StatusInternalServerError)
 		return
 	}
@@ -364,7 +364,7 @@ func RewardGetUserSubscriptions(w http.ResponseWriter, r *http.Request) {
 	}{Data: data, Count: count})
 
 	if err != nil {
-		logger.WithError(err).WithField("route", r.URL.String()).Error("error encoding json response")
+		log.WithError(err).WithField("route", r.URL.String()).Error("error encoding json response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

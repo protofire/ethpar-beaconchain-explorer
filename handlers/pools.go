@@ -25,7 +25,7 @@ func Pools(w http.ResponseWriter, r *http.Request) {
 
 	poolsData, err := poolsPageData()
 	if err != nil {
-		logger.Errorf("unable to retrieve data for %v route", r.URL.String())
+		log.Errorf("unable to retrieve data for %v route", r.URL.String())
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

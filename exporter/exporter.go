@@ -64,7 +64,7 @@ func Start(client consensus.ConsensusClient, bt *db.Bigtable) {
 			time.Sleep(minWaitTimeBetweenRuns - elapsed)
 		}
 
-		services.ReportStatus("slotExporter", "Running", nil)
+		services.ReportStatus(true, "slotExporter", "Running", nil)
 	}
 }
 
