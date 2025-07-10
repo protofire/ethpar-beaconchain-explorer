@@ -44,14 +44,18 @@ func New(output io.Writer) *Logger {
 	return &Logger{entry: logrus.NewEntry(base)}
 }
 
-// WithFields returns a new log entry with the given structured fields attached.
-func (l *Logger) WithFields(f Fields) *logrus.Entry {
-	return l.entry.WithFields(logrus.Fields(f))
+// WithFields returns a new Logger with additional structured fields.
+func (l *Logger) WithFields(f Fields) *Logger {
+	return &Logger{
+		entry: l.entry.WithFields(logrus.Fields(f)),
+	}
 }
 
 // WithField returns a new log entry with a single field attached.
-func (l *Logger) WithField(key string, value any) *logrus.Entry {
-	return l.entry.WithField(key, value)
+func (l *Logger) WithField(key string, value any) *Logger {
+	return &Logger{
+		entry: l.entry.WithField(key, value),
+	}
 }
 
 // WithError returns a new log entry with the given error attached.
@@ -71,6 +75,9 @@ func (l *Logger) Debug(args ...any) { l.entry.Debug(args...) }
 // Error logs a message at the Warn level.
 func (l *Logger) Warn(args ...any) { l.entry.Warn(args...) }
 
+// Error logs a message at the Trace level.
+func (l *Logger) Trace(args ...any) { l.entry.Trace(args...) }
+
 // Error logs a message at the Panic level and then panics.
 func (l *Logger) Panic(args ...any) { l.entry.Panic(args...) }
 
@@ -88,6 +95,9 @@ func (l *Logger) Debugf(format string, args ...any) { l.entry.Debugf(format, arg
 
 // Warnf logs a formatted message at the Warn level.
 func (l *Logger) Warnf(format string, args ...any) { l.entry.Warnf(format, args...) }
+
+// Warnf logs a formatted message at the Trace level.
+func (l *Logger) Tracef(format string, args ...any) { l.entry.Tracef(format, args...) }
 
 // Panicf logs a formatted message at the Panic level and then panics.
 func (l *Logger) Panicf(format string, args ...any) { l.entry.Panicf(format, args...) }

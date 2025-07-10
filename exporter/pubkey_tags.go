@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 )
 
 // UpdatePubkeyTag periodically updates the validator_tags table by associating

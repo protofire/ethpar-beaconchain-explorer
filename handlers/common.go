@@ -45,7 +45,7 @@ func GetValidatorOnlineThresholdSlot() uint64 {
 }
 
 // GetValidatorEarnings will return the earnings (last day, week, month and total) of selected validators, including proposal and statisic information - infused with data from the current day. all values are
-func GetValidatorEarnings(validators []uint64, currency string) (*types.ValidatorEarnings, map[uint64]*types.Validator, error) {
+func GetValidatorEarnings(validators []uint64, currency string, bt *db.Bigtable) (*types.ValidatorEarnings, map[uint64]*types.Validator, error) {
 	if len(validators) == 0 {
 		return nil, nil, errors.New("no validators provided")
 	}
@@ -64,7 +64,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 
 	g := errgroup.Group{}
 	g.Go(func() error {
-		latestBalances, err := db.BigtableClient.GetValidatorBalanceHistory(validators, latestFinalizedEpoch, latestFinalizedEpoch)
+		latestBalances, err := bt.GetValidatorBalanceHistory(validators, latestFinalizedEpoch, latestFinalizedEpoch)
 		if err != nil {
 			logger.Errorf("error getting validator balance data in GetValidatorEarnings: %v", err)
 			return err
@@ -246,7 +246,7 @@ func GetValidatorEarnings(validators []uint64, currency string) (*types.Validato
 	}
 	if len(proposedToday) > 0 {
 		// get el data
-		execBlocks, err := db.BigtableClient.GetBlocksIndexedMultiple(proposedToday, 10000)
+		execBlocks, err := bt.GetBlocksIndexedMultiple(proposedToday, 10000)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error retrieving execution blocks data from bigtable: %v", err)
 		}
@@ -730,14 +730,14 @@ func GetWithdrawableCountFromCursor(epoch uint64, validatorindex uint64, cursor 
 	}
 }
 
-func getExecutionChartData(indices []uint64, currency string, lowerBoundDay uint64) ([]*types.ChartDataPoint, error) {
+func getExecutionChartData(indices []uint64, currency string, lowerBoundDay uint64, bt *db.Bigtable) ([]*types.ChartDataPoint, error) {
 	var limit uint64 = 300
 	blockList, consMap, err := findExecBlockNumbersByProposerIndex(indices, 0, limit, false, true, lowerBoundDay)
 	if err != nil {
 		return nil, err
 	}
 
-	blocks, err := db.BigtableClient.GetBlocksIndexedMultiple(blockList, limit)
+	blocks, err := bt.GetBlocksIndexedMultiple(blockList, limit)
 	if err != nil {
 		return nil, err
 	}

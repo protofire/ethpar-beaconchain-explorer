@@ -12,7 +12,7 @@ import (
 	"time"
 
 	ensContracts "github.com/protofire/ethpar-beaconchain-explorer/contracts/ens"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -316,11 +316,11 @@ func (bigtable *Bigtable) ImportEnsUpdates(client *ethclient.Client, readBatchSi
 	}
 
 	if len(keys) == 0 {
-		logger.Info("No ENS entries to validate")
+		log.Info("No ENS entries to validate")
 		return nil
 	}
 
-	logger.Infof("Validating %v ENS entries", len(keys))
+	log.Infof("Validating %v ENS entries", len(keys))
 	alreadyChecked := EnsCheckedDictionary{
 		address: make(map[common.Address]bool),
 		name:    make(map[string]bool),
@@ -337,7 +337,7 @@ func (bigtable *Bigtable) ImportEnsUpdates(client *ethclient.Client, readBatchSi
 			to = total
 		}
 		batch := keys[i:to]
-		logger.Infof("Batching ENS entries %v:%v of %v", i, to, total)
+		log.Infof("Batching ENS entries %v:%v of %v", i, to, total)
 
 		g := new(errgroup.Group)
 		g.SetLimit(10) // limit load on the node
@@ -415,7 +415,7 @@ func (bigtable *Bigtable) ImportEnsUpdates(client *ethclient.Client, readBatchSi
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	logger.WithField("updates", total).Info("Import of ENS updates completed")
+	log.WithField("updates", total).Info("Import of ENS updates completed")
 	return nil
 }
 
@@ -447,7 +447,7 @@ func validateEnsAddress(client *ethclient.Client, address common.Address, alread
 				err.Error() == "no resolution" ||
 				err.Error() == "execution reverted" ||
 				strings.HasPrefix(err.Error(), "name is not valid") {
-				// logger.Warnf("reverse resolving address [%v] resulted in a skippable error [%s], skipping it", address, err.Error())
+				// log.Warnf("reverse resolving address [%v] resulted in a skippable error [%s], skipping it", address, err.Error())
 			} else {
 				return fmt.Errorf("error could not reverse resolve address [%v]: %w", address, err)
 			}
@@ -486,7 +486,7 @@ func validateEnsName(client *ethclient.Client, name string, alreadyChecked *EnsC
 
 	nameHash, err := go_ens.NameHash(name)
 	if err != nil {
-		// logger.Warnf("error could not hash name [%v]: %v -> removing ens entry", name, err)
+		// log.Warnf("error could not hash name [%v]: %v -> removing ens entry", name, err)
 		err = removeEnsName(client, name)
 		if err != nil {
 			return fmt.Errorf("error removing ens name [%v]: %w", name, err)
@@ -504,7 +504,7 @@ func validateEnsName(client *ethclient.Client, name string, alreadyChecked *EnsC
 			err.Error() == "invalid jump destination" ||
 			err.Error() == "invalid opcode: INVALID" {
 			// the given name is not available anymore or resolving it did not work properly => we can remove it from the db (if it is there)
-			// logger.WithField("error", err).WithField("name", name).Warnf("could not resolve name")
+			// log.WithField("error", err).WithField("name", name).Warnf("could not resolve name")
 			err = removeEnsName(client, name)
 			if err != nil {
 				return fmt.Errorf("error removing ens name after resolve failed [%v]: %w", name, err)
@@ -526,7 +526,7 @@ func validateEnsName(client *ethclient.Client, name string, alreadyChecked *EnsC
 	// ensName, err := go_ens.NewName(client, mainName)
 	// if err != nil {
 	// 	if strings.HasPrefix(err.Error(), "name is not valid") {
-	// 		logger.WithField("error", err).WithField("name", name).Warnf("could not create name")
+	// 		log.WithField("error", err).WithField("name", name).Warnf("could not create name")
 	// 		return nil
 	// 	}
 	// 	return fmt.Errorf("error could not create name via go_ens.NewName for [%v]: %w", name, err)
@@ -540,7 +540,7 @@ func validateEnsName(client *ethclient.Client, name string, alreadyChecked *EnsC
 	reverseName, err := go_ens.ReverseResolve(client, addr)
 	if err != nil {
 		if err.Error() == "not a resolver" || err.Error() == "no resolution" || err.Error() == "execution reverted" {
-			// logger.Warnf("reverse resolving address [%v] for name [%v] resulted in an error [%s], marking entry as not primary", addr, name, err.Error())
+			// log.Warnf("reverse resolving address [%v] for name [%v] resulted in an error [%s], marking entry as not primary", addr, name, err.Error())
 		} else {
 			return fmt.Errorf("error could not reverse resolve address [%v]: %w", addr, err)
 		}
@@ -567,13 +567,13 @@ func validateEnsName(client *ethclient.Client, name string, alreadyChecked *EnsC
 	`, nameHash[:], name, addr.Bytes(), isPrimary, expires)
 	if err != nil {
 		if strings.Contains(fmt.Sprintf("%v", err), "invalid byte sequence") {
-			logger.Warnf("could not insert ens name [%v]: %v", name, err)
+			log.Warnf("could not insert ens name [%v]: %v", name, err)
 			return nil
 		}
 		return fmt.Errorf("error writing ens data for name [%v]: %w", name, err)
 	}
 
-	// logrus.WithFields(logrus.Fields{
+	// log.WithFields(logger.Fields{
 	// 	"name":        name,
 	// 	"address":     addr,
 	// 	"expires":     expires,
@@ -683,11 +683,11 @@ func removeEnsName(client *ethclient.Client, name string) error {
 		ens_name = $1
 	;`, name)
 	if err != nil && strings.Contains(fmt.Sprintf("%v", err), "invalid byte sequence") {
-		logger.Warnf("could not delete ens name [%v]: %v", name, err)
+		log.Warnf("could not delete ens name [%v]: %v", name, err)
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("error deleting ens name [%v]: %v", name, err)
 	}
-	logger.Infof("Ens name removed from db: %v", name)
+	log.Infof("Ens name removed from db: %v", name)
 	return nil
 }

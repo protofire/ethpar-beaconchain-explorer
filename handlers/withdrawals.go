@@ -51,58 +51,60 @@ func Withdrawals(w http.ResponseWriter, r *http.Request) {
 }
 
 // WithdrawalsData will return eth1-deposits as json
-func WithdrawalsData(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	currency := GetCurrency(r)
-	q := r.URL.Query()
+func WithdrawalsData(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		currency := GetCurrency(r)
+		q := r.URL.Query()
 
-	search := ReplaceEnsNameWithAddress(q.Get("search[value]"))
+		search := ReplaceEnsNameWithAddress(q.Get("search[value]"))
 
-	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
-		http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
-		return
-	}
+		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
+			return
+		}
 
-	start, err := strconv.ParseUint(q.Get("start"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables start parameter from string to int: %v", err)
-		http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
-		return
-	}
-	if start > db.WithdrawalsQueryLimit {
-		start = db.WithdrawalsQueryLimit
-	}
-	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables length parameter from string to int: %v", err)
-		http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
-		return
-	}
-	if length > 100 {
-		length = 100
-	}
+		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
+			return
+		}
+		if start > db.WithdrawalsQueryLimit {
+			start = db.WithdrawalsQueryLimit
+		}
+		length, err := strconv.ParseUint(q.Get("length"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+			http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
+			return
+		}
+		if length > 100 {
+			length = 100
+		}
 
-	orderBy := q.Get("order[0][column]")
-	orderDir := q.Get("order[0][dir]")
+		orderBy := q.Get("order[0][column]")
+		orderDir := q.Get("order[0][dir]")
 
-	data, err := WithdrawalsTableData(draw, search, length, start, orderBy, orderDir, currency)
-	if err != nil {
-		logger.Errorf("error getting withdrawal table data: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+		data, err := WithdrawalsTableData(draw, search, length, start, orderBy, orderDir, currency, bt)
+		if err != nil {
+			logger.Errorf("error getting withdrawal table data: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 
-	err = json.NewEncoder(w).Encode(data)
-	if err != nil {
-		logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		err = json.NewEncoder(w).Encode(data)
+		if err != nil {
+			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
-func WithdrawalsTableData(draw uint64, search string, length, start uint64, orderBy, orderDir string, currency string) (*types.DataTableResponse, error) {
+func WithdrawalsTableData(draw uint64, search string, length, start uint64, orderBy, orderDir string, currency string, bt *db.Bigtable) (*types.DataTableResponse, error) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Minute*10))
 	defer cancel()
 
@@ -190,7 +192,7 @@ func WithdrawalsTableData(draw uint64, search string, length, start uint64, orde
 	for _, v := range withdrawals {
 		names[string(v.Address)] = ""
 	}
-	names, _, err = db.BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bt.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -227,57 +229,59 @@ func WithdrawalsTableData(draw uint64, search string, length, start uint64, orde
 }
 
 // Eth1DepositsData will return eth1-deposits as json
-func BLSChangeData(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	q := r.URL.Query()
+func BLSChangeData(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
 
-	search := ReplaceEnsNameWithAddress(q.Get("search[value]"))
+		search := ReplaceEnsNameWithAddress(q.Get("search[value]"))
 
-	draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
-		http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
-		return
-	}
-	start, err := strconv.ParseUint(q.Get("start"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables start parameter from string to int: %v", err)
-		http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
-		return
-	}
-	if start > db.BlsChangeQueryLimit {
-		// limit offset to 10000, otherwise the query will be too slow
-		start = db.BlsChangeQueryLimit
-	}
-	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
-	if err != nil {
-		logger.Warnf("error converting datatables length parameter from string to int: %v", err)
-		http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
-		return
-	}
-	if length > 100 {
-		length = 100
-	}
+		draw, err := strconv.ParseUint(q.Get("draw"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables draw parameter from string to int: %v", err)
+			http.Error(w, "Error: Missing or invalid parameter draw", http.StatusBadRequest)
+			return
+		}
+		start, err := strconv.ParseUint(q.Get("start"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables start parameter from string to int: %v", err)
+			http.Error(w, "Error: Missing or invalid parameter start", http.StatusBadRequest)
+			return
+		}
+		if start > db.BlsChangeQueryLimit {
+			// limit offset to 10000, otherwise the query will be too slow
+			start = db.BlsChangeQueryLimit
+		}
+		length, err := strconv.ParseUint(q.Get("length"), 10, 64)
+		if err != nil {
+			logger.Warnf("error converting datatables length parameter from string to int: %v", err)
+			http.Error(w, "Error: Missing or invalid parameter length", http.StatusBadRequest)
+			return
+		}
+		if length > 100 {
+			length = 100
+		}
 
-	orderBy := q.Get("order[0][column]")
-	orderDir := q.Get("order[0][dir]")
+		orderBy := q.Get("order[0][column]")
+		orderDir := q.Get("order[0][dir]")
 
-	data, err := BLSTableData(draw, search, length, start, orderBy, orderDir)
-	if err != nil {
-		logger.Errorf("Error getting bls changes: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+		data, err := BLSTableData(draw, search, length, start, orderBy, orderDir, bt)
+		if err != nil {
+			logger.Errorf("Error getting bls changes: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 
-	err = json.NewEncoder(w).Encode(data)
-	if err != nil {
-		logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		err = json.NewEncoder(w).Encode(data)
+		if err != nil {
+			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
-func BLSTableData(draw uint64, search string, length, start uint64, orderBy, orderDir string) (*types.DataTableResponse, error) {
+func BLSTableData(draw uint64, search string, length, start uint64, orderBy, orderDir string, bt *db.Bigtable) (*types.DataTableResponse, error) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Minute*10))
 	defer cancel()
 	orderByMap := map[string]string{
@@ -356,7 +360,7 @@ func BLSTableData(draw uint64, search string, length, start uint64, orderBy, ord
 	for _, v := range blsChange {
 		names[string(v.Address)] = ""
 	}
-	names, _, err = db.BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+	names, _, err = bt.GetAddressesNamesArMetadata(&names, nil)
 	if err != nil {
 		return nil, err
 	}

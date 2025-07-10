@@ -12,7 +12,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -28,7 +28,7 @@ import (
 var logger = logrus.New().WithField("module", "eth1data")
 var ErrTxIsPending = errors.New("error retrieving data for tx: tx is still pending")
 
-func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, error) {
+func GetEth1Transaction(hash common.Hash, currency string, rpc execution.ExecutionClient, bt *db.Bigtable) (*types.Eth1TxData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -48,7 +48,7 @@ func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, e
 		}
 		return data, nil
 	}
-	tx, pending, err := rpc.CurrentErigonClient.GetNativeClient().TransactionByHash(ctx, hash)
+	tx, pending, err := rpc.GetNativeClient().TransactionByHash(ctx, hash)
 
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving data for tx: %w", err)
@@ -66,7 +66,7 @@ func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, e
 		Events:    make([]*types.Eth1EventData, 0, 10),
 	}
 
-	receipt, err := getTransactionReceipt(ctx, hash)
+	receipt, err := getTransactionReceipt(ctx, rpc, hash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving receipt data for tx: %w", err)
 	}
@@ -79,12 +79,12 @@ func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, e
 		txPageData.To = &receipt.ContractAddress
 		txPageData.IsContractCreation = true
 	}
-	txPageData.TargetIsContract, err = IsContract(ctx, *txPageData.To)
+	txPageData.TargetIsContract, err = IsContract(ctx, rpc, *txPageData.To)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving code data for tx recipient %v: %w", tx.To(), err)
 	}
 
-	header, err := getBlockHeaderByHash(ctx, receipt.BlockHash)
+	header, err := getBlockHeaderByHash(ctx, rpc, receipt.BlockHash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving block header data for tx: %w", err)
 	}
@@ -135,7 +135,7 @@ func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, e
 		}
 	}
 
-	data, err := rpc.CurrentErigonClient.TraceParityTx(tx.Hash().Hex())
+	data, err := rpc.TraceParityTx(tx.Hash().Hex())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get parity trace for revert reason: %w", err)
 	}
@@ -145,21 +145,21 @@ func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, e
 			txPageData.ErrorMsg = errorMsg
 		}
 	} else {
-		txPageData.Transfers, err = db.BigtableClient.GetArbitraryTokenTransfersForTransaction(tx.Hash().Bytes())
+		txPageData.Transfers, err = bt.GetArbitraryTokenTransfersForTransaction(tx.Hash().Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("error loading token transfers from tx: %w", err)
 		}
 	}
-	txPageData.InternalTxns, err = db.BigtableClient.GetInternalTransfersForTransaction(tx.Hash().Bytes(), msg.From.Bytes(), data, currency)
+	txPageData.InternalTxns, err = bt.GetInternalTransfersForTransaction(tx.Hash().Bytes(), msg.From.Bytes(), data, currency)
 	if err != nil {
 		return nil, fmt.Errorf("error loading internal transfers from tx: %w", err)
 	}
-	txPageData.FromName, err = db.BigtableClient.GetAddressName(msg.From.Bytes())
+	txPageData.FromName, err = bt.GetAddressName(msg.From.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveing from name for tx: %w", err)
 	}
 	if msg.To != nil {
-		txPageData.ToName, err = db.BigtableClient.GetAddressName(msg.To.Bytes())
+		txPageData.ToName, err = bt.GetAddressName(msg.To.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("error retrieveing to name for tx: %w", err)
 		}
@@ -176,13 +176,13 @@ func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, e
 
 		for _, log := range receipt.Logs {
 			if cmEntry, wasContractMetadataCached = contractMetadataCache[log.Address]; !wasContractMetadataCached {
-				cmEntry.meta, cmEntry.err = db.BigtableClient.GetContractMetadata(log.Address.Bytes())
+				cmEntry.meta, cmEntry.err = bt.GetContractMetadata(log.Address.Bytes())
 				contractMetadataCache[log.Address] = cmEntry
 			}
 			if cmEntry.err != nil || cmEntry.meta == nil || cmEntry.meta.ABI == nil {
 				name := ""
 				if len(log.Topics) > 0 {
-					name = db.BigtableClient.GetEventLabel(log.Topics[0][:])
+					name = bt.GetEventLabel(log.Topics[0][:])
 				}
 				eth1Event := &types.Eth1EventData{
 					Address: log.Address,
@@ -296,13 +296,13 @@ func GetEth1Transaction(hash common.Hash, currency string) (*types.Eth1TxData, e
 	return txPageData, nil
 }
 
-func IsContract(ctx context.Context, address common.Address) (bool, error) {
+func IsContract(ctx context.Context, rpc execution.ExecutionClient, address common.Address) (bool, error) {
 	cacheKey := fmt.Sprintf("%d:isContract:%s", utils.Config.Chain.ClConfig.DepositChainID, address.String())
 	if wanted, err := cache.TieredCache.GetBoolWithLocalTimeout(cacheKey, time.Hour); err == nil {
 		return wanted, nil
 	}
 
-	code, err := rpc.CurrentErigonClient.GetNativeClient().CodeAt(ctx, address, nil)
+	code, err := rpc.GetNativeClient().CodeAt(ctx, address, nil)
 	if err != nil {
 		return false, fmt.Errorf("error retrieving code data for address %v: %w", address, err)
 	}
@@ -316,8 +316,8 @@ func IsContract(ctx context.Context, address common.Address) (bool, error) {
 	return isContract, nil
 }
 
-func getBlockHeaderByHash(ctx context.Context, hash common.Hash) (*geth_types.Header, error) {
-	header, err := rpc.CurrentErigonClient.GetNativeClient().HeaderByHash(ctx, hash)
+func getBlockHeaderByHash(ctx context.Context, rpc execution.ExecutionClient, hash common.Hash) (*geth_types.Header, error) {
+	header, err := rpc.GetNativeClient().HeaderByHash(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving block header data for tx: %w", err)
 	}
@@ -325,7 +325,7 @@ func getBlockHeaderByHash(ctx context.Context, hash common.Hash) (*geth_types.He
 	return header, nil
 }
 
-func getTransactionReceipt(ctx context.Context, hash common.Hash) (*geth_types.Receipt, error) {
+func getTransactionReceipt(ctx context.Context, rpc execution.ExecutionClient, hash common.Hash) (*geth_types.Receipt, error) {
 	cacheKey := fmt.Sprintf("%d:r:%s", utils.Config.Chain.ClConfig.DepositChainID, hash.String())
 
 	if wanted, err := cache.TieredCache.GetWithLocalTimeout(cacheKey, time.Hour, new(geth_types.Receipt)); err == nil {
@@ -333,7 +333,7 @@ func getTransactionReceipt(ctx context.Context, hash common.Hash) (*geth_types.R
 		return wanted.(*geth_types.Receipt), nil
 	}
 
-	receipt, err := rpc.CurrentErigonClient.GetNativeClient().TransactionReceipt(ctx, hash)
+	receipt, err := rpc.GetNativeClient().TransactionReceipt(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving receipt data for tx: %w", err)
 	}

@@ -24,7 +24,7 @@ type rewardHistory struct {
 	Validators    []uint64   `json:"validators"`
 }
 
-func GetValidatorHist(validatorArr []uint64, currency string, start uint64, end uint64) rewardHistory {
+func GetValidatorHist(validatorArr []uint64, currency string, start uint64, end uint64, bt *db.Bigtable) rewardHistory {
 	var err error
 
 	var pricesDb []types.Price
@@ -49,7 +49,7 @@ func GetValidatorHist(validatorArr []uint64, currency string, start uint64, end 
 		lowerBound++
 	}
 
-	income, err := db.GetValidatorIncomeHistory(validatorArr, lowerBound, upperBound, LatestFinalizedEpoch())
+	income, err := db.GetValidatorIncomeHistory(validatorArr, lowerBound, upperBound, LatestFinalizedEpoch(), bt)
 	if err != nil {
 		logger.Errorf("error getting income history for validator hist: %v", err)
 	}
@@ -125,7 +125,7 @@ func addCommas(balance float64, decimals string) string {
 	return string(rb)
 }
 
-func GeneratePdfReport(hist rewardHistory, currency string) []byte {
+func GeneratePdfReport(hist rewardHistory, currency string, bt *db.Bigtable) []byte {
 
 	data := hist.History
 
@@ -254,7 +254,7 @@ func GeneratePdfReport(hist rewardHistory, currency string) []byte {
 
 	y = pdf.GetY()
 
-	for i, row := range getValidatorDetails(validators) {
+	for i, row := range getValidatorDetails(validators, bt) {
 		pdf.SetTextColor(24, 24, 24)
 		pdf.SetFillColor(255, 255, 255)
 		x := marginH
@@ -295,12 +295,12 @@ func GeneratePdfReport(hist rewardHistory, currency string) []byte {
 
 }
 
-func GetPdfReport(validatorArr []uint64, currency string, start uint64, end uint64) []byte {
-	hist := GetValidatorHist(validatorArr, currency, start, end)
-	return GeneratePdfReport(hist, currency)
+func GetPdfReport(validatorArr []uint64, currency string, start uint64, end uint64, bt *db.Bigtable) []byte {
+	hist := GetValidatorHist(validatorArr, currency, start, end, bt)
+	return GeneratePdfReport(hist, currency, bt)
 }
 
-func getValidatorDetails(validators []uint64) [][]string {
+func getValidatorDetails(validators []uint64, bt *db.Bigtable) [][]string {
 	validatorFilter := pq.Array(validators)
 	var data []types.ValidatorPageData
 	err := db.WriterDb.Select(&data,
@@ -314,7 +314,7 @@ func getValidatorDetails(validators []uint64) [][]string {
 	}
 
 	latestEpoch := LatestEpoch()
-	balances, err := db.BigtableClient.GetValidatorBalanceHistory(validators, latestEpoch, latestEpoch)
+	balances, err := bt.GetValidatorBalanceHistory(validators, latestEpoch, latestEpoch)
 	if err != nil {
 		utils.LogError(err, "error getting validator balance history", 0, map[string]interface{}{
 			"validators":  validators,
@@ -323,7 +323,7 @@ func getValidatorDetails(validators []uint64) [][]string {
 		return [][]string{}
 	}
 
-	lastAttestationSlots, err := db.BigtableClient.GetLastAttestationSlots(validators)
+	lastAttestationSlots, err := bt.GetLastAttestationSlots(validators)
 	if err != nil {
 		utils.LogError(err, "error getting validator balance history", 0, map[string]interface{}{
 			"validators":  validators,

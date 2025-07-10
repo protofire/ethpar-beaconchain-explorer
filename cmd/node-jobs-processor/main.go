@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 	"github.com/protofire/ethpar-beaconchain-explorer/version"
@@ -35,14 +35,7 @@ func main() {
 	utils.Config = cfg
 	logrus.WithField("config", *configPath).WithField("version", version.Version).WithField("chainName", utils.Config.Chain.ClConfig.ConfigName).Printf("starting")
 
-	if utils.Config.Metrics.Enabled {
-		go func(addr string) {
-			logrus.Infof("serving metrics on %v", addr)
-			if err := metrics.Serve(addr); err != nil {
-				logrus.WithError(err).Fatal("Error serving metrics")
-			}
-		}(utils.Config.Metrics.Address)
-	}
+	metrics.StartMetrics(utils.Config.Metrics.Enabled, utils.Config.Metrics.Address)
 
 	db.MustInitDB(&types.DatabaseConfig{
 		Username:     cfg.WriterDatabase.Username,

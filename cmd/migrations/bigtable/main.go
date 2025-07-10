@@ -46,10 +46,17 @@ func main() {
 	}
 	utils.Config = cfg
 
-	bt, err := db.InitBigtable(utils.Config.Bigtable.Project, utils.Config.Bigtable.Instance, fmt.Sprintf("%d", utils.Config.Chain.ClConfig.DepositChainID), utils.Config.RedisCacheEndpoint)
-	if err != nil {
-		logrus.Fatalf("error connecting to bigtable: %v", err)
-	}
+	// Initialize BigTable client
+	bt := db.MustInitBigtable(&db.BigtableConfig{
+		Project:      utils.Config.Bigtable.Project,
+		Instance:     utils.Config.Bigtable.Project,
+		ChainId:      utils.Config.Chain.ClConfig.DepositChainID,
+		CacheAddr:    utils.Config.RedisCacheEndpoint,
+		Emulated:     utils.Config.Bigtable.Emulator,
+		EmulatorHost: utils.Config.Bigtable.EmulatorHost,
+		EmulatorPort: uint16(utils.Config.Bigtable.EmulatorPort),
+		Rpc:          nil,
+	})
 	defer bt.Close()
 
 	db.MustInitDB(&types.DatabaseConfig{
@@ -138,28 +145,28 @@ func main() {
 			g := new(errgroup.Group)
 			g.SetLimit(6)
 			g.Go(func() error {
-				err := db.BigtableClient.SaveValidatorBalances(epoch, data.Validators)
+				err := bt.SaveValidatorBalances(epoch, data.Validators)
 				if err != nil {
 					return fmt.Errorf("error exporting validator balances to bigtable for epoch %v: %w", epoch, err)
 				}
 				return nil
 			})
 			g.Go(func() error {
-				err := db.BigtableClient.SaveAttestationDuties(data.AttestationDuties)
+				err := bt.SaveAttestationDuties(data.AttestationDuties)
 				if err != nil {
 					return fmt.Errorf("error exporting attestations to bigtable for epoch %v: %w", epoch, err)
 				}
 				return nil
 			})
 			g.Go(func() error {
-				err := db.BigtableClient.SaveSyncComitteeDuties(data.SyncDuties)
+				err := bt.SaveSyncComitteeDuties(data.SyncDuties)
 				if err != nil {
 					return fmt.Errorf("error exporting sync committee duties to bigtable for epoch %v: %w", epoch, err)
 				}
 				return nil
 			})
 			g.Go(func() error {
-				err := db.BigtableClient.MigrateIncomeDataV1V2Schema(epoch)
+				err := bt.MigrateIncomeDataV1V2Schema(epoch)
 				if err != nil {
 					return fmt.Errorf("error migrating income data to v2 schema for epoch %v: %w", epoch, err)
 				}
@@ -236,7 +243,7 @@ func monitor(configPath string) {
 		for i := head.FinalizedEpoch; i <= head.HeadEpoch; i++ {
 			logrus.Infof("exporting epoch %v", i)
 			for slot := i * cfg.Chain.ClConfig.SlotsPerEpoch; i <= (i+1)*cfg.Chain.ClConfig.SlotsPerEpoch-1; i++ {
-				err := exporter.ExportSlot(consClient, slot, false, tx)
+				err := exporter.ExportSlot(consClient, slot, false, tx, bt)
 				if err != nil {
 					logrus.Errorf("error exporting slot: %v", err)
 					tx.Rollback()

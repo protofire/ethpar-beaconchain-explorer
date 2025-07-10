@@ -15,56 +15,58 @@ import (
 )
 
 // Will return the gas now page
-func GasNow(w http.ResponseWriter, r *http.Request) {
-	templateFiles := append(layoutTemplateFiles, "gasnow.html")
-	var gasNowTemplate = templates.GetTemplate(templateFiles...)
+func GasNow(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		templateFiles := append(layoutTemplateFiles, "gasnow.html")
+		var gasNowTemplate = templates.GetTemplate(templateFiles...)
 
-	w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html")
 
-	data := InitPageData(w, r, "gasnow", "/gasnow", fmt.Sprintf("%v Gwei", 34), templateFiles)
+		data := InitPageData(w, r, "gasnow", "/gasnow", fmt.Sprintf("%v Gwei", 34), templateFiles)
 
-	now := time.Now().Truncate(time.Minute)
-	lastWeek := time.Now().Truncate(time.Minute).Add(-utils.Week)
+		now := time.Now().Truncate(time.Minute)
+		lastWeek := time.Now().Truncate(time.Minute).Add(-utils.Week)
 
-	history, err := db.BigtableClient.GetGasNowHistory(now, lastWeek)
-	if err != nil {
-		logger.Errorf("error retrieving gas price histors: %v", err)
-		return
-	}
-
-	group := make(map[int64]float64, 0)
-	for i := 0; i < len(history); i++ {
-		_, ok := group[history[i].Ts.Truncate(time.Hour).Unix()]
-		if !ok {
-			group[history[i].Ts.Truncate(time.Hour).Unix()] = float64(history[i].Fast.Int64())
-		} else {
-			group[history[i].Ts.Truncate(time.Hour).Unix()] = (group[history[i].Ts.Truncate(time.Hour).Unix()] + float64(history[i].Fast.Int64())) / 2
+		history, err := bt.GetGasNowHistory(now, lastWeek)
+		if err != nil {
+			logger.Errorf("error retrieving gas price histors: %v", err)
+			return
 		}
-	}
 
-	resRet := []*struct {
-		Ts      int64   `json:"ts"`
-		AvgFast float64 `json:"fast"`
-	}{}
+		group := make(map[int64]float64, 0)
+		for i := 0; i < len(history); i++ {
+			_, ok := group[history[i].Ts.Truncate(time.Hour).Unix()]
+			if !ok {
+				group[history[i].Ts.Truncate(time.Hour).Unix()] = float64(history[i].Fast.Int64())
+			} else {
+				group[history[i].Ts.Truncate(time.Hour).Unix()] = (group[history[i].Ts.Truncate(time.Hour).Unix()] + float64(history[i].Fast.Int64())) / 2
+			}
+		}
 
-	for ts, fast := range group {
-		resRet = append(resRet, &struct {
+		resRet := []*struct {
 			Ts      int64   `json:"ts"`
 			AvgFast float64 `json:"fast"`
-		}{
-			Ts:      ts,
-			AvgFast: fast,
+		}{}
+
+		for ts, fast := range group {
+			resRet = append(resRet, &struct {
+				Ts      int64   `json:"ts"`
+				AvgFast float64 `json:"fast"`
+			}{
+				Ts:      ts,
+				AvgFast: fast,
+			})
+		}
+
+		sort.SliceStable(resRet, func(i int, j int) bool {
+			return resRet[i].Ts > resRet[j].Ts
 		})
-	}
 
-	sort.SliceStable(resRet, func(i int, j int) bool {
-		return resRet[i].Ts > resRet[j].Ts
-	})
+		data.Data = resRet
 
-	data.Data = resRet
-
-	if handleTemplateError(w, r, "gasnow.go", "GasNow", "", gasNowTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-		return // an error has occurred and was processed
+		if handleTemplateError(w, r, "gasnow.go", "GasNow", "", gasNowTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+			return // an error has occurred and was processed
+		}
 	}
 }
 

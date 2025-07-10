@@ -1,4 +1,4 @@
-package rpc
+package erigon
 
 import (
 	"context"
@@ -10,15 +10,17 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/contracts/oneinchoracle"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/balance"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
-	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	
 	"github.com/ethereum/go-ethereum/ethclient"
 	geth_rpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/sirupsen/logrus"
@@ -31,39 +33,38 @@ import (
 type ErigonClient struct {
 	endpoint     string
 	rpcClient    *geth_rpc.Client
-	ethClient    *ethclient.Client
+	client       *ethclient.Client
 	chainID      *big.Int
-	multiChecker *Balance
+	multiChecker *balance.Balance
+	logger       *logger.Logger
 }
 
-var CurrentErigonClient *ErigonClient
-
 func NewErigonClient(endpoint string) (*ErigonClient, error) {
-	logger.Infof("initializing erigon client at %v", endpoint)
+
+	log := logger.New(nil).WithField("service", "erigonRpcClient")
 	client := &ErigonClient{
 		endpoint: endpoint,
+		logger: log,
 	}
-
-	rpcClient, err := geth_rpc.Dial(client.endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("error dialing rpc node: %w", err)
-	}
-	client.rpcClient = rpcClient
+	
+	log.Infof("initializing erigon client at %v", endpoint)
 
 	ethClient, err := ethclient.Dial(client.endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing rpc node: %w", err)
 	}
-	client.ethClient = ethClient
-
-	client.multiChecker, err = NewBalance(common.HexToAddress("0xb1F8e55c7f64D203C1400B9D8555d050F94aDF39"), client.ethClient)
+	client.client = ethClient
+	client.rpcClient = ethClient.Client()
+	
+	// TODO: what is this address for?
+	client.multiChecker, err = balance.NewBalance(common.HexToAddress("0xb1F8e55c7f64D203C1400B9D8555d050F94aDF39"), client.client)
 	if err != nil {
 		return nil, fmt.Errorf("error initiation balance checker contract: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	chainID, err := client.ethClient.ChainID(ctx)
+	chainID, err := client.client.ChainID(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting chainid of rpcclient: %w", err)
 	}
@@ -72,24 +73,31 @@ func NewErigonClient(endpoint string) (*ErigonClient, error) {
 	return client, nil
 }
 
-func (client *ErigonClient) Close() {
-	client.rpcClient.Close()
-	client.ethClient.Close()
+func (ec *ErigonClient) Close() {
+	ec.rpcClient.Close()
+	ec.client.Close()
 }
 
-func (client *ErigonClient) GetChainID() *big.Int {
-	return client.chainID
+func (ec *ErigonClient) GetChainID() *big.Int {
+	return ec.chainID
 }
 
-func (client *ErigonClient) GetNativeClient() *ethclient.Client {
-	return client.ethClient
+func (ec *ErigonClient) ValidateChainIdFromConfig(cfgId uint64) bool {
+	clientChainId := ec.GetChainID()
+	configChainId := new(big.Int).SetUint64(cfgId)
+
+	return clientChainId.Cmp(configChainId) == 0
+}
+
+func (ec *ErigonClient) GetNativeClient() *ethclient.Client {
+	return ec.client
 }
 
 func (client *ErigonClient) GetRPCClient() *geth_rpc.Client {
 	return client.rpcClient
 }
 
-func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth1Block, *types.GetBlockTimings, error) {
+func (ec *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth1Block, *types.GetBlockTimings, error) {
 	startTime := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("rpc_el_get_block").Observe(time.Since(startTime).Seconds())
@@ -101,7 +109,7 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 	start := time.Now()
 	timings := &types.GetBlockTimings{}
 
-	block, err := client.ethClient.BlockByNumber(ctx, big.NewInt(int64(number)))
+	block, err := ec.client.BlockByNumber(ctx, big.NewInt(int64(number)))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -184,7 +192,9 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 	for _, tx := range txs {
 
 		var from []byte
-		sender, err := geth_types.Sender(geth_types.NewCancunSigner(tx.ChainId()), tx)
+		signer := geth_types.LatestSignerForChainID(tx.ChainId())
+		sender, err := geth_types.Sender(signer, tx)
+		//sender, err := geth_types.Sender(geth_types.NewCancunSigner(tx.ChainId()), tx)
 		if err != nil {
 			from, _ = hex.DecodeString("abababababababababababababababababababab")
 			logrus.Errorf("error converting tx %v to msg: %v", tx.Hash(), err)
@@ -233,13 +243,13 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 
 		var traceError error
 		if traceMode == "parity" || traceMode == "parity/geth" {
-			traces, err := client.TraceParity(block.NumberU64())
+			traces, err := ec.TraceParity(block.NumberU64())
 
 			if err != nil {
 				if traceMode == "parity" {
 					return fmt.Errorf("error tracing block via parity style traces (%v), %v: %w", block.Number(), block.Hash(), err)
 				} else {
-					logger.Errorf("error tracing block via parity style traces (%v), %v: %v", block.Number(), block.Hash(), err)
+					ec.logger.Errorf("error tracing block via parity style traces (%v), %v: %v", block.Number(), block.Hash(), err)
 
 				}
 				traceError = err
@@ -277,7 +287,7 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 
 		if traceMode == "geth" || (traceError != nil && traceMode == "parity/geth") {
 
-			gethTraceData, err := client.TraceGeth(block.Hash())
+			gethTraceData, err := ec.TraceGeth(block.Hash())
 
 			if err != nil {
 				return fmt.Errorf("error tracing block via geth style traces (%v), %v: %w", block.Number(), block.Hash(), err)
@@ -318,7 +328,7 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 					logrus.Fatalf("unknown trace type %v in tx %v", trace.Type, trace.TransactionPosition)
 				}
 
-				logger.Tracef("appending trace %v to tx %x from %v to %v value %v", trace.TransactionPosition, c.Transactions[trace.TransactionPosition].Hash, trace.From, trace.To, trace.Value)
+				ec.logger.Tracef("appending trace %v to tx %x from %v to %v value %v", trace.TransactionPosition, c.Transactions[trace.TransactionPosition].Hash, trace.From, trace.To, trace.Value)
 
 				c.Transactions[trace.TransactionPosition].Itx = append(c.Transactions[trace.TransactionPosition].Itx, tracePb)
 			}
@@ -331,7 +341,7 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 		return nil
 	})
 
-	if err = client.rpcClient.CallContext(ctx, &receipts, "eth_getBlockReceipts", fmt.Sprintf("0x%x", block.NumberU64())); err != nil {
+	if err = ec.rpcClient.CallContext(ctx, &receipts, "eth_getBlockReceipts", fmt.Sprintf("0x%x", block.NumberU64())); err != nil {
 		return nil, nil, fmt.Errorf("error retrieving receipts for block %v: %w", block.Number(), err)
 	}
 
@@ -372,7 +382,7 @@ func (client *ErigonClient) GetBlock(number int64, traceMode string) (*types.Eth
 	return c, timings, nil
 }
 
-func (client *ErigonClient) GetBlockNumberByHash(hash string) (uint64, error) {
+func (ec *ErigonClient) GetBlockNumberByHash(hash string) (uint64, error) {
 	startTime := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("rpc_el_get_block_number_by_hash").Observe(time.Since(startTime).Seconds())
@@ -381,14 +391,14 @@ func (client *ErigonClient) GetBlockNumberByHash(hash string) (uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	block, err := client.ethClient.BlockByHash(ctx, common.HexToHash(hash))
+	block, err := ec.client.BlockByHash(ctx, common.HexToHash(hash))
 	if err != nil {
 		return 0, err
 	}
 	return block.NumberU64(), nil
 }
 
-func (client *ErigonClient) GetLatestEth1BlockNumber() (uint64, error) {
+func (ec *ErigonClient) GetLatestEth1BlockNumber() (uint64, error) {
 	startTime := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("rpc_el_get_latest_eth1_block_number").Observe(time.Since(startTime).Seconds())
@@ -397,7 +407,7 @@ func (client *ErigonClient) GetLatestEth1BlockNumber() (uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	latestBlock, err := client.ethClient.BlockByNumber(ctx, nil)
+	latestBlock, err := ec.client.BlockByNumber(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("error getting latest block: %w", err)
 	}
@@ -405,53 +415,19 @@ func (client *ErigonClient) GetLatestEth1BlockNumber() (uint64, error) {
 	return latestBlock.NumberU64(), nil
 }
 
-type GethTraceCallResultWrapper struct {
-	Result *GethTraceCallResult
-}
+func (ec *ErigonClient) TraceGeth(blockHash common.Hash) ([]*rpc_types.GethTraceCallResult, error) {
+	var res []*rpc_types.GethTraceCallResultWrapper
 
-type GethTraceCallResult struct {
-	TransactionPosition int
-	Time                string
-	GasUsed             string
-	From                common.Address
-	To                  common.Address
-	Value               string
-	Gas                 string
-	Input               string
-	Output              string
-	Error               string
-	Type                string
-	Calls               []*GethTraceCallResult
-}
-
-var gethTracerArg = map[string]string{
-	"tracer": "callTracer",
-}
-
-func extractCalls(r *GethTraceCallResult, d *[]*GethTraceCallResult) {
-	if r == nil {
-		return
+	var gethTracerArg = map[string]string{
+		"tracer": "callTracer",
 	}
-	*d = append(*d, r)
-
-	if r.Calls == nil {
-		return
-	}
-	for _, c := range r.Calls {
-		c.TransactionPosition = r.TransactionPosition
-		extractCalls(c, d)
-	}
-}
-
-func (client *ErigonClient) TraceGeth(blockHash common.Hash) ([]*GethTraceCallResult, error) {
-	var res []*GethTraceCallResultWrapper
-
-	err := client.rpcClient.Call(&res, "debug_traceBlockByHash", blockHash, gethTracerArg)
+	
+	err := ec.rpcClient.Call(&res, "debug_traceBlockByHash", blockHash, gethTracerArg)
 	if err != nil {
 		return nil, err
 	}
 
-	data := make([]*GethTraceCallResult, 0, 20)
+	data := make([]*rpc_types.GethTraceCallResult, 0, 20)
 	for i, r := range res {
 		r.Result.TransactionPosition = i
 		extractCalls(r.Result, &data)
@@ -460,67 +436,10 @@ func (client *ErigonClient) TraceGeth(blockHash common.Hash) ([]*GethTraceCallRe
 	return data, nil
 }
 
-type ParityTraceResult struct {
-	Action struct {
-		CallType      string `json:"callType"`
-		From          string `json:"from"`
-		Gas           string `json:"gas"`
-		Input         string `json:"input"`
-		To            string `json:"to"`
-		Value         string `json:"value"`
-		Init          string `json:"init"`
-		Address       string `json:"address"`
-		Balance       string `json:"balance"`
-		RefundAddress string `json:"refundAddress"`
-		Author        string `json:"author"`
-		RewardType    string `json:"rewardType"`
-	} `json:"action"`
-	BlockHash   string `json:"blockHash"`
-	BlockNumber int    `json:"blockNumber"`
-	Error       string `json:"error"`
-	Result      struct {
-		GasUsed string `json:"gasUsed"`
-		Code    string `json:"code"`
-		Output  string `json:"output"`
-		Address string `json:"address"`
-	} `json:"result"`
+func (ec *ErigonClient) TraceParity(blockNumber uint64) ([]*rpc_types.ParityTraceResult, error) {
+	var res []*rpc_types.ParityTraceResult
 
-	Subtraces           int     `json:"subtraces"`
-	TraceAddress        []int64 `json:"traceAddress"`
-	TransactionHash     string  `json:"transactionHash"`
-	TransactionPosition int     `json:"transactionPosition"`
-	Type                string  `json:"type"`
-}
-
-func (trace *ParityTraceResult) ConvertFields() ([]byte, []byte, []byte, string) {
-	var from, to, value []byte
-	tx_type := trace.Type
-
-	switch trace.Type {
-	case "create":
-		from = common.FromHex(trace.Action.From)
-		to = common.FromHex(trace.Result.Address)
-		value = common.FromHex(trace.Action.Value)
-	case "suicide":
-		from = common.FromHex(trace.Action.Address)
-		to = common.FromHex(trace.Action.RefundAddress)
-		value = common.FromHex(trace.Action.Balance)
-	case "call":
-		from = common.FromHex(trace.Action.From)
-		to = common.FromHex(trace.Action.To)
-		value = common.FromHex(trace.Action.Value)
-		tx_type = trace.Action.CallType
-	default:
-		spew.Dump(trace)
-		utils.LogFatal(nil, "unknown trace type", 0, map[string]interface{}{"trace type": trace.Type, "tx hash": trace.TransactionHash})
-	}
-	return from, to, value, tx_type
-}
-
-func (client *ErigonClient) TraceParity(blockNumber uint64) ([]*ParityTraceResult, error) {
-	var res []*ParityTraceResult
-
-	err := client.rpcClient.Call(&res, "trace_block", blockNumber)
+	err := ec.rpcClient.Call(&res, "trace_block", blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -528,10 +447,10 @@ func (client *ErigonClient) TraceParity(blockNumber uint64) ([]*ParityTraceResul
 	return res, nil
 }
 
-func (client *ErigonClient) TraceParityTx(txHash string) ([]*ParityTraceResult, error) {
-	var res []*ParityTraceResult
+func (ec *ErigonClient) TraceParityTx(txHash string) ([]*rpc_types.ParityTraceResult, error) {
+	var res []*rpc_types.ParityTraceResult
 
-	err := client.rpcClient.Call(&res, "trace_transaction", txHash)
+	err := ec.rpcClient.Call(&res, "trace_transaction", txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -539,7 +458,7 @@ func (client *ErigonClient) TraceParityTx(txHash string) ([]*ParityTraceResult, 
 	return res, nil
 }
 
-func (client *ErigonClient) GetBalances(pairs []*types.Eth1AddressBalance, addressIndex, tokenIndex int) ([]*types.Eth1AddressBalance, error) {
+func (ec *ErigonClient) GetBalances(pairs []*types.Eth1AddressBalance, addressIndex, tokenIndex int) ([]*types.Eth1AddressBalance, error) {
 	startTime := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("rpc_el_get_balances").Observe(time.Since(startTime).Seconds())
@@ -586,7 +505,7 @@ func (client *ErigonClient) GetBalances(pairs []*types.Eth1AddressBalance, addre
 		}
 	}
 
-	err := client.rpcClient.BatchCall(batchElements)
+	err := ec.rpcClient.BatchCall(batchElements)
 	if err != nil {
 		return nil, fmt.Errorf("error during batch request: %w", err)
 	}
@@ -605,7 +524,7 @@ func (client *ErigonClient) GetBalances(pairs []*types.Eth1AddressBalance, addre
 	return ret, nil
 }
 
-func (client *ErigonClient) GetBalancesForAddresse(address string, tokenStr []string) ([]*types.Eth1AddressBalance, error) {
+func (ec *ErigonClient) GetBalancesForAddresse(address string, tokenStr []string) ([]*types.Eth1AddressBalance, error) {
 	opts := &bind.CallOpts{
 		BlockNumber: nil,
 	}
@@ -615,7 +534,7 @@ func (client *ErigonClient) GetBalancesForAddresse(address string, tokenStr []st
 	for _, token := range tokenStr {
 		tokens = append(tokens, common.HexToAddress(token))
 	}
-	balancesInt, err := client.multiChecker.Balances(opts, []common.Address{common.HexToAddress(address)}, tokens)
+	balancesInt, err := ec.multiChecker.Balances(opts, []common.Address{common.HexToAddress(address)}, tokens)
 	if err != nil {
 		return nil, err
 	}
@@ -633,11 +552,11 @@ func (client *ErigonClient) GetBalancesForAddresse(address string, tokenStr []st
 	return res, nil
 }
 
-func (client *ErigonClient) GetNativeBalance(address string) ([]byte, error) {
+func (ec *ErigonClient) GetNativeBalance(address string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	balance, err := client.ethClient.BalanceAt(ctx, common.HexToAddress(address), nil)
+	balance, err := ec.client.BalanceAt(ctx, common.HexToAddress(address), nil)
 
 	if err != nil {
 		return nil, err
@@ -645,12 +564,12 @@ func (client *ErigonClient) GetNativeBalance(address string) ([]byte, error) {
 	return balance.Bytes(), nil
 }
 
-func (client *ErigonClient) GetERC20TokenBalance(address string, token string) ([]byte, error) {
+func (ec *ErigonClient) GetERC20TokenBalance(address string, token string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	to := common.HexToAddress(token)
-	balance, err := client.ethClient.CallContract(ctx, ethereum.CallMsg{
+	balance, err := ec.client.CallContract(ctx, ethereum.CallMsg{
 		To:   &to,
 		Gas:  1000000,
 		Data: common.Hex2Bytes("70a08231000000000000000000000000" + address),
@@ -662,15 +581,15 @@ func (client *ErigonClient) GetERC20TokenBalance(address string, token string) (
 	return balance, nil
 }
 
-func (client *ErigonClient) GetERC20TokenMetadata(token []byte) (*types.ERC20Metadata, error) {
-	logger.Infof("retrieving metadata for token %x", token)
+func (ec *ErigonClient) GetERC20TokenMetadata(token []byte) (*types.ERC20Metadata, error) {
+	ec.logger.Infof("retrieving metadata for token %x", token)
 
-	oracle, err := oneinchoracle.NewOneInchOracleByChainID(client.GetChainID(), client.ethClient)
+	oracle, err := oneinchoracle.NewOneInchOracleByChainID(ec.GetChainID(), ec.client)
 	if err != nil {
 		return nil, err
 	}
 
-	contract, err := erc20.NewErc20(common.BytesToAddress(token), client.ethClient)
+	contract, err := erc20.NewErc20(common.BytesToAddress(token), ec.client)
 	if err != nil {
 		return nil, err
 	}
@@ -735,24 +654,4 @@ func (client *ErigonClient) GetERC20TokenMetadata(token []byte) (*types.ERC20Met
 	}
 
 	return ret, err
-}
-
-func toCallArg(msg ethereum.CallMsg) interface{} {
-	arg := map[string]interface{}{
-		"from": msg.From,
-		"to":   msg.To,
-	}
-	if len(msg.Data) > 0 {
-		arg["data"] = hexutil.Bytes(msg.Data)
-	}
-	if msg.Value != nil {
-		arg["value"] = (*hexutil.Big)(msg.Value)
-	}
-	if msg.Gas != 0 {
-		arg["gas"] = hexutil.Uint64(msg.Gas)
-	}
-	if msg.GasPrice != nil {
-		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
-	}
-	return arg
 }

@@ -14,11 +14,11 @@ const latestBlockNumberCacheKey = "latestEth1BlockNumber"
 const latestBlockHashRootCacheKey = "latestEth1BlockRootHash"
 
 // latestBlockUpdater updates the most recent eth1 block number variable
-func latestBlockUpdater(wg *sync.WaitGroup) {
+func latestBlockUpdater(wg *sync.WaitGroup, bt *db.Bigtable) {
 	firstRun := true
 
 	for {
-		recent, err := db.BigtableClient.GetMostRecentBlockFromDataTable()
+		recent, err := bt.GetMostRecentBlockFromDataTable()
 		if err != nil {
 			utils.LogError(err, "error getting most recent eth1 block", 0)
 		}

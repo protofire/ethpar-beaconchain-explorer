@@ -22,31 +22,35 @@ const (
 	minimumTransactionsPerUpdate = 25
 )
 
-func Eth1Transactions(w http.ResponseWriter, r *http.Request) {
-	templateFiles := append(layoutTemplateFiles, "execution/transactions.html")
-	var eth1TransactionsTemplate = templates.GetTemplate(templateFiles...)
+func Eth1Transactions(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		templateFiles := append(layoutTemplateFiles, "execution/transactions.html")
+		var eth1TransactionsTemplate = templates.GetTemplate(templateFiles...)
 
-	w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html")
 
-	data := InitPageData(w, r, "blockchain", "/eth1transactions", "Transactions", templateFiles)
-	data.Data = getTransactionDataStartingWithPageToken("")
+		data := InitPageData(w, r, "blockchain", "/eth1transactions", "Transactions", templateFiles)
+		data.Data = getTransactionDataStartingWithPageToken("", bt)
 
-	if handleTemplateError(w, r, "eth1Transactions.go", "Eth1Transactions", "", eth1TransactionsTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-		return // an error has occurred and was processed
+		if handleTemplateError(w, r, "eth1Transactions.go", "Eth1Transactions", "", eth1TransactionsTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+			return // an error has occurred and was processed
+		}
 	}
 }
 
-func Eth1TransactionsData(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func Eth1TransactionsData(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	err := json.NewEncoder(w).Encode(getTransactionDataStartingWithPageToken(r.URL.Query().Get("pageToken")))
-	if err != nil {
-		logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		err := json.NewEncoder(w).Encode(getTransactionDataStartingWithPageToken(r.URL.Query().Get("pageToken"), bt))
+		if err != nil {
+			logger.Errorf("error enconding json response for %v route: %v", r.URL.String(), err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 	}
 }
 
-func getTransactionDataStartingWithPageToken(pageToken string) *types.DataTableResponse {
+func getTransactionDataStartingWithPageToken(pageToken string, bt *db.Bigtable) *types.DataTableResponse {
 	pageTokenId := uint64(0)
 	{
 		if len(pageToken) > 0 {
@@ -62,13 +66,13 @@ func getTransactionDataStartingWithPageToken(pageToken string) *types.DataTableR
 
 	tableData := make([][]interface{}, 0, minimumTransactionsPerUpdate)
 	for len(tableData) < minimumTransactionsPerUpdate && pageTokenId != 0 {
-		b, n, err := getEth1BlockAndNext(pageTokenId)
+		b, n, err := getEth1BlockAndNext(pageTokenId, bt)
 		if err != nil {
 			logger.Errorf("error getting transaction from block %v", err)
 			return nil
 		}
 		t := b.GetTransactions()
-		contractInteractionTypes, err := db.BigtableClient.GetAddressContractInteractionsAtBlock(b)
+		contractInteractionTypes, err := bt.GetAddressContractInteractionsAtBlock(b)
 		if err != nil {
 			utils.LogError(err, "error getting contract states", 0)
 		}
@@ -80,7 +84,7 @@ func getTransactionDataStartingWithPageToken(pageToken string) *types.DataTableR
 				names[string(v.GetFrom())] = ""
 				names[string(v.GetTo())] = ""
 			}
-			names, _, err = db.BigtableClient.GetAddressesNamesArMetadata(&names, nil)
+			names, _, err = bt.GetAddressesNamesArMetadata(&names, nil)
 			if err != nil {
 				logger.Errorf("error getting name for addresses: %v", err)
 				return nil
@@ -100,11 +104,11 @@ func getTransactionDataStartingWithPageToken(pageToken string) *types.DataTableR
 				}
 				tableData = append(tableData, []interface{}{
 					utils.FormatAddressWithLimits(v.GetHash(), "", false, "tx", visibleDigitsForHash+5, 18, true),
-					utils.FormatMethod(db.BigtableClient.GetMethodLabel(v.GetData(), contractInteraction)),
+					utils.FormatMethod(bt.GetMethodLabel(v.GetData(), contractInteraction)),
 					template.HTML(fmt.Sprintf(`<A href="block/%d">%v</A>`, b.GetNumber(), utils.FormatAddCommas(b.GetNumber()))),
 					utils.FormatTimestamp(b.GetTime().AsTime().Unix()),
 					utils.FormatAddressWithLimits(v.GetFrom(), names[string(v.GetFrom())], false, "address", visibleDigitsForHash+5, 18, true),
-					utils.FormatAddressWithLimits(v.GetTo(), db.BigtableClient.GetAddressLabel(names[string(v.GetTo())], contractInteraction), contractInteraction != types.CONTRACT_NONE, "address", 15, 20, true),
+					utils.FormatAddressWithLimits(v.GetTo(), bt.GetAddressLabel(names[string(v.GetTo())], contractInteraction), contractInteraction != types.CONTRACT_NONE, "address", 15, 20, true),
 					utils.FormatAmountFormatted(new(big.Int).SetBytes(v.GetValue()), utils.Config.Frontend.ElCurrency, 8, 4, true, true, false),
 					utils.FormatAmountFormatted(db.CalculateTxFeeFromTransaction(v, new(big.Int).SetBytes(b.GetBaseFee())), utils.Config.Frontend.ElCurrency, 8, 4, true, true, false),
 				})
@@ -125,8 +129,8 @@ func getTransactionDataStartingWithPageToken(pageToken string) *types.DataTableR
 // Returns the block requested via number and the number of the next block in our bigtable schema (i.e. the block that came chronologically before the requested block)
 //
 // If nextBlock doesn't exists nil, 0, nil is returned
-func getEth1BlockAndNext(number uint64) (*types.Eth1Block, uint64, error) {
-	block, err := db.BigtableClient.GetBlockFromBlocksTable(number)
+func getEth1BlockAndNext(number uint64, bt *db.Bigtable) (*types.Eth1Block, uint64, error) {
+	block, err := bt.GetBlockFromBlocksTable(number)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -140,7 +144,7 @@ func getEth1BlockAndNext(number uint64) (*types.Eth1Block, uint64, error) {
 
 	nextBlock := uint64(0)
 	{
-		blocks, err := db.BigtableClient.GetBlocksDescending(number, 2)
+		blocks, err := bt.GetBlocksDescending(number, 2)
 		if err != nil {
 			return nil, 0, err
 		}

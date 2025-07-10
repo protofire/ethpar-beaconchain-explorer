@@ -27,7 +27,7 @@ func StripeRemoveCustomer(customerID string) error {
 		)
 	} else {
 		// logg & continue anyway
-		logger.WithError(err).Error("error could not disable stripe mobile subs: " + customerID + "err: ")
+		dblog.WithError(err).Error("error could not disable stripe mobile subs: " + customerID + "err: ")
 	}
 
 	// remove customer id entry from database

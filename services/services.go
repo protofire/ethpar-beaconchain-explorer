@@ -35,7 +35,7 @@ import (
 var logger = logrus.New().WithField("module", "services")
 
 // Init will initialize the services
-func Init(client consensus.ConsensusClient) {
+func Init(client consensus.ConsensusClient, bt *db.Bigtable) {
 	ready := &sync.WaitGroup{}
 	ready.Add(1)
 	go epochUpdater(ready)
@@ -47,7 +47,7 @@ func Init(client consensus.ConsensusClient) {
 	go latestProposedSlotUpdater(ready)
 
 	ready.Add(1)
-	go latestBlockUpdater(ready)
+	go latestBlockUpdater(ready, bt)
 
 	ready.Add(1)
 	go headBlockRootHashUpdater(ready)
@@ -74,16 +74,16 @@ func Init(client consensus.ConsensusClient) {
 	go mempoolUpdater(ready)
 
 	ready.Add(1)
-	go burnUpdater(ready)
+	go burnUpdater(ready, bt)
 
 	ready.Add(1)
-	go gasNowUpdater(ready)
+	go gasNowUpdater(ready, bt)
 
 	ready.Add(1)
 	go ethStoreStatisticsDataUpdater(ready)
 
 	ready.Add(1)
-	go startMonitoringService(ready)
+	go startMonitoringService(ready, bt)
 
 	ready.Add(1)
 	go latestExportedStatisticDayUpdater(ready)
@@ -100,7 +100,7 @@ func InitNotificationSender() {
 	go notificationSender()
 }
 
-func InitNotificationCollector(pubkeyCachePath string) {
+func InitNotificationCollector(pubkeyCachePath string, bt *db.Bigtable) {
 	err := initPubkeyCache(pubkeyCachePath)
 	if err != nil {
 		logger.Fatalf("error initializing pubkey cache path for notifications: %v", err)
@@ -108,7 +108,7 @@ func InitNotificationCollector(pubkeyCachePath string) {
 
 	go ethclients.Init()
 
-	go notificationCollector()
+	go notificationCollector(bt)
 }
 
 func getRelaysPageData() (*types.RelaysResp, error) {
@@ -1306,11 +1306,11 @@ func IsSyncing() bool {
 	return time.Now().Add(time.Minute * -10).After(utils.EpochToTime(LatestEpoch()))
 }
 
-func gasNowUpdater(wg *sync.WaitGroup) {
+func gasNowUpdater(wg *sync.WaitGroup, bt *db.Bigtable) {
 	firstRun := true
 
 	for {
-		data, err := getGasNowData()
+		data, err := getGasNowData(bt)
 		if err != nil {
 			logger.Warnf("error retrieving gas now data: %v", err)
 			time.Sleep(time.Second * 5)
@@ -1330,7 +1330,7 @@ func gasNowUpdater(wg *sync.WaitGroup) {
 	}
 }
 
-func getGasNowData() (*types.GasNowPageData, error) {
+func getGasNowData(bt *db.Bigtable) (*types.GasNowPageData, error) {
 	gpoData := &types.GasNowPageData{}
 	gpoData.Code = 200
 	gpoData.Data.Timestamp = time.Now().UnixNano() / 1e6
@@ -1428,7 +1428,7 @@ func getGasNowData() (*types.GasNowPageData, error) {
 		gpoData.Data.Slow = header.BaseFee
 	}
 
-	err = db.BigtableClient.SaveGasNowHistory(gpoData.Data.Slow, gpoData.Data.Standard, gpoData.Data.Fast, gpoData.Data.Rapid)
+	err = bt.SaveGasNowHistory(gpoData.Data.Slow, gpoData.Data.Standard, gpoData.Data.Fast, gpoData.Data.Rapid)
 	if err != nil {
 		logrus.WithError(err).Error("error updating gas now history")
 	}
@@ -1581,10 +1581,10 @@ func mempoolUpdater(wg *sync.WaitGroup) {
 	}
 }
 
-func burnUpdater(wg *sync.WaitGroup) {
+func burnUpdater(wg *sync.WaitGroup, bt *db.Bigtable) {
 	firstRun := true
 	for ; ; time.Sleep(time.Minute * 15) { // only update once every 15 minutes
-		data, err := getBurnPageData()
+		data, err := getBurnPageData(bt)
 		if err != nil {
 			logger.Errorf("error retrieving burn page data: %v", err)
 			continue
@@ -1602,7 +1602,7 @@ func burnUpdater(wg *sync.WaitGroup) {
 	}
 }
 
-func getBurnPageData() (*types.BurnPageData, error) {
+func getBurnPageData(bt *db.Bigtable) (*types.BurnPageData, error) {
 	data := &types.BurnPageData{}
 	start := time.Now()
 
@@ -1654,7 +1654,7 @@ func getBurnPageData() (*types.BurnPageData, error) {
 		return nil, fmt.Errorf("error retrieving burn rate (1h) from blocks table: %v", err)
 	}
 
-	income, err := db.BigtableClient.GetTotalValidatorIncomeDetailsHistory(lookbackEpoch, latestFinalizedEpoch)
+	income, err := bt.GetTotalValidatorIncomeDetailsHistory(lookbackEpoch, latestFinalizedEpoch)
 	if err != nil {
 		logger.WithError(err).Error("error getting validator income history")
 	}
@@ -1715,7 +1715,7 @@ func getBurnPageData() (*types.BurnPageData, error) {
 		return nil, fmt.Errorf("error retrieving block utilization from blocks table: %v", err)
 	}
 
-	blocks, err := db.BigtableClient.GetBlocksDescending(latestBlock, 1000)
+	blocks, err := bt.GetBlocksDescending(latestBlock, 1000)
 	if err != nil {
 		return nil, err
 	}

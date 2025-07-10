@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/templates"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
@@ -31,130 +32,132 @@ var _ = intersect.Simple
 const MaxSlotValue = 137438953503 // we only render a page for blocks up to this slot
 
 // Slot will return the data for a block contained in the slot
-func Slot(w http.ResponseWriter, r *http.Request) {
-	slotTemplateFiles := append(layoutTemplateFiles,
-		"slot/slot.html",
-		"slot/transactions.html",
-		"slot/withdrawals.html",
-		"slot/attestations.html",
-		"slot/deposits.html",
-		"slot/votes.html",
-		"slot/attesterSlashing.html",
-		"slot/proposerSlashing.html",
-		"slot/exits.html",
-		"slot/blobs.html",
-		"slot/parallel_blocks.html",
-		"components/timestamp.html",
-		"slot/overview.html",
-		"slot/execTransactions.html")
-	slotFutureTemplateFiles := append(layoutTemplateFiles,
-		"slot/slotFuture.html",
-		"components/timestamp.html")
-	blockNotFoundTemplateFiles := append(layoutTemplateFiles, "slotnotfound.html")
-	var slotTemplate = templates.GetTemplate(slotTemplateFiles...)
-	var slotFutureTemplate = templates.GetTemplate(slotFutureTemplateFiles...)
-	var blockNotFoundTemplate = templates.GetTemplate(blockNotFoundTemplateFiles...)
+func Slot(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+    slotTemplateFiles := append(layoutTemplateFiles,
+      "slot/slot.html",
+      "slot/transactions.html",
+      "slot/withdrawals.html",
+      "slot/attestations.html",
+      "slot/deposits.html",
+      "slot/votes.html",
+      "slot/attesterSlashing.html",
+      "slot/proposerSlashing.html",
+      "slot/exits.html",
+      "slot/blobs.html",
+      "slot/parallel_blocks.html",
+      "components/timestamp.html",
+      "slot/overview.html",
+      "slot/execTransactions.html")
+    slotFutureTemplateFiles := append(layoutTemplateFiles,
+      "slot/slotFuture.html",
+      "components/timestamp.html")
+    blockNotFoundTemplateFiles := append(layoutTemplateFiles, "slotnotfound.html")
+    var slotTemplate = templates.GetTemplate(slotTemplateFiles...)
+    var slotFutureTemplate = templates.GetTemplate(slotFutureTemplateFiles...)
+    var blockNotFoundTemplate = templates.GetTemplate(blockNotFoundTemplateFiles...)
 
-	w.Header().Set("Content-Type", "text/html")
-
-	vars := mux.Vars(r)
-
-	slotOrHash := strings.Replace(vars["slotOrHash"], "0x", "", -1)
-	blockSlot := int64(-1)
-	blockRootHash, err := hex.DecodeString(slotOrHash)
-	if err != nil || len(slotOrHash) != 64 {
-		blockRootHash = []byte{}
-		blockSlot, err = strconv.ParseInt(vars["slotOrHash"], 10, 64)
-		if err != nil || blockSlot > math.MaxInt32 { // block slot must be lower than max int4
-			data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), blockNotFoundTemplateFiles)
-			data.Data = "slot"
-			if handleTemplateError(w, r, "slot.go", "Slot", "blockSlot", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-				return // an error has occurred and was processed
-			}
-			return
-		}
-	}
-
-	if blockSlot == -1 {
-		err = db.ReaderDb.Get(&blockSlot, `SELECT slot FROM blocks WHERE blockroot = $1 OR stateroot = $1 LIMIT 1`, blockRootHash)
-		if blockSlot == -1 {
-			data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), blockNotFoundTemplateFiles)
-			data.Data = "slot"
-			if handleTemplateError(w, r, "slot.go", "Slot", "blockSlot", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-				return // an error has occurred and was processed
-			}
-			return
-		}
-		if err != nil {
-			logger.Errorf("error retrieving entry count of given block or state data: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	slotPageData, err := GetSlotPageData(uint64(blockSlot))
-	if err == sql.ErrNoRows {
-		slot := uint64(blockSlot)
-		//Slot not in database -> Show future block
-
-		if slot > MaxSlotValue {
-			logger.Errorf("error retrieving blockPageData: %v", err)
-
-			data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), blockNotFoundTemplateFiles)
-			if handleTemplateError(w, r, "slot.go", "Slot", "MaxSlotValue", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-				return // an error has occurred and was processed
-			}
-		}
-
-		data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), slotFutureTemplateFiles)
-		data.Meta.Path = "/slot/" + slotOrHash
-		futurePageData := types.BlockPageData{
-			ValidatorProposalInfo: types.ValidatorProposalInfo{
-				Slot: slot,
-			},
-			Epoch:        utils.EpochOfSlot(slot),
-			Ts:           utils.SlotToTime(slot),
-			NextSlot:     slot + 1,
-			PreviousSlot: slot - 1,
-		}
-		data.Data = futurePageData
-
-		if handleTemplateError(w, r, "slot.go", "Slot", "ErrNoRows", slotFutureTemplate.ExecuteTemplate(w, "layout", data)) != nil {
-			return // an error has occurred and was processed
-		}
-		return
-	} else if err != nil {
-		if handleTemplateError(w, r, "slot.go", "Slot", "GetSlotPageData", err) != nil {
-			return // an error has occurred and was processed
-		}
-		return
-	}
-
-	// if the network started with PoS, slot 0 will contain block 0; checking for blockPageData.ExecBlockNumber.Int64 > 0 does not work in this case
-	isMergedSlot0 := slotPageData.Slot == 0 && slotPageData.Epoch >= utils.Config.Chain.ClConfig.BellatrixForkEpoch
-
-	if slotPageData.Status == 1 && (slotPageData.ExecBlockNumber.Int64 > 0 || isMergedSlot0) {
-		// slot has corresponding execution block, fetch execution data
-		eth1BlockPageData, err := GetExecutionBlockPageData(uint64(slotPageData.ExecBlockNumber.Int64), 10)
-		// if err != nil, simply show slot view without block
-		if err == nil {
-			slotPageData.ExecutionData = eth1BlockPageData
-			slotPageData.ExecutionData.IsValidMev = slotPageData.IsValidMev
-		}
-	}
-	data := InitPageData(w, r, "blockchain", fmt.Sprintf("/slot/%v", slotPageData.Slot), fmt.Sprintf("Slot %v", slotOrHash), slotTemplateFiles)
-	data.Data = slotPageData
-
-	if utils.IsApiRequest(r) {
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(data.Data)
-	} else {
 		w.Header().Set("Content-Type", "text/html")
-		err = slotTemplate.ExecuteTemplate(w, "layout", data)
-	}
 
-	if handleTemplateError(w, r, "slot.go", "Slot", "ApiRequest", err) != nil {
-		return // an error has occurred and was processed
+		vars := mux.Vars(r)
+
+		slotOrHash := strings.Replace(vars["slotOrHash"], "0x", "", -1)
+		blockSlot := int64(-1)
+		blockRootHash, err := hex.DecodeString(slotOrHash)
+		if err != nil || len(slotOrHash) != 64 {
+			blockRootHash = []byte{}
+			blockSlot, err = strconv.ParseInt(vars["slotOrHash"], 10, 64)
+			if err != nil || blockSlot > math.MaxInt32 { // block slot must be lower than max int4
+				data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), blockNotFoundTemplateFiles)
+				data.Data = "slot"
+				if handleTemplateError(w, r, "slot.go", "Slot", "blockSlot", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+					return // an error has occurred and was processed
+				}
+				return
+			}
+		}
+
+		if blockSlot == -1 {
+			err = db.ReaderDb.Get(&blockSlot, `SELECT slot FROM blocks WHERE blockroot = $1 OR stateroot = $1 LIMIT 1`, blockRootHash)
+			if blockSlot == -1 {
+				data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), blockNotFoundTemplateFiles)
+				data.Data = "slot"
+				if handleTemplateError(w, r, "slot.go", "Slot", "blockSlot", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+					return // an error has occurred and was processed
+				}
+				return
+			}
+			if err != nil {
+				logger.Errorf("error retrieving entry count of given block or state data: %v", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		slotPageData, err := GetSlotPageData(uint64(blockSlot))
+		if err == sql.ErrNoRows {
+			slot := uint64(blockSlot)
+			//Slot not in database -> Show future block
+
+			if slot > MaxSlotValue {
+				logger.Errorf("error retrieving blockPageData: %v", err)
+
+				data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), blockNotFoundTemplateFiles)
+				if handleTemplateError(w, r, "slot.go", "Slot", "MaxSlotValue", blockNotFoundTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+					return // an error has occurred and was processed
+				}
+			}
+
+			data := InitPageData(w, r, "blockchain", "/slots", fmt.Sprintf("Slot %v", slotOrHash), slotFutureTemplateFiles)
+			data.Meta.Path = "/slot/" + slotOrHash
+			futurePageData := types.BlockPageData{
+				ValidatorProposalInfo: types.ValidatorProposalInfo{
+					Slot: slot,
+				},
+				Epoch:        utils.EpochOfSlot(slot),
+				Ts:           utils.SlotToTime(slot),
+				NextSlot:     slot + 1,
+				PreviousSlot: slot - 1,
+			}
+			data.Data = futurePageData
+
+			if handleTemplateError(w, r, "slot.go", "Slot", "ErrNoRows", slotFutureTemplate.ExecuteTemplate(w, "layout", data)) != nil {
+				return // an error has occurred and was processed
+			}
+			return
+		} else if err != nil {
+			if handleTemplateError(w, r, "slot.go", "Slot", "GetSlotPageData", err) != nil {
+				return // an error has occurred and was processed
+			}
+			return
+		}
+
+		// if the network started with PoS, slot 0 will contain block 0; checking for blockPageData.ExecBlockNumber.Int64 > 0 does not work in this case
+		isMergedSlot0 := slotPageData.Slot == 0 && slotPageData.Epoch >= utils.Config.Chain.ClConfig.BellatrixForkEpoch
+
+		if slotPageData.Status == 1 && (slotPageData.ExecBlockNumber.Int64 > 0 || isMergedSlot0) {
+			// slot has corresponding execution block, fetch execution data
+			eth1BlockPageData, err := GetExecutionBlockPageData(uint64(slotPageData.ExecBlockNumber.Int64), 10, bt, rpc)
+			// if err != nil, simply show slot view without block
+			if err == nil {
+				slotPageData.ExecutionData = eth1BlockPageData
+				slotPageData.ExecutionData.IsValidMev = slotPageData.IsValidMev
+			}
+		}
+		data := InitPageData(w, r, "blockchain", fmt.Sprintf("/slot/%v", slotPageData.Slot), fmt.Sprintf("Slot %v", slotOrHash), slotTemplateFiles)
+		data.Data = slotPageData
+
+		if utils.IsApiRequest(r) {
+			w.Header().Set("Content-Type", "application/json")
+			err = json.NewEncoder(w).Encode(data.Data)
+		} else {
+			w.Header().Set("Content-Type", "text/html")
+			err = slotTemplate.ExecuteTemplate(w, "layout", data)
+		}
+
+		if handleTemplateError(w, r, "slot.go", "Slot", "ApiRequest", err) != nil {
+			return // an error has occurred and was processed
+		}
 	}
 }
 
@@ -661,46 +664,48 @@ type transactionsData struct {
 }
 
 // BlockTransactionsData returns the transactions for a specific block
-func BlockTransactionsData(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func BlockTransactionsData(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	slot, err := strconv.ParseUint(vars["block"], 10, 64)
-	if err != nil {
-		logger.Warnf("error parsing slot url parameter %v: %v", vars["slot"], err)
-		http.Error(w, "Error: Invalid parameter slot.", http.StatusBadRequest)
-		return
-	}
-
-	transactions, err := GetExecutionBlockPageData(slot, 0)
-	if err != nil || transactions == nil {
-		logger.Errorf("error retrieving transactions data for slot %v, err: %v", slot, err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	data := make([]*transactionsData, len(transactions.Txs))
-	for i, v := range transactions.Txs {
-		methodFormatted := `<span class="badge badge-light">Transfer</span>`
-		if len(v.Method) > 0 && v.Method != "Transfer" {
-			methodFormatted = fmt.Sprintf(`<span class="badge badge-light text-truncate mw-100" truncate-tooltip="%v">%v</span>`, v.Method, v.Method)
+		vars := mux.Vars(r)
+		slot, err := strconv.ParseUint(vars["block"], 10, 64)
+		if err != nil {
+			logger.Warnf("error parsing slot url parameter %v: %v", vars["slot"], err)
+			http.Error(w, "Error: Invalid parameter slot.", http.StatusBadRequest)
+			return
 		}
-		data[i] = &transactionsData{
-			HashFormatted: v.HashFormatted,
-			Method:        methodFormatted,
-			FromFormatted: v.FromFormatted,
-			ToFormatted:   v.ToFormatted,
-			Value:         utils.FormatAmountFormatted(v.Value, utils.Config.Frontend.ElCurrency, 5, 0, true, true, false),
-			Fee:           utils.FormatAmountFormatted(v.Fee, utils.Config.Frontend.ElCurrency, 5, 0, true, true, false),
-			GasPrice:      utils.FormatAmountFormatted(v.GasPrice, "GWei", 5, 0, true, true, false),
-		}
-	}
 
-	err = json.NewEncoder(w).Encode(data)
-	if err != nil {
-		logger.Errorf("error encoding json response for %v route: %v", r.URL.String(), err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		transactions, err := GetExecutionBlockPageData(slot, 0, bt, rpc)
+		if err != nil || transactions == nil {
+			logger.Errorf("error retrieving transactions data for slot %v, err: %v", slot, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		data := make([]*transactionsData, len(transactions.Txs))
+		for i, v := range transactions.Txs {
+			methodFormatted := `<span class="badge badge-light">Transfer</span>`
+			if len(v.Method) > 0 && v.Method != "Transfer" {
+				methodFormatted = fmt.Sprintf(`<span class="badge badge-light text-truncate mw-100" truncate-tooltip="%v">%v</span>`, v.Method, v.Method)
+			}
+			data[i] = &transactionsData{
+				HashFormatted: v.HashFormatted,
+				Method:        methodFormatted,
+				FromFormatted: v.FromFormatted,
+				ToFormatted:   v.ToFormatted,
+				Value:         utils.FormatAmountFormatted(v.Value, utils.Config.Frontend.ElCurrency, 5, 0, true, true, false),
+				Fee:           utils.FormatAmountFormatted(v.Fee, utils.Config.Frontend.ElCurrency, 5, 0, true, true, false),
+				GasPrice:      utils.FormatAmountFormatted(v.GasPrice, "GWei", 5, 0, true, true, false),
+			}
+		}
+
+		err = json.NewEncoder(w).Encode(data)
+		if err != nil {
+			logger.Errorf("error encoding json response for %v route: %v", r.URL.String(), err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 

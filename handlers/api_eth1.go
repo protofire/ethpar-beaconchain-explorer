@@ -63,52 +63,54 @@ func ApiEth1Deposit(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} types.ApiResponse
 // @Failure 400 {object} types.ApiResponse
 // @Router /api/v1/execution/block/{blockNumber} [get]
-func ApiETH1ExecBlocks(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func ApiETH1ExecBlocks(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	limit := uint64(100)
-	vars := mux.Vars(r)
+		limit := uint64(100)
+		vars := mux.Vars(r)
 
-	var blockList []uint64
-	splits := strings.Split(vars["blockNumber"], ",")
-	for _, split := range splits {
-		temp, err := strconv.ParseUint(split, 10, 64)
-		if err != nil {
-			SendBadRequestResponse(w, r.URL.String(), "invalid block number")
+		var blockList []uint64
+		splits := strings.Split(vars["blockNumber"], ",")
+		for _, split := range splits {
+			temp, err := strconv.ParseUint(split, 10, 64)
+			if err != nil {
+				SendBadRequestResponse(w, r.URL.String(), "invalid block number")
+				return
+			}
+			blockList = append(blockList, temp)
+		}
+
+		if len(blockList) > int(limit) {
+			SendBadRequestResponse(w, r.URL.String(), fmt.Sprintf("only a maximum of %d query parameters are allowed", limit))
 			return
 		}
-		blockList = append(blockList, temp)
+
+		blocks, err := bt.GetBlocksIndexedMultiple(blockList, limit)
+		if err != nil {
+			logger.Errorf("Can not retrieve blocks from bigtable %v", err)
+			SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from bigtable")
+			return
+		}
+
+		_, beaconDataMap, err := findExecBlockNumbersByExecBlockNumber(blockList, 0, limit)
+		if err != nil {
+			SendBadRequestResponse(w, r.URL.String(), "can not retrieve proposer information")
+			return
+		}
+
+		relaysData, err := db.GetRelayDataForIndexedBlocks(blocks)
+		if err != nil {
+			logger.Errorf("can not load mev data %v", err)
+			SendBadRequestResponse(w, r.URL.String(), "can not retrieve mev data")
+			return
+		}
+
+		results := formatBlocksForApiResponse(blocks, relaysData, beaconDataMap, nil)
+
+		j := json.NewEncoder(w)
+		SendOKResponse(j, r.URL.String(), []interface{}{results})
 	}
-
-	if len(blockList) > int(limit) {
-		SendBadRequestResponse(w, r.URL.String(), fmt.Sprintf("only a maximum of %d query parameters are allowed", limit))
-		return
-	}
-
-	blocks, err := db.BigtableClient.GetBlocksIndexedMultiple(blockList, limit)
-	if err != nil {
-		logger.Errorf("Can not retrieve blocks from bigtable %v", err)
-		SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from bigtable")
-		return
-	}
-
-	_, beaconDataMap, err := findExecBlockNumbersByExecBlockNumber(blockList, 0, limit)
-	if err != nil {
-		SendBadRequestResponse(w, r.URL.String(), "can not retrieve proposer information")
-		return
-	}
-
-	relaysData, err := db.GetRelayDataForIndexedBlocks(blocks)
-	if err != nil {
-		logger.Errorf("can not load mev data %v", err)
-		SendBadRequestResponse(w, r.URL.String(), "can not retrieve mev data")
-		return
-	}
-
-	results := formatBlocksForApiResponse(blocks, relaysData, beaconDataMap, nil)
-
-	j := json.NewEncoder(w)
-	SendOKResponse(j, r.URL.String(), []interface{}{results})
 }
 
 // ApiETH1AccountProposedBlocks godoc
@@ -124,125 +126,127 @@ func ApiETH1ExecBlocks(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} types.ApiResponse
 // @Failure 400 {object} types.ApiResponse
 // @Router /api/v1/execution/{addressIndexOrPubkey}/produced [get]
-func ApiETH1AccountProducedBlocks(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func ApiETH1AccountProducedBlocks(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
+		vars := mux.Vars(r)
 
-	maxValidators := getUserPremium(r).MaxValidators
-	addresses, indices, err := getAddressesOrIndicesFromAddressIndexOrPubkey(vars["addressIndexOrPubkey"], maxValidators)
-	if err != nil {
-		SendBadRequestResponse(
-			w,
-			r.URL.String(),
-			fmt.Sprintf("invalid address, validator index or pubkey or exceeded max of %v params", maxValidators),
-		)
-		return
-	}
-
-	if len(addresses) > 20 {
-		SendBadRequestResponse(
-			w,
-			r.URL.String(),
-			"you are only allowed to query up to max 20 addresses",
-		)
-		return
-	}
-
-	var offset uint64 = 0
-	var limit uint64 = 10
-	var isSortAsc bool = false
-
-	offsetString := r.URL.Query().Get("offset")
-	offset, err = strconv.ParseUint(offsetString, 10, 64)
-	if err != nil {
-		offset = 0
-	}
-
-	limitString := r.URL.Query().Get("limit")
-	limit, err = strconv.ParseUint(limitString, 10, 64)
-	if err != nil {
-		limit = 10
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	sortString := r.URL.Query().Get("sort")
-	if sortString == "asc" {
-		isSortAsc = true
-	}
-
-	var blockList []uint64
-	var beaconDataMap = map[uint64]types.ExecBlockProposer{}
-	if len(addresses) > 0 {
-		blockListSub, beaconDataMapSub, err := findExecBlockNumbersByFeeRecipient(addresses, offset, limit, isSortAsc)
+		maxValidators := getUserPremium(r).MaxValidators
+		addresses, indices, err := getAddressesOrIndicesFromAddressIndexOrPubkey(vars["addressIndexOrPubkey"], maxValidators)
 		if err != nil {
-			SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from database")
+			SendBadRequestResponse(
+				w,
+				r.URL.String(),
+				fmt.Sprintf("invalid address, validator index or pubkey or exceeded max of %v params", maxValidators),
+			)
 			return
 		}
-		blockList = append(blockList, blockListSub...)
-		for key, val := range beaconDataMapSub {
-			beaconDataMap[key] = val
-		}
-	}
 
-	if len(indices) > 0 {
-		blockListSub, beaconDataMapSub, err := findExecBlockNumbersByProposerIndex(indices, offset, limit, isSortAsc, false, 0)
-		if err != nil {
-			SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from database")
+		if len(addresses) > 20 {
+			SendBadRequestResponse(
+				w,
+				r.URL.String(),
+				"you are only allowed to query up to max 20 addresses",
+			)
 			return
 		}
-		blockList = append(blockList, blockListSub...)
-		for key, val := range beaconDataMapSub {
-			beaconDataMap[key] = val
+
+		var offset uint64 = 0
+		var limit uint64 = 10
+		var isSortAsc bool = false
+
+		offsetString := r.URL.Query().Get("offset")
+		offset, err = strconv.ParseUint(offsetString, 10, 64)
+		if err != nil {
+			offset = 0
 		}
-	}
 
-	// Remove duplicates from the block list
-	allKeys := make(map[uint64]bool)
-	list := []uint64{}
-	for _, item := range blockList {
-		if _, ok := allKeys[item]; !ok {
-			allKeys[item] = true
-			list = append(list, item)
+		limitString := r.URL.Query().Get("limit")
+		limit, err = strconv.ParseUint(limitString, 10, 64)
+		if err != nil {
+			limit = 10
 		}
-	}
-	blockList = list
+		if limit > 100 {
+			limit = 100
+		}
 
-	// Trim to the blocks that are within the limit range
-	if isSortAsc {
-		sort.Slice(blockList, func(i, j int) bool { return blockList[i] < blockList[j] })
-	} else {
-		sort.Slice(blockList, func(i, j int) bool { return blockList[i] > blockList[j] })
-	}
-	if len(blockList) > int(limit) {
-		blockList = blockList[:limit]
-	}
+		sortString := r.URL.Query().Get("sort")
+		if sortString == "asc" {
+			isSortAsc = true
+		}
 
-	blocks, err := db.BigtableClient.GetBlocksIndexedMultiple(blockList, uint64(limit))
-	if err != nil {
-		logger.Errorf("Can not retrieve blocks from bigtable %v", err)
-		SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from bigtable")
-		return
+		var blockList []uint64
+		var beaconDataMap = map[uint64]types.ExecBlockProposer{}
+		if len(addresses) > 0 {
+			blockListSub, beaconDataMapSub, err := findExecBlockNumbersByFeeRecipient(addresses, offset, limit, isSortAsc)
+			if err != nil {
+				SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from database")
+				return
+			}
+			blockList = append(blockList, blockListSub...)
+			for key, val := range beaconDataMapSub {
+				beaconDataMap[key] = val
+			}
+		}
+
+		if len(indices) > 0 {
+			blockListSub, beaconDataMapSub, err := findExecBlockNumbersByProposerIndex(indices, offset, limit, isSortAsc, false, 0)
+			if err != nil {
+				SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from database")
+				return
+			}
+			blockList = append(blockList, blockListSub...)
+			for key, val := range beaconDataMapSub {
+				beaconDataMap[key] = val
+			}
+		}
+
+		// Remove duplicates from the block list
+		allKeys := make(map[uint64]bool)
+		list := []uint64{}
+		for _, item := range blockList {
+			if _, ok := allKeys[item]; !ok {
+				allKeys[item] = true
+				list = append(list, item)
+			}
+		}
+		blockList = list
+
+		// Trim to the blocks that are within the limit range
+		if isSortAsc {
+			sort.Slice(blockList, func(i, j int) bool { return blockList[i] < blockList[j] })
+		} else {
+			sort.Slice(blockList, func(i, j int) bool { return blockList[i] > blockList[j] })
+		}
+		if len(blockList) > int(limit) {
+			blockList = blockList[:limit]
+		}
+
+		blocks, err := bt.GetBlocksIndexedMultiple(blockList, uint64(limit))
+		if err != nil {
+			logger.Errorf("Can not retrieve blocks from bigtable %v", err)
+			SendBadRequestResponse(w, r.URL.String(), "can not retrieve blocks from bigtable")
+			return
+		}
+
+		relaysData, err := db.GetRelayDataForIndexedBlocks(blocks)
+		if err != nil {
+			logger.Errorf("can not load mev data %v", err)
+			SendBadRequestResponse(w, r.URL.String(), "can not retrieve mev data")
+			return
+		}
+
+		var sortFunc func(i, j types.ExecutionBlockApiResponse) bool
+		if isSortAsc {
+			sortFunc = func(i, j types.ExecutionBlockApiResponse) bool { return i.BlockNumber < j.BlockNumber }
+		}
+
+		results := formatBlocksForApiResponse(blocks, relaysData, beaconDataMap, sortFunc)
+
+		j := json.NewEncoder(w)
+		SendOKResponse(j, r.URL.String(), []interface{}{results})
 	}
-
-	relaysData, err := db.GetRelayDataForIndexedBlocks(blocks)
-	if err != nil {
-		logger.Errorf("can not load mev data %v", err)
-		SendBadRequestResponse(w, r.URL.String(), "can not retrieve mev data")
-		return
-	}
-
-	var sortFunc func(i, j types.ExecutionBlockApiResponse) bool
-	if isSortAsc {
-		sortFunc = func(i, j types.ExecutionBlockApiResponse) bool { return i.BlockNumber < j.BlockNumber }
-	}
-
-	results := formatBlocksForApiResponse(blocks, relaysData, beaconDataMap, sortFunc)
-
-	j := json.NewEncoder(w)
-	SendOKResponse(j, r.URL.String(), []interface{}{results})
 }
 
 // ApiETH1GasNowData godoc
@@ -287,57 +291,59 @@ func ApiEth1GasNowData(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} types.ApiResponse
 // @Failure 400 {object} types.ApiResponse
 // @Router /api/v1/execution/address/{address} [get]
-func ApiEth1Address(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	vars := mux.Vars(r)
-	address := ReplaceEnsNameWithAddress(vars["address"])
-	q := r.URL.Query()
+func ApiEth1Address(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		vars := mux.Vars(r)
+		address := ReplaceEnsNameWithAddress(vars["address"])
+		q := r.URL.Query()
 
-	address = strings.Replace(address, "0x", "", -1)
-	address = strings.ToLower(address)
+		address = strings.Replace(address, "0x", "", -1)
+		address = strings.ToLower(address)
 
-	if !utils.IsEth1Address(address) {
-		SendBadRequestResponse(w, r.URL.String(), "error invalid address. An Ethereum address consists of an optional 0x prefix followed by 40 hexadecimal characters.")
-		return
-	}
-	token := q.Get("token")
-
-	if len(token) > 0 {
-		token = strings.Replace(token, "0x", "", -1)
-		token = strings.ToLower(token)
-		if !utils.IsEth1Address(token) {
-			SendBadRequestResponse(w, r.URL.String(), "error invalid token query param. A token address consists of an optional 0x prefix followed by 40 hexadecimal characters.")
+		if !utils.IsEth1Address(address) {
+			SendBadRequestResponse(w, r.URL.String(), "error invalid address. An Ethereum address consists of an optional 0x prefix followed by 40 hexadecimal characters.")
 			return
 		}
-	}
+		token := q.Get("token")
 
-	response := types.ApiEth1AddressResponse{}
-
-	metadata, err := db.BigtableClient.GetMetadataForAddress(common.FromHex(address), 0, 200)
-	if err != nil {
-		logger.Errorf("error retrieving metadata for address: %v route: %v err: %v", address, r.URL.String(), err)
-		sendServerErrorResponse(w, r.URL.String(), "error could not get metadata for address")
-		return
-	}
-
-	response.Ether = utils.WeiBytesToEther(metadata.EthBalance.Balance).String()
-	response.Address = fmt.Sprintf("0x%x", metadata.EthBalance.Address)
-	for _, m := range metadata.Balances {
-		// if there is a token filter and we are currently not on the right value, skip to the next loop iteration
-		if len(token) > 0 && token != fmt.Sprintf("%x", m.Token) {
-			continue
+		if len(token) > 0 {
+			token = strings.Replace(token, "0x", "", -1)
+			token = strings.ToLower(token)
+			if !utils.IsEth1Address(token) {
+				SendBadRequestResponse(w, r.URL.String(), "error invalid token query param. A token address consists of an optional 0x prefix followed by 40 hexadecimal characters.")
+				return
+			}
 		}
 
-		response.Tokens = append(response.Tokens, types.ApiEth1AddressERC20TokenResponse{
-			Address: fmt.Sprintf("0x%x", m.Token),
-			Balance: decimal.NewFromBigInt(new(big.Int).SetBytes(m.Balance), 0).Div(decimal.NewFromBigInt(big.NewInt(1), int32(new(big.Int).SetBytes(m.Metadata.Decimals).Int64()))).String(),
-			Symbol:  m.Metadata.Symbol,
-		})
-	}
+		response := types.ApiEth1AddressResponse{}
 
-	SendOKResponse(json.NewEncoder(w), r.URL.String(), []interface{}{response})
+		metadata, err := bt.GetMetadataForAddress(common.FromHex(address), 0, 200)
+		if err != nil {
+			logger.Errorf("error retrieving metadata for address: %v route: %v err: %v", address, r.URL.String(), err)
+			sendServerErrorResponse(w, r.URL.String(), "error could not get metadata for address")
+			return
+		}
+
+		response.Ether = utils.WeiBytesToEther(metadata.EthBalance.Balance).String()
+		response.Address = fmt.Sprintf("0x%x", metadata.EthBalance.Address)
+		for _, m := range metadata.Balances {
+			// if there is a token filter and we are currently not on the right value, skip to the next loop iteration
+			if len(token) > 0 && token != fmt.Sprintf("%x", m.Token) {
+				continue
+			}
+
+			response.Tokens = append(response.Tokens, types.ApiEth1AddressERC20TokenResponse{
+				Address: fmt.Sprintf("0x%x", m.Token),
+				Balance: decimal.NewFromBigInt(new(big.Int).SetBytes(m.Balance), 0).Div(decimal.NewFromBigInt(big.NewInt(1), int32(new(big.Int).SetBytes(m.Metadata.Decimals).Int64()))).String(),
+				Symbol:  m.Metadata.Symbol,
+			})
+		}
+
+		SendOKResponse(json.NewEncoder(w), r.URL.String(), []interface{}{response})
+	}
 }
 
 // ApiEth1AddressERC20Tokens godoc
@@ -351,62 +357,64 @@ func ApiEth1Address(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} types.ApiResponse
 // @Failure 400 {object} types.ApiResponse
 // @Router /api/v1/execution/address/{address}/erc20tokens [get]
-func ApiEth1AddressERC20Tokens(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func ApiEth1AddressERC20Tokens(bt *db.Bigtable) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	errFields := map[string]interface{}{
-		"route": r.URL.String()}
+		errFields := map[string]interface{}{
+			"route": r.URL.String()}
 
-	vars := mux.Vars(r)
+		vars := mux.Vars(r)
 
-	address := ReplaceEnsNameWithAddress(vars["address"])
-	address = strings.Replace(address, "0x", "", -1)
-	address = strings.ToLower(address)
+		address := ReplaceEnsNameWithAddress(vars["address"])
+		address = strings.Replace(address, "0x", "", -1)
+		address = strings.ToLower(address)
 
-	if !utils.IsEth1Address(address) {
-		SendBadRequestResponse(w, r.URL.String(), "error invalid address. An Ethereum address consists of an optional 0x prefix followed by 40 hexadecimal characters.")
-		return
+		if !utils.IsEth1Address(address) {
+			SendBadRequestResponse(w, r.URL.String(), "error invalid address. An Ethereum address consists of an optional 0x prefix followed by 40 hexadecimal characters.")
+			return
+		}
+
+		q := r.URL.Query()
+
+		offsetQuery := q.Get("offset")
+		offset, err := strconv.ParseInt(offsetQuery, 10, 64)
+		if err != nil {
+			offset = 0
+		} else if offset < 0 {
+			offset = 0
+		}
+
+		limitQuery := q.Get("limit")
+		limit, err := strconv.ParseInt(limitQuery, 10, 64)
+		if err != nil {
+			limit = int64(db.ECR20TokensPerAddressLimit)
+		} else if limit < 0 || limit > int64(db.ECR20TokensPerAddressLimit) {
+			limit = int64(db.ECR20TokensPerAddressLimit)
+		}
+
+		errFields["address"] = address
+		errFields["offset"] = offset
+		errFields["limit"] = limit
+
+		metadata, err := bt.GetMetadataForAddress(common.FromHex(address), uint64(offset), uint64(limit))
+		if err != nil {
+			utils.LogError(err, "error could not get metadata for address", 0, errFields)
+			sendServerErrorResponse(w, r.URL.String(), "error could not get metadata for address")
+			return
+		}
+
+		response := make([]types.ApiEth1AddressERC20TokenResponse, 0, len(metadata.Balances))
+		for _, m := range metadata.Balances {
+			response = append(response, types.ApiEth1AddressERC20TokenResponse{
+				Address: fmt.Sprintf("0x%x", m.Token),
+				Balance: decimal.NewFromBigInt(new(big.Int).SetBytes(m.Balance), 0).Div(decimal.NewFromBigInt(big.NewInt(1), int32(new(big.Int).SetBytes(m.Metadata.Decimals).Int64()))).String(),
+				Symbol:  m.Metadata.Symbol,
+			})
+		}
+
+		SendOKResponse(json.NewEncoder(w), r.URL.String(), []interface{}{response})
 	}
-
-	q := r.URL.Query()
-
-	offsetQuery := q.Get("offset")
-	offset, err := strconv.ParseInt(offsetQuery, 10, 64)
-	if err != nil {
-		offset = 0
-	} else if offset < 0 {
-		offset = 0
-	}
-
-	limitQuery := q.Get("limit")
-	limit, err := strconv.ParseInt(limitQuery, 10, 64)
-	if err != nil {
-		limit = int64(db.ECR20TokensPerAddressLimit)
-	} else if limit < 0 || limit > int64(db.ECR20TokensPerAddressLimit) {
-		limit = int64(db.ECR20TokensPerAddressLimit)
-	}
-
-	errFields["address"] = address
-	errFields["offset"] = offset
-	errFields["limit"] = limit
-
-	metadata, err := db.BigtableClient.GetMetadataForAddress(common.FromHex(address), uint64(offset), uint64(limit))
-	if err != nil {
-		utils.LogError(err, "error could not get metadata for address", 0, errFields)
-		sendServerErrorResponse(w, r.URL.String(), "error could not get metadata for address")
-		return
-	}
-
-	response := make([]types.ApiEth1AddressERC20TokenResponse, 0, len(metadata.Balances))
-	for _, m := range metadata.Balances {
-		response = append(response, types.ApiEth1AddressERC20TokenResponse{
-			Address: fmt.Sprintf("0x%x", m.Token),
-			Balance: decimal.NewFromBigInt(new(big.Int).SetBytes(m.Balance), 0).Div(decimal.NewFromBigInt(big.NewInt(1), int32(new(big.Int).SetBytes(m.Metadata.Decimals).Int64()))).String(),
-			Symbol:  m.Metadata.Symbol,
-		})
-	}
-
-	SendOKResponse(json.NewEncoder(w), r.URL.String(), []interface{}{response})
 }
 
 func formatBlocksForApiResponse(blocks []*types.Eth1BlockIndexed, relaysData map[common.Hash]types.RelaysData, beaconDataMap map[uint64]types.ExecBlockProposer, sortFunc func(i, j types.ExecutionBlockApiResponse) bool) []types.ExecutionBlockApiResponse {
@@ -482,7 +490,7 @@ func formatBlocksForApiResponse(blocks []*types.Eth1BlockIndexed, relaysData map
 	return results
 }
 
-func getValidatorExecutionPerformance(queryIndices []uint64) ([]types.ExecutionPerformanceResponse, error) {
+func getValidatorExecutionPerformance(queryIndices []uint64, bt *db.Bigtable) ([]types.ExecutionPerformanceResponse, error) {
 	latestEpoch := services.LatestEpoch()
 	last31dTimestamp := time.Now().Add(-31 * utils.Day)
 	last7dTimestamp := time.Now().Add(-7 * utils.Day)
@@ -513,7 +521,7 @@ func getValidatorExecutionPerformance(queryIndices []uint64) ([]types.ExecutionP
 
 	blockList, blockToProposerMap := getBlockNumbersAndMapProposer(execBlocks)
 
-	blocks, err := db.BigtableClient.GetBlocksIndexedMultiple(blockList, 10000)
+	blocks, err := bt.GetBlocksIndexedMultiple(blockList, 10000)
 	if err != nil {
 		return nil, fmt.Errorf("error cannot get blocks from bigtable using GetBlocksIndexedMultiple: %w", err)
 	}

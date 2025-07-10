@@ -11,7 +11,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/metrics"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/lighthouse"
@@ -68,14 +68,7 @@ func main() {
 	}
 	utils.Config = cfg
 
-	if utils.Config.Metrics.Enabled {
-		go func(addr string) {
-			logrus.Infof("serving metrics on %v", addr)
-			if err := metrics.Serve(addr); err != nil {
-				logrus.WithError(err).Fatal("Error serving metrics")
-			}
-		}(utils.Config.Metrics.Address)
-	}
+	metrics.StartMetrics(utils.Config.Metrics.Enabled, utils.Config.Metrics.Address)
 
 	if utils.Config.Chain.ClConfig.SlotsPerEpoch == 0 || utils.Config.Chain.ClConfig.SecondsPerSlot == 0 {
 		utils.LogFatal(fmt.Errorf("error ether SlotsPerEpoch [%v] or SecondsPerSlot [%v] are not set", utils.Config.Chain.ClConfig.SlotsPerEpoch, utils.Config.Chain.ClConfig.SecondsPerSlot), "", 0)
@@ -128,10 +121,18 @@ func main() {
 	defer db.FrontendReaderDB.Close()
 	defer db.FrontendWriterDB.Close()
 
-	_, err = db.InitBigtable(cfg.Bigtable.Project, cfg.Bigtable.Instance, fmt.Sprintf("%d", utils.Config.Chain.ClConfig.DepositChainID), utils.Config.RedisCacheEndpoint)
-	if err != nil {
-		logrus.Fatalf("error connecting to bigtable: %v", err)
-	}
+	// Initialize BigTable client
+	bt := db.MustInitBigtable(&db.BigtableConfig{
+		Project:      utils.Config.Bigtable.Project,
+		Instance:     utils.Config.Bigtable.Project,
+		ChainId:      utils.Config.Chain.ClConfig.DepositChainID,
+		CacheAddr:    utils.Config.RedisCacheEndpoint,
+		Emulated:     utils.Config.Bigtable.Emulator,
+		EmulatorHost: utils.Config.Bigtable.EmulatorHost,
+		EmulatorPort: uint16(utils.Config.Bigtable.EmulatorPort),
+		Rpc:          nil,
+	})
+	defer bt.Close()
 
 	price.Init(utils.Config.Chain.ClConfig.DepositChainID, utils.Config.Eth1ErigonEndpoint, utils.Config.Frontend.ClCurrency, utils.Config.Frontend.ElCurrency)
 
@@ -182,7 +183,7 @@ func main() {
 					clearStatsStatusTable(d)
 				}
 
-				err = db.WriteValidatorStatisticsForDay(uint64(d), consClient)
+				err = db.WriteValidatorStatisticsForDay(uint64(d), consClient, bt)
 				if err != nil {
 					utils.LogError(err, fmt.Errorf("error exporting stats for day %v", d), 0)
 					break
@@ -198,7 +199,7 @@ func main() {
 					logrus.Fatalf("error resetting status for chart series status for day %v: %v", d, err)
 				}
 
-				err = db.WriteChartSeriesForDay(int64(d))
+				err = db.WriteChartSeriesForDay(int64(d), bt)
 				if err != nil {
 					logrus.Errorf("error exporting chart series from day %v: %v", d, err)
 					break
@@ -224,7 +225,7 @@ func main() {
 				clearStatsStatusTable(uint64(opt.statisticsDayToExport))
 			}
 
-			err = db.WriteValidatorStatisticsForDay(uint64(opt.statisticsDayToExport), consClient)
+			err = db.WriteValidatorStatisticsForDay(uint64(opt.statisticsDayToExport), consClient, bt)
 			if err != nil {
 				utils.LogError(err, fmt.Errorf("error exporting stats for day %v", opt.statisticsDayToExport), 0)
 			}
@@ -236,7 +237,7 @@ func main() {
 				logrus.Fatalf("error resetting status for chart series status for day %v: %v", opt.statisticsDayToExport, err)
 			}
 
-			err = db.WriteChartSeriesForDay(int64(opt.statisticsDayToExport))
+			err = db.WriteChartSeriesForDay(int64(opt.statisticsDayToExport), bt)
 			if err != nil {
 				logrus.Errorf("error exporting chart series from day %v: %v", opt.statisticsDayToExport, err)
 			}
@@ -251,7 +252,7 @@ func main() {
 		return
 	}
 
-	go statisticsLoop(consClient)
+	go statisticsLoop(consClient, bt)
 
 	if opt.statisticsDepositsToggle {
 		go depositsLoop()
@@ -262,7 +263,7 @@ func main() {
 	logrus.Println("exiting...")
 }
 
-func statisticsLoop(client consensus.ConsensusClient) {
+func statisticsLoop(client consensus.ConsensusClient, bt *db.Bigtable) {
 	for {
 
 		var loopError error
@@ -300,7 +301,7 @@ func statisticsLoop(client consensus.ConsensusClient) {
 
 			if lastExportedDayValidator <= previousDay || lastExportedDayValidator == 0 {
 				for day := lastExportedDayValidator; day <= previousDay; day++ {
-					err := db.WriteValidatorStatisticsForDay(day, client)
+					err := db.WriteValidatorStatisticsForDay(day, client, bt)
 					if err != nil {
 						utils.LogError(err, fmt.Errorf("error exporting stats for day %v", day), 0)
 						loopError = err
@@ -324,7 +325,7 @@ func statisticsLoop(client consensus.ConsensusClient) {
 			}
 			if lastExportedDayChart <= previousDay || lastExportedDayChart == 0 {
 				for day := lastExportedDayChart; day <= previousDay; day++ {
-					err = db.WriteChartSeriesForDay(int64(day))
+					err = db.WriteChartSeriesForDay(int64(day), bt)
 					if err != nil {
 						logrus.Errorf("error exporting chart series from day %v: %v", day, err)
 						loopError = err

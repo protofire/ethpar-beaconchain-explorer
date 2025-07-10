@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 func ClearAndCopyToTable[T []any](db *sqlx.DB, tableName string, columns []string, data []T) error {
@@ -30,7 +29,7 @@ func ClearAndCopyToTable[T []any](db *sqlx.DB, tableName string, columns []strin
 		defer func() {
 			err := tx.Rollback(context.Background())
 			if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-				logrus.Error(err, "error rolling back transaction", 0)
+				dblog.Error(err, "error rolling back transaction", 0)
 			}
 		}()
 
