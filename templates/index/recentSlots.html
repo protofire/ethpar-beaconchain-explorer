@@ -17,13 +17,7 @@
               <th>Proposer</th>
               <th>Attestations</th>
               <th>Deposits</th>
-              {{ if .Slots }}
-                {{ if gt (len .Slots) 0 }}
-                  {{ if gt (index .Slots 0).ParallelBlocksCount 0 }}
-                    <th>Parallel Blocks</th>
-                  {{ end }}
-                {{ end }}
-              {{ end }}
+              <th>Execution Blocks</th>
             </tr>
           </thead>
           <tbody v-if="page && page.slots && page.slots.length">
@@ -58,8 +52,33 @@
               <td v-else>N/A</td>
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
-              <td v-if="slot.parallel_blocks_count && slot.parallel_blocks_count > 0">
-                <span class="badge rounded-pill text-bg-info" v-text="slot.parallel_blocks_count"></span>
+              <td>
+                <!-- Parallel blocks tree for Vue.js data -->
+                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="parallel-blocks-tree">
+                  <div v-if="slot.execution_ranks.length === 1" class="single-block">
+                    <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
+                       class="block-link" 
+                       v-text="'Block ' + addCommas(slot.execution_ranks[0].block_number)"></a>
+                    <small class="text-muted ml-1" v-text="addCommas(slot.execution_ranks[0].gas_used) + ' gas'"></small>
+                  </div>
+                  <div v-else class="multiple-blocks">
+                    <div class="parallel-summary">
+                      <span class="badge badge-info" v-text="slot.execution_ranks.length + ' Parallel Blocks'"></span>
+                    </div>
+                    <div class="blocks-tree mt-1">
+                      <div v-for="(rank, index) in slot.execution_ranks" class="block-item">
+                        <span class="rank-indicator" v-text="'R' + rank.rank"></span>
+                        <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
+                           class="block-link" 
+                           v-text="addCommas(rank.block_number)"></a>
+                        <small class="text-muted" v-text="addCommas(rank.gas_used) + ' gas'"></small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="no-blocks">
+                  <span class="text-muted">-</span>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -101,17 +120,46 @@
                   </td>
                   <td>{{ formatAddCommas $slot.Attestations }}</td>
                   <td>{{ formatAddCommas $slot.Deposits }}</td>
-                  {{ if gt $slot.ParallelBlocksCount 0 }}
-                    <td>
-                      <span class="badge rounded-pill text-bg-info">{{ $slot.ParallelBlocksCount }}</span>
-                    </td>
-                  {{ end }}
+                  <td>
+                    <!-- Parallel blocks tree for server-side data -->
+                    {{ if $slot.ExecutionRanks }}
+                      {{ if eq (len $slot.ExecutionRanks) 1 }}
+                        <div class="single-block">
+                          <a href="/block/{{ (index $slot.ExecutionRanks 0).BlockNumber }}/rank/{{ (index $slot.ExecutionRanks 0).Rank }}" class="block-link">
+                            Block {{ formatAddCommas (index $slot.ExecutionRanks 0).BlockNumber }}
+                          </a>
+                          <small class="text-muted ml-1">{{ formatAddCommas (index $slot.ExecutionRanks 0).GasUsed }} gas</small>
+                        </div>
+                      {{ else }}
+                        <div class="multiple-blocks">
+                          <div class="parallel-summary">
+                            <span class="badge badge-info">{{ len $slot.ExecutionRanks }} Parallel Blocks</span>
+                          </div>
+                          <div class="blocks-tree mt-1">
+                            {{ range $rank := $slot.ExecutionRanks }}
+                              <div class="block-item">
+                                <span class="rank-indicator">R{{ $rank.Rank }}</span>
+                                <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" class="block-link">
+                                  {{ formatAddCommas $rank.BlockNumber }}
+                                </a>
+                                <small class="text-muted">{{ formatAddCommas $rank.GasUsed }} gas</small>
+                              </div>
+                            {{ end }}
+                          </div>
+                        </div>
+                      {{ end }}
+                    {{ else if gt $slot.ParallelBlocksCount 0 }}
+                      <span class="badge badge-info">{{ $slot.ParallelBlocksCount }} Blocks</span>
+                    {{ else }}
+                      <span class="text-muted">-</span>
+                    {{ end }}
+                  </td>
                 </tr>
               {{ end }}
             {{ else }}
               <!-- No slots data available -->
               <tr>
-                <td colspan="6" class="text-center">
+                <td colspan="7" class="text-center">
                   <div class="p-3 text-muted">
                     <i class="fas fa-clock fa-2x mb-2"></i>
                     <br>
@@ -132,4 +180,62 @@
       formatTimestamps();
     });
   </script>
+
+  <style>
+    .parallel-blocks-tree {
+      text-align: left;
+      min-width: 120px;
+    }
+    
+    .single-block {
+      font-size: 0.9rem;
+    }
+    
+    .multiple-blocks {
+      font-size: 0.85rem;
+    }
+    
+    .parallel-summary {
+      margin-bottom: 0.25rem;
+    }
+    
+    .blocks-tree {
+      border-left: 2px solid #e9ecef;
+      padding-left: 0.5rem;
+      margin-left: 0.25rem;
+    }
+    
+    .block-item {
+      margin-bottom: 0.15rem;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    
+    .rank-indicator {
+      background: #6c757d;
+      color: white;
+      padding: 0.1rem 0.25rem;
+      border-radius: 0.2rem;
+      font-size: 0.7rem;
+      min-width: 25px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    
+    .block-link {
+      color: #007bff;
+      text-decoration: none;
+      font-family: monospace;
+    }
+    
+    .block-link:hover {
+      text-decoration: underline;
+    }
+    
+    .no-blocks {
+      text-align: center;
+    }
+  </style>
 {{ end }}
