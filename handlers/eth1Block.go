@@ -33,6 +33,7 @@ var (
 			"slot/execTransactions.html",
 			"slot/blobs.html",
 			"slot/withdrawals.html",
+			"slot/parallel_blocks.html",
 		)...)
 
 	preMergeBlockTemplate = templates.GetTemplate(

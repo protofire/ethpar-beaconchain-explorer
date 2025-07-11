@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -80,11 +81,11 @@ func Eth1BlocksData(bt *db.Bigtable) http.HandlerFunc {
 }
 
 type additionalSlotData struct {
-	Epoch        uint64 `db:"epoch"`
-	Slot         uint64 `db:"slot"`
-	Proposer     uint64 `db:"proposer"`
-	Status       uint64 `db:"status"`
-	ProposerName string `db:"name"`
+	Epoch        uint64        `db:"epoch"`
+	Slot         uint64        `db:"slot"`
+	Proposer     sql.NullInt64 `db:"proposer"`
+	Status       uint64        `db:"status"`
+	ProposerName string        `db:"name"`
 }
 
 func getSlotByBlockTimestamp(t *timestamp.Timestamp) uint64 {
@@ -208,8 +209,9 @@ func getEth1BlocksTableData(draw, start, length, recordsTotal uint64, bt *db.Big
 		if sData != nil {
 			status = utils.FormatBlockStatus(sData.Status, sData.Slot)
 
-			if !isPoSBlock0 {
-				proposer = utils.FormatValidatorWithName(sData.Proposer, sData.ProposerName)
+			// ✅ Update this section to handle nullable proposer:
+			if !isPoSBlock0 && sData.Proposer.Valid && sData.Proposer.Int64 >= 0 {
+				proposer = utils.FormatValidatorWithName(uint64(sData.Proposer.Int64), sData.ProposerName)
 			}
 
 			slotText = template.HTML(fmt.Sprintf(`<a href="slot/%d">%s</a>`, sData.Slot, utils.FormatAddCommas(sData.Slot)))
