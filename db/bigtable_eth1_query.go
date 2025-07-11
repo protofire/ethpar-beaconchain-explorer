@@ -127,7 +127,10 @@ func (bigtable *Bigtable) GetMostRecentBlockFromDataTable() (*types.Eth1BlockInd
 	block := types.Eth1BlockIndexed{}
 
 	rowHandler := func(row gcp_bigtable.Row) bool {
-		c, err := strconv.Atoi(strings.Replace(row.Key(), prefix, "", 1))
+		suffix := strings.TrimPrefix(row.Key(), prefix)
+		parts := strings.Split(suffix, ":")
+		reversedStr := parts[0]
+		c, err := strconv.Atoi(reversedStr)
 		if err != nil {
 			log.Errorf("error parsing block number from key %v: %v", row.Key(), err)
 			return false
@@ -181,15 +184,16 @@ func getBlockHandler(blocks *[]*types.Eth1BlockIndexed) func(gcp_bigtable.Row) b
 // Missing ranks are silently skipped without error.
 //
 // Blocks are read from the blocks Bigtable table using keys of the form:
-//   <chainId>:<reversedPaddedBlockNumber>:<rank>
+//
+//	<chainId>:<reversedPaddedBlockNumber>:<rank>
 //
 // The block data is deserialized from the "data" column in the DEFAULT_FAMILY_BLOCKS
 // column family and streamed to the caller via the provided channel.
 //
 // Returns an error only if a Bigtable read operation or protobuf unmarshal fails.
 func (bigtable *Bigtable) GetFullBlocksDescending(
-    stream chan<- *types.Eth1Block,
-    high, low uint64,
+	stream chan<- *types.Eth1Block,
+	high, low uint64,
 ) error {
 	ctx, cleanup := withTimeoutAndWarning(
 		fmt.Sprintf("getting full blocks with ranks: high %d low %d", high, low),
@@ -245,7 +249,8 @@ func (bigtable *Bigtable) GetFullBlocksDescending(
 // For each block number in the input slice, the function constructs up to 5 row keys,
 // one per possible rank (rank 0 is always expected to exist, others are optional).
 // Row keys are constructed in the format:
-//   <chainID>:B:<reversedPaddedBlockNumber>:<rank>
+//
+//	<chainID>:B:<reversedPaddedBlockNumber>:<rank>
 //
 // Bigtable is queried in a batch using RowList to fetch all matching rows.
 // Only rows with valid data in column "d" (as filtered by a ColumnFilter) are returned.
@@ -1212,10 +1217,10 @@ func (bigtable *Bigtable) GetInternalTransfersForTransaction(transaction []byte,
 
 	if len(parityTrace) < 1 {
 		// TODO: pruned node workaround: No internal transactions available from a pruned node.
-    		log.Warnf("got parity trace with len < 1, len: %v", len(parityTrace))
+		log.Warnf("got parity trace with len < 1, len: %v", len(parityTrace))
 		return []types.ITransaction{}, nil
 	}
-	
+
 	log.Infof("parityTrace len: %v", len(parityTrace))
 	data := make([]types.ITransaction, 0, len(parityTrace)-1)
 	for i := 1; i < len(parityTrace); i++ {
@@ -2937,9 +2942,10 @@ func (bigtable *Bigtable) GetGasNowHistory(ts, pastTs time.Time) ([]types.GasNow
 
 // GetAvailableRanksForExecBlock returns a list of ranks for a given execution block number
 // by scanning all rows in Bigtable that match the block's key prefix.
-// 
+//
 // For block number N, it scans rows with prefix:
-//   <chainID>:<reversedPaddedBlockNumber(N)>:
+//
+//	<chainID>:<reversedPaddedBlockNumber(N)>:
 //
 // Then extracts the rank from the row key suffix.
 // Returns a sorted list of available ranks (e.g., [0, 2, 4]).
