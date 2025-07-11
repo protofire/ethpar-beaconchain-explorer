@@ -11,7 +11,7 @@
             <span data-toggle="tooltip" data-placement="top" title="Block Number, the height, not the slot">Block Number:</span>
           </div>
           <div class="col-md-10 text-monospace text-break">
-            <a href="/block/{{ $parallel_block.BlockNumber }}">{{ formatAddCommas $parallel_block.BlockNumber }}</a>
+            <a href="/block/{{ $parallel_block.BlockNumber }}/rank/{{ $parallel_block.Rank }}">{{ formatAddCommas $parallel_block.BlockNumber }}</a>
           </div>
         </div>
 
@@ -20,7 +20,7 @@
             <span data-toggle="tooltip" data-placement="top" title="The Execution Block Hash">Block Hash:</span>
           </div>
           <div class="col-md-10 text-monospace text-break">
-            <a href="/block/0x{{ printf "%x" $parallel_block.BlockHash }}">0x{{ printf "%x" $parallel_block.BlockHash }}</a>
+            <a href="/block/0x{{ printf "%x" $parallel_block.BlockHash }}/rank/{{ $parallel_block.Rank }}">0x{{ printf "%x" $parallel_block.BlockHash }}</a>
           </div>
         </div>
 

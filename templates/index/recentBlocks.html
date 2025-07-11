@@ -28,10 +28,28 @@
             <tr v-for="block in page.blocks">
               <td><a v-bind:href="'/epoch/' + block.epoch" v-html="addCommas(block.epoch)"></a></td>
               <td><a v-bind:href="'/slot/' + block.slot" v-html="addCommas(block.slot)"></a></td>
-              <td v-if="block.exec_block_number === 0">
-                <span style="background: #e7e1d7" class="badge badge-pill bg-light text-dark" style="font-size: 12px; font-weight: 500;">-</span>
+              
+              <!-- ADD: Parallel blocks display -->
+              <td v-if="block.execution_ranks && block.execution_ranks.length > 1">
+                <div class="parallel-blocks-container">
+                  <span class="badge badge-info mb-1">{{ block.execution_ranks.length }} Parallel Blocks</span>
+                  <div class="parallel-blocks-list">
+                    <div v-for="(rank, index) in block.execution_ranks" class="parallel-block-item">
+                      <span class="rank-badge">R{{ rank.rank }}</span>
+                      <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank">
+                        Block {{ addCommas(rank.block_number) }}
+                      </a>
+                      <small class="text-muted">{{ addCommas(rank.gas_used) }} gas</small>
+                    </div>
+                  </div>
+                </div>
               </td>
-              <td v-else><a v-bind:href="'/block/' + block.exec_block_number" v-html="addCommas(block.exec_block_number)"></a></td>
+              <td v-else-if="block.exec_block_number === 0">
+                <span class="badge badge-pill bg-light text-dark">-</span>
+              </td>
+              <td v-else>
+                <a v-bind:href="'/block/' + block.exec_block_number">{{ addCommas(block.exec_block_number) }}</a>
+              </td>
               <td v-if="block.slot === 0">
                 <span style="background: #e7e1d7" class="badge text-dark">Genesis</span>
               </td>
@@ -65,4 +83,26 @@
       </div>
     </div>
   </div>
+<style>
+.parallel-blocks-container {
+  text-align: left;
+}
+.parallel-blocks-list {
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid #e9ecef;
+}
+.parallel-block-item {
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+}
+.rank-badge {
+  background: #6c757d;
+  color: white;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  margin-right: 0.5rem;
+}
+</style>
 {{ end }}
