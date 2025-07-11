@@ -1,4 +1,4 @@
-package consensus
+package types
 
 import (
 	"github.com/protofire/ethpar-beaconchain-explorer/codec"

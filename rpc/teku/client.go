@@ -6,14 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/config"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -35,24 +36,28 @@ type TekuClient struct {
 	assignmentsCacheMux *sync.Mutex
 	slotsCache          *lru.Cache
 	slotsCacheMux       *sync.Mutex
-	signer              gtypes.Signer
+	logger              *logger.Logger
+	chainId             uint64
+	chainParams         *config.NetworkConfig
 }
 
 // NewTekuClient initializes a new TekuClient instance with the given
 // endpoint URL and chain ID. It sets up internal HTTP communication,
-// LRU-based in-memory caches, and the appropriate signer for use with
-// signature-requiring API calls.
+// mutex-protected LRU-based in-memory caches, and embeds basic logging.
 //
 // Parameters:
-//   - endpoint: Base URL of the Teku REST API (e.g., http://localhost:5052).
-//   - chainID: Chain ID used to configure the signer.
+//   - endpoint: Base URL of the Teku REST API.
+//   - chainId: Chain ID used for transaction context (e.g., for recovering sender addresses).
+//   - chainParams: Pointer to a struct containing Beacon chain parameters
 //
 // Returns:
-//   - *TekuClient: A ready-to-use client for communicating with the CL node.
-//   - error: If cache initialization fails.
-func NewTekuClient(endpoint string, chainID *big.Int) (*TekuClient, error) {
-	signer := gtypes.NewPragueSigner(chainID)
-
+//   - *TekuClient: A ready-to-use client for interacting with the Consensus Layer (CL) node.
+//   - error: If cache initialization fails or any internal setup encounters an issue.
+func NewTekuClient(endpoint string, chainId uint64, chainParams *config.NetworkConfig) (*TekuClient, error) {
+	
+	log := logger.New(nil).WithField("service", "tekuRpcClient")
+	log.Infof("initializing teku client at %v", endpoint)
+	
 	// Use transport with keep-alives and connection reuse
 	httpTransport := &http.Transport{
 		MaxIdleConns:          100,
@@ -64,13 +69,15 @@ func NewTekuClient(endpoint string, chainID *big.Int) (*TekuClient, error) {
 
 	client := &TekuClient{
 		endpoint:            endpoint,
-		signer:              signer,
 		assignmentsCacheMux: &sync.Mutex{},
 		slotsCacheMux:       &sync.Mutex{},
 		client: &http.Client{
 			Timeout:   2 * time.Minute,
 			Transport: httpTransport,
 		},
+		logger: log,
+		chainId: chainId,
+		chainParams: chainParams,
 	}
 
 	var err error
@@ -87,11 +94,22 @@ func NewTekuClient(endpoint string, chainID *big.Int) (*TekuClient, error) {
 	return client, nil
 }
 
+// Close releases any resources held by the TekuClient.
+// Currently, it ensures that idle HTTP connections are closed.
+func (tc *TekuClient) Close() {
+	if tc.client != nil {
+		if transport, ok := tc.client.Transport.(*http.Transport); ok {
+			transport.CloseIdleConnections()
+			tc.logger.Debug("closed idle HTTP connections for TekuClient")
+		}
+	}
+}
+
 func (tc *TekuClient) GetNewBlockChan() chan *types.Block {
 	blkCh := make(chan *types.Block, 10)
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/eth/v1/events?topics=head", tc.endpoint), nil)
 	if err != nil {
-		logger.Fatal(err, "error initializing event sse request", 0)
+		tc.logger.Fatal(err, "error initializing event sse request", 0)
 	}
 	// disable gzip compression for sse
 	req.Header.Set("accept-encoding", "identity")
@@ -111,20 +129,20 @@ func (tc *TekuClient) GetNewBlockChan() chan *types.Block {
 				utils.LogError(err, "Teku connection error (will automatically retry to connect)", 0)
 			case e := <-stream.Events:
 				// logger.Infof("retrieved %v via event stream", e.Data())
-				var parsed consensus.StreamedBlockEventData
+				var parsed rpc_types.StreamedBlockEventData
 				err = json.Unmarshal([]byte(e.Data()), &parsed)
 				if err != nil {
-					logger.Warnf("failed to decode block event: %v", err)
+					tc.logger.Warnf("failed to decode block event: %v", err)
 					continue
 				}
 
-				logger.Infof("retrieving data for slot %v", parsed.Slot)
+				tc.logger.Infof("retrieving data for slot %v", parsed.Slot)
 				block, err := tc.GetBlockBySlot(uint64(parsed.Slot))
 				if err != nil {
-					logger.Warnf("failed to fetch block for slot %d: %v", uint64(parsed.Slot), err)
+					tc.logger.Warnf("failed to fetch block for slot %d: %v", uint64(parsed.Slot), err)
 					continue
 				}
-				logger.Infof("retrieved block for slot %v", parsed.Slot)
+				tc.logger.Infof("retrieved block for slot %v", parsed.Slot)
 				// logger.Infof("pushing block %v", blk.Slot)
 				blkCh <- block
 			}
@@ -141,7 +159,7 @@ func (tc *TekuClient) GetNewBlockChan() chan *types.Block {
 //
 // Returns a parsed StandardBeaconPendingDepositsResponse on success, or an error
 // if the request fails or the response is invalid.
-func (tc *TekuClient) GetPendingDeposits() (*consensus.StandardBeaconPendingDepositsResponse, error) {
+func (tc *TekuClient) GetPendingDeposits() (*rpc_types.StandardBeaconPendingDepositsResponse, error) {
 	url := fmt.Sprintf("%s/eth/v1/beacon/states/head/pending_deposits", tc.endpoint)
 
 	headResp, err := tc.get(url)
@@ -149,7 +167,7 @@ func (tc *TekuClient) GetPendingDeposits() (*consensus.StandardBeaconPendingDepo
 		return nil, fmt.Errorf("error retrieving pending deposits: %w", err)
 	}
 
-	var parsedHead consensus.StandardBeaconPendingDepositsResponse
+	var parsedHead rpc_types.StandardBeaconPendingDepositsResponse
 	if err := json.Unmarshal(headResp, &parsedHead); err != nil {
 		return nil, fmt.Errorf("error parsing pending deposits: %w", err)
 	}
@@ -180,7 +198,7 @@ func (tc *TekuClient) GetChainHead() (*types.ChainHead, error) {
 		return nil, fmt.Errorf("error retrieving chain head: %w", err)
 	}
 
-	var parsedHead consensus.StandardBeaconHeaderResponse
+	var parsedHead rpc_types.StandardBeaconHeaderResponse
 	err = json.Unmarshal(headResp, &parsedHead)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing chain head: %w", err)
@@ -195,13 +213,13 @@ func (tc *TekuClient) GetChainHead() (*types.ChainHead, error) {
 	if err != nil {
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
-			logger.Debugf("pruned node: skipping finality_checkpoints for head state root %s (slot %d)", id, slot)
+			tc.logger.Debugf("pruned node: skipping finality_checkpoints for head state root %s (slot %d)", id, slot)
 			return zeroFinalityFields(uint64(slot), utils.MustParseHex(parsedHead.Data.Root)), nil
 		}
 		return nil, fmt.Errorf("error retrieving finality checkpoints of head: %w", err)
 	}
 
-	var parsedFinality consensus.StandardFinalityCheckpointsResponse
+	var parsedFinality rpc_types.StandardFinalityCheckpointsResponse
 	err = json.Unmarshal(finalityResp, &parsedFinality)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing finality checkpoints of head: %w", err)
@@ -255,7 +273,7 @@ func (tc *TekuClient) GetValidatorQueue() (*types.ValidatorQueue, error) {
 		return nil, fmt.Errorf("error retrieving validator queue from head state: %w", err)
 	}
 
-	var parsedValidators consensus.StandardValidatorsResponse
+	var parsedValidators rpc_types.StandardValidatorsResponse
 	if err := json.Unmarshal(validatorsResp, &parsedValidators); err != nil {
 		return nil, fmt.Errorf("error parsing validator queue response: %w", err)
 	}
@@ -317,12 +335,12 @@ func (tc *TekuClient) GetEpochAssignments(epoch uint64) (*types.EpochAssignments
 	if err != nil {
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
-			logger.Debugf("pruned mode: proposer duties unavailable for epoch %d", epoch)
+			tc.logger.Debugf("pruned mode: proposer duties unavailable for epoch %d", epoch)
 		} else {
 			return nil, fmt.Errorf("error retrieving proposer duties for epoch %v: %w", epoch, err)
 		}
 	} else {
-		var parsedProposerResponse consensus.StandardProposerDutiesResponse
+		var parsedProposerResponse rpc_types.StandardProposerDutiesResponse
 		if err := json.Unmarshal(proposerResp, &parsedProposerResponse); err != nil {
 			return nil, fmt.Errorf("error parsing proposer duties: %w", err)
 		}
@@ -335,12 +353,12 @@ func (tc *TekuClient) GetEpochAssignments(epoch uint64) (*types.EpochAssignments
 		if err != nil {
 			// TODO: pruned node workaround
 			if isPrunedError(err) {
-				logger.Debugf("pruned mode: header unavailable for root %s (epoch %d)", parsedProposerResponse.DependentRoot, epoch)
+				tc.logger.Debugf("pruned mode: header unavailable for root %s (epoch %d)", parsedProposerResponse.DependentRoot, epoch)
 			} else {
 				return nil, fmt.Errorf("error retrieving header root %s (epoch %d)", parsedProposerResponse.DependentRoot, epoch)
 			}
 		} else {
-			var parsedHeader consensus.StandardBeaconHeaderResponse
+			var parsedHeader rpc_types.StandardBeaconHeaderResponse
 			if err := json.Unmarshal(headerResp, &parsedHeader); err != nil {
 				return nil, fmt.Errorf("error parsing chain header: %w", err)
 			}
@@ -351,11 +369,11 @@ func (tc *TekuClient) GetEpochAssignments(epoch uint64) (*types.EpochAssignments
 			if err != nil {
 				// TODO: pruned node workaround
 				if isPrunedError(err) {
-					logger.Debugf("pruned mode: committees unavailable for root %s (epoch %d)", depStateRoot, epoch)
+					tc.logger.Debugf("pruned mode: committees unavailable for root %s (epoch %d)", depStateRoot, epoch)
 				}
 				return nil, fmt.Errorf("error retrieving committees for root %s (epoch %d)", depStateRoot, epoch)
 			} else {
-				var parsedCommittees consensus.StandardCommitteesResponse
+				var parsedCommittees rpc_types.StandardCommitteesResponse
 				if err := json.Unmarshal(committeesResp, &parsedCommittees); err != nil {
 					return nil, fmt.Errorf("error parsing committees data: %w", err)
 				}
@@ -388,7 +406,7 @@ func (tc *TekuClient) GetEpochAssignments(epoch uint64) (*types.EpochAssignments
 		if err != nil {
 			// TODO: pruned node workaround
 			if isPrunedError(err) {
-				logger.Debugf("pruned mode: sync committee unavailable for state %s (epoch %d)", syncState, epoch)
+				tc.logger.Debugf("pruned mode: sync committee unavailable for state %s (epoch %d)", syncState, epoch)
 			} else {
 				return nil, fmt.Errorf("failed to get sync committee for state %s (epoch %d)", syncState, epoch)
 			}
@@ -426,23 +444,23 @@ func (tc *TekuClient) GetEpochAssignments(epoch uint64) (*types.EpochAssignments
 // Returns:
 //   - *StandardProposerDutiesResponse: Always non-nil
 //   - error: Only if the response fails to decode or is otherwise invalid
-func (tc *TekuClient) GetEpochProposerAssignments(epoch uint64) (*consensus.StandardProposerDutiesResponse, error) {
+func (tc *TekuClient) GetEpochProposerAssignments(epoch uint64) (*rpc_types.StandardProposerDutiesResponse, error) {
 	url := fmt.Sprintf("%s/eth/v1/validator/duties/proposer/%d", tc.endpoint, epoch)
 
 	proposerResp, err := tc.get(url)
 	if err != nil {
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
-			logger.Debugf("pruned mode: proposer duties unavailable for epoch %d", epoch)
-			return &consensus.StandardProposerDutiesResponse{
+			tc.logger.Debugf("pruned mode: proposer duties unavailable for epoch %d", epoch)
+			return &rpc_types.StandardProposerDutiesResponse{
 				DependentRoot: "",
-				Data:          []consensus.BeaconProposerDutyData{},
+				Data:          []rpc_types.BeaconProposerDutyData{},
 			}, nil
 		}
 		return nil, fmt.Errorf("error retrieving proposer duties for epoch %v: %w", epoch, err)
 	}
 
-	var result consensus.StandardProposerDutiesResponse
+	var result rpc_types.StandardProposerDutiesResponse
 	if err := json.Unmarshal(proposerResp, &result); err != nil {
 		return nil, fmt.Errorf("error parsing proposer duties: %w", err)
 	}
@@ -464,7 +482,7 @@ func (tc *TekuClient) GetEpochProposerAssignments(epoch uint64) (*consensus.Stan
 // Returns:
 //   - *StandardValidatorsResponse: Non-nil, with .Data containing zero or more validator entries
 //   - error: Only if the HTTP request or JSON decoding fails and is not pruned-related
-func (tc *TekuClient) GetValidatorState(epoch uint64) (*consensus.StandardValidatorsResponse, error) {
+func (tc *TekuClient) GetValidatorState(epoch uint64) (*rpc_types.StandardValidatorsResponse, error) {
 	slot := epoch * utils.Config.Chain.ClConfig.SlotsPerEpoch
 	url := fmt.Sprintf("%s/eth/v1/beacon/states/%d/validators", tc.endpoint, slot)
 
@@ -472,15 +490,15 @@ func (tc *TekuClient) GetValidatorState(epoch uint64) (*consensus.StandardValida
 	if err != nil {
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
-			logger.Debugf("pruned mode: validator state unavailable for epoch %d (slot %d)", epoch, slot)
-			return &consensus.StandardValidatorsResponse{
-				Data: []consensus.StandardValidatorEntry{},
+			tc.logger.Debugf("pruned mode: validator state unavailable for epoch %d (slot %d)", epoch, slot)
+			return &rpc_types.StandardValidatorsResponse{
+				Data: []rpc_types.StandardValidatorEntry{},
 			}, nil
 		}
 		return nil, fmt.Errorf("error retrieving validators for epoch %d: %w", epoch, err)
 	}
 
-	var result consensus.StandardValidatorsResponse
+	var result rpc_types.StandardValidatorsResponse
 	if err := json.Unmarshal(validatorsResp, &result); err != nil {
 		return nil, fmt.Errorf("error parsing validators for epoch %d: %w", epoch, err)
 	}
@@ -529,7 +547,7 @@ func (tc *TekuClient) GetEpochData(epoch uint64, skipHistoricBalances bool) (*ty
 			Status:                     validator.Status,
 		})
 	}
-	logger.Infof("retrieved %v validators for epoch %v", len(data.Validators), epoch)
+	tc.logger.Infof("retrieved %v validators for epoch %v", len(data.Validators), epoch)
 
 	var wg errgroup.Group
 	var mux sync.Mutex
@@ -562,7 +580,7 @@ func (tc *TekuClient) GetEpochData(epoch uint64, skipHistoricBalances bool) (*ty
 			data.AttestationDuties[types.Slot(attestedSlot)][types.ValidatorIndex(vIdx)] = []types.Slot{}
 		}
 
-		logger.Infof("retrieved assignment data for epoch %v", epoch)
+		tc.logger.Infof("retrieved assignment data for epoch %v", epoch)
 		return nil
 	})
 
@@ -573,7 +591,7 @@ func (tc *TekuClient) GetEpochData(epoch uint64, skipHistoricBalances bool) (*ty
 			if err != nil {
 				// TODO: pruned node workaround
 				if isPrunedError(err) {
-					logger.Warnf("epoch %d: participation stats unavailable (pruned)", epoch)
+					tc.logger.Warnf("epoch %d: participation stats unavailable (pruned)", epoch)
 					data.EpochParticipationStats = &types.ValidatorParticipation{Epoch: epoch}
 					data.PrunedPartial = true
 					return nil
@@ -681,7 +699,7 @@ func (tc *TekuClient) GetEpochData(epoch uint64, skipHistoricBalances bool) (*ty
 		}
 	}
 
-	logger.Infof("retrieved epoch data for epoch %d (prunedPartial = %v)", epoch, data.PrunedPartial)
+	tc.logger.Infof("retrieved epoch data for epoch %d (prunedPartial = %v)", epoch, data.PrunedPartial)
 
 	return data, nil
 }
@@ -710,22 +728,22 @@ func (tc *TekuClient) GetBalancesForEpoch(epoch int64) (map[uint64]uint64, error
 
 	// Fallback for genesis
 	if err != nil && epoch == 0 {
-		logger.Warnf("slot 0 validator balances unavailable, falling back to 'genesis'")
+		tc.logger.Warnf("slot 0 validator balances unavailable, falling back to 'genesis'")
 		resp, err = tc.get(fmt.Sprintf("%s/eth/v1/beacon/states/genesis/validator_balances", tc.endpoint))
 		if err != nil {
-			logger.Debug("pruned mode: validator balances for genesis unavailable")
+			tc.logger.Debug("pruned mode: validator balances for genesis unavailable")
 			return validatorBalances, nil
 		}
 	} else if err != nil {
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
-			logger.Debugf("pruned mode: validator balances for epoch %d unavailable", epoch)
+			tc.logger.Debugf("pruned mode: validator balances for epoch %d unavailable", epoch)
 			return validatorBalances, nil
 		}
 		return nil, fmt.Errorf("failed to get validator balances for epoch %d: %w", epoch, err)
 	}
 
-	var parsedResponse consensus.StandardValidatorBalancesResponse
+	var parsedResponse rpc_types.StandardValidatorBalancesResponse
 	if err := json.Unmarshal(resp, &parsedResponse); err != nil {
 		return nil, fmt.Errorf("error parsing response for validator_balances")
 	}
@@ -746,7 +764,7 @@ func (tc *TekuClient) GetBlockByBlockroot(blockroot []byte) (*types.Block, error
 		}
 		return nil, fmt.Errorf("error retrieving headers for blockroot 0x%x: %w", blockroot, err)
 	}
-	var parsedHeaders consensus.StandardBeaconHeaderResponse
+	var parsedHeaders rpc_types.StandardBeaconHeaderResponse
 	err = json.Unmarshal(resHeaders, &parsedHeaders)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing header-response for blockroot 0x%x: %w", blockroot, err)
@@ -759,10 +777,10 @@ func (tc *TekuClient) GetBlockByBlockroot(blockroot []byte) (*types.Block, error
 		return nil, fmt.Errorf("error retrieving block data at slot %v: %w", slot, err)
 	}
 
-	var parsedResponse consensus.StandardV2BlockResponse
+	var parsedResponse rpc_types.StandardV2BlockResponse
 	err = json.Unmarshal(resp, &parsedResponse)
 	if err != nil {
-		logger.Errorf("error parsing block data at slot %v: %v", parsedHeaders.Data.Header.Message.Slot, err)
+		tc.logger.Errorf("error parsing block data at slot %v: %v", parsedHeaders.Data.Header.Message.Slot, err)
 		return nil, fmt.Errorf("error parsing block-response at slot %v: %w", slot, err)
 	}
 
@@ -770,8 +788,8 @@ func (tc *TekuClient) GetBlockByBlockroot(blockroot []byte) (*types.Block, error
 }
 
 // GetBlockHeader will get the block header by slot from Teku RPC api
-func (tc *TekuClient) GetBlockHeader(slot uint64) (*consensus.StandardBeaconHeaderResponse, error) {
-	var parsedHeaders *consensus.StandardBeaconHeaderResponse
+func (tc *TekuClient) GetBlockHeader(slot uint64) (*rpc_types.StandardBeaconHeaderResponse, error) {
+	var parsedHeaders *rpc_types.StandardBeaconHeaderResponse
 
 	resHeaders, err := tc.get(fmt.Sprintf("%s/eth/v1/beacon/headers/%d", tc.endpoint, slot))
 	if err != nil && slot == 0 {
@@ -780,7 +798,7 @@ func (tc *TekuClient) GetBlockHeader(slot uint64) (*consensus.StandardBeaconHead
 			return nil, fmt.Errorf("error retrieving chain head for slot %v: %w", slot, err)
 		}
 
-		var parsedHeader consensus.StandardBeaconHeadersResponse
+		var parsedHeader rpc_types.StandardBeaconHeadersResponse
 		err = json.Unmarshal(headResp, &parsedHeader)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing chain head for slot %v: %w", slot, err)
@@ -790,7 +808,7 @@ func (tc *TekuClient) GetBlockHeader(slot uint64) (*consensus.StandardBeaconHead
 			return nil, fmt.Errorf("error no headers available for slot %v", slot)
 		}
 
-		parsedHeaders = &consensus.StandardBeaconHeaderResponse{
+		parsedHeaders = &rpc_types.StandardBeaconHeaderResponse{
 			Data: parsedHeader.Data[len(parsedHeader.Data)-1],
 		}
 
@@ -825,7 +843,7 @@ func (tc *TekuClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 	headerURL := fmt.Sprintf("%s/eth/v1/beacon/headers/%d", tc.endpoint, slot)
 	headerResp, err := tc.get(headerURL)
 
-	var parsedHeader consensus.StandardBeaconHeaderResponse
+	var parsedHeader rpc_types.StandardBeaconHeaderResponse
 	isMissedSlot := false
 
 	switch {
@@ -840,7 +858,7 @@ func (tc *TekuClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 	}
 
 	if isMissedSlot {
-		logger.Infof("slot %d: no block proposed (missed slot)", slot)
+		tc.logger.Infof("slot %d: no block proposed (missed slot)", slot)
 		return tc.buildMissedSlotBlock(slot, epoch, isFirstSlotOfEpoch)
 	}
 
@@ -849,10 +867,10 @@ func (tc *TekuClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 	if cached, ok := tc.slotsCache.Get(parsedHeader.Data.Root); ok {
 		tc.slotsCacheMux.Unlock()
 		if block, ok := cached.(*types.Block); ok {
-			logger.Infof("slot %d (0x%x) retrieved from cache", block.Slot, block.BlockRoot)
+			tc.logger.Infof("slot %d (0x%x) retrieved from cache", block.Slot, block.BlockRoot)
 			return block, nil
 		}
-		logger.Errorf("invalid cached block for slot %d", slot)
+		tc.logger.Errorf("invalid cached block for slot %d", slot)
 	} else {
 		tc.slotsCacheMux.Unlock()
 	}
@@ -864,7 +882,7 @@ func (tc *TekuClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 		return nil, fmt.Errorf("failed to retrieve full block at slot %d: %w", slot, err)
 	}
 
-	var parsedBlock consensus.StandardV2BlockResponse
+	var parsedBlock rpc_types.StandardV2BlockResponse
 	if err := json.Unmarshal(blockResp, &parsedBlock); err != nil {
 		return nil, fmt.Errorf("failed to parse block at slot %d: %w", slot, err)
 	}
@@ -890,8 +908,8 @@ func (tc *TekuClient) GetBlockBySlot(slot uint64) (*types.Block, error) {
 // and StandardV2BlockResponse, enriching it with epoch assignments and blob sidecars.
 // It gracefully handles pruned node behavior and missing data where applicable.
 func (tc *TekuClient) blockFromResponse(
-	parsedHeaders *consensus.StandardBeaconHeaderResponse,
-	parsedResponse *consensus.StandardV2BlockResponse,
+	parsedHeaders *rpc_types.StandardBeaconHeaderResponse,
+	parsedResponse *rpc_types.StandardV2BlockResponse,
 ) (*types.Block, error) {
 
 	parsedBlock := parsedResponse.Data
@@ -906,7 +924,7 @@ func (tc *TekuClient) blockFromResponse(
 	epoch := slot / utils.Config.Chain.ClConfig.SlotsPerEpoch
 	epochAssignments, err := tc.GetEpochAssignments(epoch)
 	if err != nil {
-		logger.Warnf("epoch assignments unavailable at epoch %d: %v", epoch, err)
+		tc.logger.Warnf("epoch assignments unavailable at epoch %d: %v", epoch, err)
 		epochAssignments = &types.EpochAssignments{
 			ProposerAssignments: map[uint64]uint64{},
 			AttestorAssignments: map[string]uint64{},
@@ -929,7 +947,7 @@ func (tc *TekuClient) blockFromResponse(
 	// Other major structures
 	buildProposerSlashings(block, &parsedBlock)
 	buildAttesterSlashings(block, &parsedBlock)
-	buildAttestations(tc, block, &parsedBlock)
+	buildAttestations(tc, block, &parsedBlock, tc.logger)
 	buildDeposits(block, &parsedBlock)
 	buildVoluntaryExits(block, &parsedBlock)
 	buildBLSChanges(block, &parsedBlock)
@@ -971,13 +989,13 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 		requestEpoch += 1
 	}
 
-	logger.Infof("requesting validator inclusion data for epoch %v", requestEpoch)
+	tc.logger.Infof("requesting validator inclusion data for epoch %v", requestEpoch)
 
 	resp, err := tc.get(fmt.Sprintf("%s/teku/validator_inclusion/%d/global", tc.endpoint, requestEpoch))
 	if err != nil {
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
-			logger.Debugf("pruned mode: epoch %v pruned from node history; returning empty participation", requestEpoch)
+			tc.logger.Debugf("pruned mode: epoch %v pruned from node history; returning empty participation", requestEpoch)
 			return &types.ValidatorParticipation{
 				Epoch:                   epoch,
 				GlobalParticipationRate: 0,
@@ -989,7 +1007,7 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 		return nil, fmt.Errorf("error retrieving validator participation data for epoch %v: %w", requestEpoch, err)
 	}
 
-	var parsedResponse consensus.StandardValidatorParticipationResponse
+	var parsedResponse rpc_types.StandardValidatorParticipationResponse
 	if err := json.Unmarshal(resp, &parsedResponse); err != nil {
 		return nil, fmt.Errorf("error parsing validator participation data for epoch %v: %w", epoch, err)
 	}
@@ -1006,7 +1024,7 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 			if err != nil {
 				// TODO: pruned node workaround
 				if isPrunedError(err) {
-					logger.Debugf("pruned mode: prevEpoch %v data pruned; returning empty participation", requestEpoch-1)
+					tc.logger.Debugf("pruned mode: prevEpoch %v data pruned; returning empty participation", requestEpoch-1)
 					return &types.ValidatorParticipation{
 						Epoch:                   epoch,
 						GlobalParticipationRate: 0,
@@ -1018,7 +1036,7 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 				return nil, fmt.Errorf("error retrieving validator participation data for prevEpoch %v: %w", requestEpoch-1, err)
 			}
 
-			var parsedPrevResponse consensus.StandardValidatorParticipationResponse
+			var parsedPrevResponse rpc_types.StandardValidatorParticipationResponse
 			if err := json.Unmarshal(prevResp, &parsedPrevResponse); err != nil {
 				return nil, fmt.Errorf("error parsing validator participation data for prevEpoch %v: %w", epoch, err)
 			}
@@ -1064,13 +1082,13 @@ func (tc *TekuClient) GetValidatorParticipation(epoch uint64) (*types.ValidatorP
 //     404 or similar errors by returning an empty sync committee object and no error.
 //   - This ensures compatibility with non-archival nodes while allowing the caller to distinguish
 //     between actual data and missing data due to pruning.
-func (tc *TekuClient) GetSyncCommittee(stateID string, epoch uint64) (*consensus.StandardSyncCommitteeData, error) {
+func (tc *TekuClient) GetSyncCommittee(stateID string, epoch uint64) (*rpc_types.StandardSyncCommitteeData, error) {
 	syncCommitteesResp, err := tc.get(fmt.Sprintf("%s/eth/v1/beacon/states/%s/sync_committees?epoch=%d", tc.endpoint, stateID, epoch))
 	if err != nil {
 		// TODO: pruned node workaround
 		if isPrunedError(err) {
-			logger.Debugf("pruned mode: sync committee unavailable for epoch %s", epoch)
-			return &consensus.StandardSyncCommitteeData{
+			tc.logger.Debugf("pruned mode: sync committee unavailable for epoch %s", epoch)
+			return &rpc_types.StandardSyncCommitteeData{
 				Validators:          []string{},
 				ValidatorAggregates: [][]string{},
 			}, nil
@@ -1078,7 +1096,7 @@ func (tc *TekuClient) GetSyncCommittee(stateID string, epoch uint64) (*consensus
 		return nil, fmt.Errorf("error retrieving sync_committees for epoch %v (state: %v): %w", epoch, stateID, err)
 	}
 
-	var parsedSyncCommittees consensus.StandardSyncCommitteesResponse
+	var parsedSyncCommittees rpc_types.StandardSyncCommitteesResponse
 	err = json.Unmarshal(syncCommitteesResp, &parsedSyncCommittees)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing sync_committees data for epoch %v (state: %v): %w", epoch, stateID, err)
@@ -1098,14 +1116,14 @@ func (tc *TekuClient) GetSyncCommittee(stateID string, epoch uint64) (*consensus
 //   - "genesis"
 //   - "finalized"
 //
-// Returns a parsed *consensus.StandardBlobSidecarsResponse or an error if retrieval or decoding fails.
-func (tc *TekuClient) GetBlobSidecars(stateID string) (*consensus.StandardBlobSidecarsResponse, error) {
+// Returns a parsed *rpc_types.StandardBlobSidecarsResponse or an error if retrieval or decoding fails.
+func (tc *TekuClient) GetBlobSidecars(stateID string) (*rpc_types.StandardBlobSidecarsResponse, error) {
 	url := fmt.Sprintf("%s/eth/v1/beacon/blob_sidecars/%s", tc.endpoint, stateID)
 	res, err := tc.get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving blob_sidecars for %v: %w", stateID, err)
 	}
-	var parsed consensus.StandardBlobSidecarsResponse
+	var parsed rpc_types.StandardBlobSidecarsResponse
 	if err := json.Unmarshal(res, &parsed); err != nil {
 		return nil, fmt.Errorf("error parsing blob_sidecars for %v: %w", stateID, err)
 	}
@@ -1159,14 +1177,14 @@ func (tc *TekuClient) get(url string) ([]byte, error) {
 func (tc *TekuClient) enrichBlockWithEpochData(block *types.Block, epoch uint64) {
 	assignments, err := tc.GetEpochAssignments(epoch)
 	if err != nil {
-		logger.Warnf("slot %d: assignments unavailable: %v", block.Slot, err)
+		tc.logger.Warnf("slot %d: assignments unavailable: %v", block.Slot, err)
 	} else {
 		block.EpochAssignments = assignments
 	}
 
 	validators, err := tc.GetValidatorState(epoch)
 	if err != nil {
-		logger.Warnf("slot %d: validators unavailable: %v", block.Slot, err)
+		tc.logger.Warnf("slot %d: validators unavailable: %v", block.Slot, err)
 		return
 	}
 
@@ -1198,7 +1216,7 @@ func (tc *TekuClient) buildMissedSlotBlock(slot, epoch uint64, enrich bool) (*ty
 			}
 		}
 	} else {
-		logger.Warnf("slot %d: failed to get proposer assignments: %v", slot, err)
+		tc.logger.Warnf("slot %d: failed to get proposer assignments: %v", slot, err)
 	}
 
 	block := buildEmptyBlock(slot, proposer)
@@ -1212,7 +1230,7 @@ func (tc *TekuClient) buildMissedSlotBlock(slot, epoch uint64, enrich bool) (*ty
 
 func (tc *TekuClient) validateBlobSidecars(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 ) error {
 	commitments := parsedBlock.Message.Body.BlobKZGCommitments
 	if len(commitments) == 0 {
@@ -1238,7 +1256,7 @@ func (tc *TekuClient) validateBlobSidecars(
 
 func (tc *TekuClient) buildSyncAggregate(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 	assignments *types.EpochAssignments,
 ) error {
 	agg := parsedBlock.Message.Body.SyncAggregate
@@ -1270,7 +1288,7 @@ func (tc *TekuClient) buildSyncAggregate(
 
 func (tc *TekuClient) buildExecutionPayload(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 ) error {
 	payload := parsedBlock.Message.Body.ExecutionPayload
 	if payload == nil || bytes.Equal(payload.ParentHash, make([]byte, 32)) {
@@ -1289,7 +1307,7 @@ func (tc *TekuClient) buildExecutionPayload(
 		tx.AccountNonce = decTx.Nonce()
 		tx.Price = decTx.GasPrice().Bytes()
 		tx.GasLimit = decTx.Gas()
-		sender, err := tc.signer.Sender(&decTx)
+		sender, err := recoverSender(&decTx, tc.chainId)
 		if err != nil {
 			return fmt.Errorf("invalid sender for tx %d: %w", i, err)
 		}

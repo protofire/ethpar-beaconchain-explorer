@@ -2,14 +2,17 @@ package teku
 
 import (
 	"errors"
+	"math/big"
 
+	eth_types "github.com/ethereum/go-ethereum/core/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/codec"
-	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/sirupsen/logrus"
 )
 
 // errNotFound indicates that the requested resource was not found (HTTP 404).
@@ -19,8 +22,6 @@ var errNotFound = errors.New("resource not found (404)")
 // errUnavailable indicates the service is temporarily unavailable (HTTP 503).
 // Teku may return this when data is pruned, not yet available, or the node is syncing.
 var errUnavailable = errors.New("service unavailable or pruned data (503)")
-
-var logger = logrus.New().WithField("module", "rpc")
 
 // TekuLatestHeadEpoch is used to cache the latest head epoch for participation requests
 var TekuLatestHeadEpoch uint64 = 0
@@ -153,8 +154,8 @@ func buildEmptyBlock(slot uint64, proposer int64) *types.Block {
 // Returns:
 //   - A pointer to a partially populated types.Block, ready for enrichment by later helpers.
 func buildBlockSkeleton(
-	parsedBlock *consensus.AnySignedBlock,
-	parsedHeaders *consensus.StandardBeaconHeaderResponse,
+	parsedBlock *rpc_types.AnySignedBlock,
+	parsedHeaders *rpc_types.StandardBeaconHeaderResponse,
 	slot uint64,
 ) *types.Block {
 	return &types.Block{
@@ -214,7 +215,7 @@ func sanitizeDepositCount(count uint64) uint64 {
 //   - parsedBlock: Consensus block from which to extract proposer slashing data.
 func buildProposerSlashings(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 ) {
 	for i, slashing := range parsedBlock.Message.Body.ProposerSlashings {
 		block.ProposerSlashings[i] = &types.ProposerSlashing{
@@ -247,7 +248,7 @@ func buildProposerSlashings(
 //   - parsedBlock: Consensus block containing raw attester slashing input.
 func buildAttesterSlashings(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 ) {
 	for i, slashing := range parsedBlock.Message.Body.AttesterSlashings {
 		block.AttesterSlashings[i] = &types.AttesterSlashing{
@@ -301,7 +302,8 @@ func buildAttesterSlashings(
 func buildAttestations(
 	tc *TekuClient,
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
+	log *logger.Logger,
 ) {
 	for i, att := range parsedBlock.Message.Body.Attestations {
 		a := &types.Attestation{
@@ -325,7 +327,7 @@ func buildAttestations(
 
 		assignments, err := tc.GetEpochAssignments(a.Data.Slot / utils.Config.Chain.ClConfig.SlotsPerEpoch)
 		if err != nil || assignments == nil {
-			logger.Warnf("missing epoch assignment for attestation at slot %d: %v", a.Data.Slot, err)
+			log.Warnf("missing epoch assignment for attestation at slot %d: %v", a.Data.Slot, err)
 			block.Attestations[i] = a
 			continue
 		}
@@ -338,7 +340,7 @@ func buildAttestations(
 			key := utils.FormatAttestorAssignmentKey(a.Data.Slot, a.Data.CommitteeIndex, j)
 			valIdx, found := assignments.AttestorAssignments[key]
 			if !found {
-				logger.Debugf("unknown attestor: slot %d, committee %d, index %d", a.Data.Slot, a.Data.CommitteeIndex, j)
+				log.Debugf("unknown attestor: slot %d, committee %d, index %d", a.Data.Slot, a.Data.CommitteeIndex, j)
 				valIdx = 0
 			}
 			a.Attesters = append(a.Attesters, valIdx)
@@ -361,7 +363,7 @@ func buildAttestations(
 //   - parsedBlock: Consensus block from which to extract deposit data.
 func buildDeposits(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 ) {
 	for i, d := range parsedBlock.Message.Body.Deposits {
 		block.Deposits[i] = &types.Deposit{
@@ -382,7 +384,7 @@ func buildDeposits(
 //   - parsedBlock: Source consensus block containing the exit data.
 func buildVoluntaryExits(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 ) {
 	for i, v := range parsedBlock.Message.Body.VoluntaryExits {
 		block.VoluntaryExits[i] = &types.VoluntaryExit{
@@ -403,7 +405,7 @@ func buildVoluntaryExits(
 //   - parsedBlock: Consensus block containing the signed BLS changes.
 func buildBLSChanges(
 	block *types.Block,
-	parsedBlock *consensus.AnySignedBlock,
+	parsedBlock *rpc_types.AnySignedBlock,
 ) {
 	for i, c := range parsedBlock.Message.Body.SignedBLSToExecutionChange {
 		block.SignedBLSToExecutionChange[i] = &types.SignedBLSToExecutionChange{
@@ -415,4 +417,19 @@ func buildBLSChanges(
 			Signature: c.Signature,
 		}
 	}
+}
+
+// Equivalent to signer.Sender(tx)
+func recoverSender(tx *eth_types.Transaction, chainId uint64) (common.Address, error) {
+	var signer eth_types.Signer
+
+	id := new(big.Int).SetUint64(chainId)
+
+	if id != nil {
+		signer = eth_types.NewEIP155Signer(id)
+	} else {
+		signer = eth_types.HomesteadSigner{}
+	}
+
+	return eth_types.Sender(signer, tx)
 }

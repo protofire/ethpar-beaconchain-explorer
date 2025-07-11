@@ -4,51 +4,56 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/config"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
 	"github.com/protofire/ethpar-beaconchain-explorer/services"
-	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	//"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/sirupsen/logrus"
 )
 
-var logger = logrus.New().WithField("module", "exporter")
-
 // Start will start the export of data from rpc into the database
-func Start(client consensus.ConsensusClient, bt *db.Bigtable) {
-	go networkLivenessUpdater(client)
+func Start(
+	client consensus.ConsensusClient, 
+	bt *db.Bigtable,
+	sqlDb *db.Postgres,
+	cfg *config.Eth2IndexerConfig,
+	chainParams *config.NetworkConfig,
+) {
+	go networkLivenessUpdater(client, sqlDb, chainParams)
 	go eth1DepositsExporter()
-	go genesisDepositsExporter(client)
+	go genesisDepositsExporter(client, sqlDb)
 	go checkSubscriptions()
 	go syncCommitteesExporter(client)
 	go syncCommitteesCountExporter()
-	if utils.Config.SSVExporter.Enabled {
+	if cfg.Indexing.SsvExporter {
 		go ssvExporter()
 	}
-	if utils.Config.RocketpoolExporter.Enabled {
+	if cfg.Indexing.RocketPoolExporter {
 		go rocketpoolExporter()
 	}
 
-	if utils.Config.Indexer.PubKeyTagsExporter.Enabled {
+	if cfg.Indexing.PubKeyTagsExporter {
 		go UpdatePubkeyTag()
 	}
 
-	if utils.Config.MevBoostRelayExporter.Enabled {
+	if cfg.Indexing.MevBoostRelayExporter {
 		go mevBoostRelaysExporter()
 	}
 	// wait until the beacon-node is available
 	for {
 		head, err := client.GetChainHead()
 		if err == nil {
-			logger.Infof("beacon node is available with head slot: %v", head.HeadSlot)
+			log.Infof("beacon node is available with head slot: %v", head.HeadSlot)
 			break
 		}
-		logger.Errorf("beacon-node seems to be unavailable: %v", err)
+		log.Errorf("beacon-node seems to be unavailable: %v", err)
 		time.Sleep(time.Second * 10)
 	}
 
 	firstRun := true
 
-	minWaitTimeBetweenRuns := time.Second * time.Duration(utils.Config.Chain.ClConfig.SecondsPerSlot)
+	minWaitTimeBetweenRuns := time.Second * time.Duration(chainParams.Time.SecondsPerSlot)
 	for {
 		start := time.Now()
 		err := RunSlotExporter(client, firstRun, bt)
@@ -77,20 +82,19 @@ func Start(client consensus.ConsensusClient, bt *db.Bigtable) {
 //   - Duplicate entries for the same epoch are avoided.
 //
 // This function is intended to track network progress and consensus stability over time.
-func networkLivenessUpdater(client consensus.ConsensusClient) {
-	var prevHeadEpoch uint64
-	err := db.WriterDb.Get(&prevHeadEpoch, "SELECT COALESCE(MAX(headepoch), 0) FROM network_liveness")
+func networkLivenessUpdater(client consensus.ConsensusClient, sqlDb *db.Postgres, chainParams *config.NetworkConfig) {
+	prevHeadEpoch, err := sqlDb.GetPrevHeadEpoch()
 	if err != nil {
-		utils.LogFatal(err, "getting previous head epoch from db error", 0)
+		log.Fatalf("getting previous head epoch from db error: %v", err)
 	}
 
-	epochDuration := time.Second * time.Duration(utils.Config.Chain.ClConfig.SecondsPerSlot*utils.Config.Chain.ClConfig.SlotsPerEpoch)
-	slotDuration := time.Second * time.Duration(utils.Config.Chain.ClConfig.SecondsPerSlot)
+	epochDuration := time.Second * time.Duration(chainParams.Time.SecondsPerSlot*chainParams.Time.SlotsPerEpoch)
+	slotDuration := time.Second * time.Duration(chainParams.Time.SecondsPerSlot)
 
 	for {
 		head, err := client.GetChainHead()
 		if err != nil {
-			logger.Errorf("error getting chainhead when exporting networkliveness: %v", err)
+			log.Errorf("error getting chainhead when exporting networkliveness: %v", err)
 			time.Sleep(slotDuration)
 			continue
 		}
@@ -106,14 +110,15 @@ func networkLivenessUpdater(client consensus.ConsensusClient) {
 			continue
 		}
 
-		_, err = db.WriterDb.Exec(`
-			INSERT INTO network_liveness (ts, headepoch, finalizedepoch, justifiedepoch, previousjustifiedepoch)
-			VALUES (NOW(), $1, $2, $3, $4)`,
-			head.HeadEpoch, head.FinalizedEpoch, head.JustifiedEpoch, head.PreviousJustifiedEpoch)
-		if err != nil {
-			logger.Errorf("error saving networkliveness: %v", err)
+		if err := sqlDb.InsertNetworkLivenessSnapshot(
+			head.HeadEpoch, 
+			head.FinalizedEpoch, 
+			head.JustifiedEpoch, 
+			head.PreviousJustifiedEpoch,
+		); err != nil {
+			log.Errorf("error saving networkliveness: %v", err)
 		} else {
-			logger.Printf("updated networkliveness for epoch %v", head.HeadEpoch)
+			log.Infof("updated networkliveness for epoch %v", head.HeadEpoch)
 			prevHeadEpoch = head.HeadEpoch
 		}
 
@@ -131,13 +136,12 @@ func networkLivenessUpdater(client consensus.ConsensusClient) {
 //
 // Genesis deposits are used to establish the initial validator set and provide
 // context for historical and auditing views in the explorer.
-func genesisDepositsExporter(client consensus.ConsensusClient) {
+func genesisDepositsExporter(client consensus.ConsensusClient, sqlDb *db.Postgres) {
 	for {
 		// check if the beaconchain has started
-		var latestEpoch uint64
-		err := db.WriterDb.Get(&latestEpoch, "SELECT COALESCE(MAX(epoch), 0) FROM epochs")
+		latestEpoch, err := sqlDb.GetLatestEpoch()
 		if err != nil {
-			logger.Errorf("error retrieving latest epoch from the database: %v", err)
+			log.Errorf("error retrieving latest epoch from the database: %v", err)
 			time.Sleep(time.Second * 10)
 			continue
 		}
@@ -148,10 +152,9 @@ func genesisDepositsExporter(client consensus.ConsensusClient) {
 		}
 
 		// check if genesis-deposits have already been exported
-		var genesisDepositsCount uint64
-		err = db.WriterDb.Get(&genesisDepositsCount, "SELECT COUNT(*) FROM blocks_deposits WHERE block_slot=0")
+		genesisDepositsCount, err := sqlDb.GetGenesisDepositsCount()
 		if err != nil {
-			logger.Errorf("error retrieving genesis-deposits-count when exporting genesis-deposits: %v", err)
+			log.Errorf("error retrieving genesis-deposits-count when exporting genesis-deposits: %v", err)
 			time.Sleep(time.Minute)
 			continue
 		}
@@ -163,7 +166,7 @@ func genesisDepositsExporter(client consensus.ConsensusClient) {
 
 		genesisValidators, err := client.GetValidatorState(0)
 		if err != nil {
-			logger.Errorf("error retrieving genesis validator data for genesis-epoch when exporting genesis-deposits: %v", err)
+			log.Errorf("error retrieving genesis validator data for genesis-epoch when exporting genesis-deposits: %v", err)
 			time.Sleep(time.Minute)
 			continue
 		}
@@ -226,6 +229,52 @@ func genesisDepositsExporter(client consensus.ConsensusClient) {
 		}
 
 		logger.Infof("exported genesis-deposits for %v genesis-validators", len(genesisValidators.Data))
+		return
+	}
+}
+
+
+
+func genesisDepositsExporter(client consensus.ConsensusClient, sqlDb *db.Postgres) {
+	for {
+		latestEpoch, err := sqlDb.GetLatestEpoch()
+		if err != nil {
+			log.Errorf("error retrieving latest epoch: %v", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		if latestEpoch == 0 {
+			time.Sleep(time.Minute)
+			continue
+		}
+
+		count, err := sqlDb.GetGenesisDepositsCount()
+		if err != nil {
+			log.Errorf("error retrieving genesis deposits count: %v", err)
+			time.Sleep(time.Minute)
+			continue
+		}
+		if count > 0 {
+			return
+		}
+
+		genesisValidators, err := client.GetValidatorState(0)
+		if err != nil {
+			log.Errorf("error fetching genesis validators: %v", err)
+			time.Sleep(time.Minute)
+			continue
+		}
+
+		log.Infof("exporting genesis deposits for %d validators", len(genesisValidators.Data))
+
+		if err := sqlDb.ExportGenesisDeposits(context.Background(), genesisValidators.Data); err != nil {
+			log.Errorf("error exporting genesis deposits: %v", err)
+			time.Sleep(time.Minute)
+			continue
+		}
+
+		log.Infof("exported genesis deposits for %d validators", len(genesisValidators.Data))
 		return
 	}
 }
