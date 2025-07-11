@@ -928,27 +928,11 @@ func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 		slot.StatusFormatted = utils.FormatBlockStatus(slot.Status, slot.Slot)
 		slot.ProposerFormatted = utils.FormatValidatorWithName(slot.Proposer, slot.ProposerName)
 		slot.BlockRootFormatted = fmt.Sprintf("%x", slot.BlockRoot)
-		
-		// Query for execution ranks for this slot
-		var executionRanks []types.ExecutionRankData
-		err := db.ReaderDb.Select(&executionRanks, `
-			SELECT 
-				ROW_NUMBER() OVER (ORDER BY exec_block_number) - 1 as rank,
-				exec_block_number as block_number,
-				COALESCE(exec_gas_used, 0) as gas_used
-			FROM blocks 
-			WHERE slot = $1 AND exec_block_number > 0
-			ORDER BY exec_block_number`, slot.Slot)
-		if err != nil {
-			log.Errorf("error retrieving execution ranks for slot %d: %v", slot.Slot, err)
-			// Set empty execution ranks on error
-			slot.ExecutionRanks = []types.ExecutionRankData{}
-		} else {
-			slot.ExecutionRanks = executionRanks
-		}
-		
-		// Set parallel blocks count based on execution ranks
-		slot.ParallelBlocksCount = uint64(len(slot.ExecutionRanks))
+	}
+	
+	// Enrich slots with execution ranks data from BigTable
+	if err := enrichSlotsExecutionRanks(slots, bt); err != nil {
+		log.Errorf("error enriching slots with execution ranks: %v", err)
 	}
 	data.Slots = slots
 
@@ -997,7 +981,6 @@ func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 		}
 
 		data.StakedEther = string(utils.FormatBalance(epochHistory[len(epochHistory)-1].EligibleEther, currency))
-		data.ActiveValidators = epochHistory[len(epochHistory)-1].ValidatorsCount
 	}
 
 	data.StakedEtherChartData = make([][]float64, len(epochHistory))
@@ -1027,6 +1010,40 @@ func enrichExecutionRanks(blocks []*types.IndexPageDataBlocks, bt *db.Bigtable) 
         b.ExecutionRanks = ranks
     }
     return nil
+}
+
+func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtable) error {
+	for _, slot := range slots {
+		if slot.ExecutionBlockNumber == 0 {
+			// No execution block for this slot
+			slot.ExecutionRanks = []types.ExecutionRankData{}
+			slot.ParallelBlocksCount = 0
+			continue
+		}
+
+		// Get available ranks for this execution block number
+		ranks, err := bt.GetAvailableRanksForExecBlock(uint64(slot.ExecutionBlockNumber))
+		if err != nil {
+			log.Errorf("failed to get ranks for exec block %d: %v", slot.ExecutionBlockNumber, err)
+			slot.ExecutionRanks = []types.ExecutionRankData{}
+			slot.ParallelBlocksCount = 0
+			continue
+		}
+
+		// Convert ranks to ExecutionRankData
+		var executionRanks []types.ExecutionRankData
+		for _, rank := range ranks {
+			executionRanks = append(executionRanks, types.ExecutionRankData{
+				Rank:        rank,
+				BlockNumber: uint64(slot.ExecutionBlockNumber),
+				GasUsed:     0, // We'll fetch this separately if needed
+			})
+		}
+
+		slot.ExecutionRanks = executionRanks
+		slot.ParallelBlocksCount = uint64(len(executionRanks))
+	}
+	return nil
 }
 
 // LatestEpoch will return the latest epoch
