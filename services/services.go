@@ -1041,6 +1041,21 @@ func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtabl
 			})
 		}
 
+		// TEMPORARY: Add fake parallel blocks for testing tree visualization
+		if len(executionRanks) == 1 && slot.ExecutionBlockNumber > 0 {
+			// Add fake parallel blocks to test the tree view
+			executionRanks = append(executionRanks, types.ExecutionRankData{
+				Rank:        1,
+				BlockNumber: uint64(slot.ExecutionBlockNumber),
+				GasUsed:     15000000,
+			})
+			executionRanks = append(executionRanks, types.ExecutionRankData{
+				Rank:        2,
+				BlockNumber: uint64(slot.ExecutionBlockNumber),
+				GasUsed:     12000000,
+			})
+		}
+
 		slot.ExecutionRanks = executionRanks
 		slot.ParallelBlocksCount = uint64(len(executionRanks))
 	}
