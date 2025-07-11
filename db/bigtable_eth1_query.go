@@ -127,7 +127,10 @@ func (bigtable *Bigtable) GetMostRecentBlockFromDataTable() (*types.Eth1BlockInd
 	block := types.Eth1BlockIndexed{}
 
 	rowHandler := func(row gcp_bigtable.Row) bool {
-		c, err := strconv.Atoi(strings.Replace(row.Key(), prefix, "", 1))
+		suffix := strings.TrimPrefix(row.Key(), prefix)
+		parts := strings.Split(suffix, ":")
+		reversedStr := parts[0]
+		c, err := strconv.Atoi(reversedStr)
 		if err != nil {
 			log.Errorf("error parsing block number from key %v: %v", row.Key(), err)
 			return false
