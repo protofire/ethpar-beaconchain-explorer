@@ -928,10 +928,27 @@ func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 		slot.StatusFormatted = utils.FormatBlockStatus(slot.Status, slot.Slot)
 		slot.ProposerFormatted = utils.FormatValidatorWithName(slot.Proposer, slot.ProposerName)
 		slot.BlockRootFormatted = fmt.Sprintf("%x", slot.BlockRoot)
-		// TODO: For EthPar parallel blocks, query and set ParallelBlocksCount
-		// This would require a query like:
-		// SELECT COUNT(*) FROM parallel_blocks WHERE slot = slot.Slot
-		slot.ParallelBlocksCount = 0 // Default to 0 for now
+		
+		// Query for execution ranks for this slot
+		var executionRanks []types.ExecutionRankData
+		err := db.ReaderDb.Select(&executionRanks, `
+			SELECT 
+				ROW_NUMBER() OVER (ORDER BY exec_block_number) - 1 as rank,
+				exec_block_number as block_number,
+				COALESCE(exec_gas_used, 0) as gas_used
+			FROM blocks 
+			WHERE slot = $1 AND exec_block_number > 0
+			ORDER BY exec_block_number`, slot.Slot)
+		if err != nil {
+			log.Errorf("error retrieving execution ranks for slot %d: %v", slot.Slot, err)
+			// Set empty execution ranks on error
+			slot.ExecutionRanks = []types.ExecutionRankData{}
+		} else {
+			slot.ExecutionRanks = executionRanks
+		}
+		
+		// Set parallel blocks count based on execution ranks
+		slot.ParallelBlocksCount = uint64(len(slot.ExecutionRanks))
 	}
 	data.Slots = slots
 

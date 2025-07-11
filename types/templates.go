@@ -220,6 +220,13 @@ type IndexPageDataEpochs struct {
 	VotedEtherFormatted              template.HTML `json:"votedether_formatted"`
 }
 
+// ExecutionRankData holds data for a single execution block rank
+type ExecutionRankData struct {
+	Rank        int    `json:"rank"`
+	BlockNumber uint64 `json:"block_number"`
+	GasUsed     uint64 `json:"gas_used"`
+}
+
 // IndexPageDataSlots is a struct to hold slot data for the main web page
 type IndexPageDataSlots struct {
 	Epoch                uint64        `json:"epoch"`
@@ -239,6 +246,7 @@ type IndexPageDataSlots struct {
 	SyncAggParticipation float64       `db:"syncaggregate_participation" json:"sync_aggregate_participation"`
 	ExecutionBlockNumber int           `db:"exec_block_number" json:"exec_block_number"`
 	ParallelBlocksCount  uint64        `json:"parallel_blocks_count"` // For EthPar - number of parallel blocks in this slot
+	ExecutionRanks       []ExecutionRankData `json:"execution_ranks"`    // For EthPar - detailed execution blocks data for this slot
 }
 
 // IndexPageDataBlocks is a struct to hold detail data for the main web page
