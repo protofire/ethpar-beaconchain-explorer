@@ -930,12 +930,9 @@ func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 		slot.BlockRootFormatted = fmt.Sprintf("%x", slot.BlockRoot)
 	}
 	
-	log.Infof("About to enrich slots with execution ranks, slots count: %d", len(slots))
 	// Enrich slots with execution ranks data from BigTable
 	if err := enrichSlotsExecutionRanks(slots, bt); err != nil {
 		log.Errorf("error enriching slots with execution ranks: %v", err)
-	} else {
-		log.Infof("Successfully enriched slots with execution ranks")
 	}
 	data.Slots = slots
 
@@ -1016,29 +1013,23 @@ func enrichExecutionRanks(blocks []*types.IndexPageDataBlocks, bt *db.Bigtable) 
 }
 
 func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtable) error {
-	log.Infof("enrichSlotsExecutionRanks: Processing %d slots", len(slots))
-	
-	for i, slot := range slots {
-		log.Infof("enrichSlotsExecutionRanks: Processing slot %d (index %d), ExecutionBlockNumber: %d", slot.Slot, i, slot.ExecutionBlockNumber)
-		
+	for _, slot := range slots {
 		if slot.ExecutionBlockNumber == 0 {
-			log.Infof("enrichSlotsExecutionRanks: Slot %d has no execution block", slot.Slot)
 			slot.ExecutionRanks = []types.ExecutionRankData{}
 			slot.ParallelBlocksCount = 0
 			continue
 		}
 
 		// Get available ranks for this execution block number
-		log.Infof("enrichSlotsExecutionRanks: Getting ranks for exec block %d", slot.ExecutionBlockNumber)
 		ranks, err := bt.GetAvailableRanksForExecBlock(uint64(slot.ExecutionBlockNumber))
 		if err != nil {
-			log.Errorf("enrichSlotsExecutionRanks: failed to get ranks for exec block %d: %v", slot.ExecutionBlockNumber, err)
+			log.Errorf("failed to get ranks for exec block %d: %v", slot.ExecutionBlockNumber, err)
 			slot.ExecutionRanks = []types.ExecutionRankData{}
 			slot.ParallelBlocksCount = 0
 			continue
 		}
 
-		log.Infof("enrichSlotsExecutionRanks: Found %d ranks for exec block %d: %v", len(ranks), slot.ExecutionBlockNumber, ranks)
+		log.Errorf("DEBUG: Slot %d, exec block %d, found ranks: %v", slot.Slot, slot.ExecutionBlockNumber, ranks)
 
 		// Convert ranks to ExecutionRankData
 		var executionRanks []types.ExecutionRankData
@@ -1052,7 +1043,6 @@ func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtabl
 
 		slot.ExecutionRanks = executionRanks
 		slot.ParallelBlocksCount = uint64(len(executionRanks))
-		log.Infof("enrichSlotsExecutionRanks: Set %d execution ranks for slot %d", len(executionRanks), slot.Slot)
 	}
 	return nil
 }

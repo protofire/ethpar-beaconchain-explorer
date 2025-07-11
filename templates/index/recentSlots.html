@@ -121,14 +121,16 @@
                   <td>{{ formatAddCommas $slot.Attestations }}</td>
                   <td>{{ formatAddCommas $slot.Deposits }}</td>
                   <td>
+                    <!-- DEBUG: Show execution data -->
+                    DEBUG: ExecutionRanks count: {{ len $slot.ExecutionRanks }}<br>
                     <!-- Parallel blocks tree for server-side data -->
                     {{ if $slot.ExecutionRanks }}
                       {{ if eq (len $slot.ExecutionRanks) 1 }}
                         <div class="single-block">
                           <a href="/block/{{ (index $slot.ExecutionRanks 0).BlockNumber }}/rank/{{ (index $slot.ExecutionRanks 0).Rank }}" class="block-link">
-                            Block {{ formatAddCommas (index $slot.ExecutionRanks 0).BlockNumber }}
+                            Block {{ (index $slot.ExecutionRanks 0).BlockNumber }}
                           </a>
-                          <small class="text-muted ml-1">{{ formatAddCommas (index $slot.ExecutionRanks 0).GasUsed }} gas</small>
+                          <small class="text-muted ml-1">{{ (index $slot.ExecutionRanks 0).GasUsed }} gas</small>
                         </div>
                       {{ else }}
                         <div class="multiple-blocks">
@@ -140,9 +142,9 @@
                               <div class="block-item">
                                 <span class="rank-indicator">R{{ $rank.Rank }}</span>
                                 <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" class="block-link">
-                                  {{ formatAddCommas $rank.BlockNumber }}
+                                  {{ $rank.BlockNumber }}
                                 </a>
-                                <small class="text-muted">{{ formatAddCommas $rank.GasUsed }} gas</small>
+                                <small class="text-muted">{{ $rank.GasUsed }} gas</small>
                               </div>
                             {{ end }}
                           </div>
