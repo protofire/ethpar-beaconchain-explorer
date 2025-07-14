@@ -74,7 +74,7 @@
                       <!-- Block info tooltip on hover -->
                       <div class="block-tooltip">
                         <div class="tooltip-header">
-                          <span class="block-rank">Rank {{ rank.rank }}</span>
+                          <span class="block-rank" v-text="'Rank ' + rank.rank"></span>
                           <span class="gas-usage" v-text="getGasText(rank.gas_used)"></span>
                         </div>
                         <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
