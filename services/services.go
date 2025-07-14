@@ -997,6 +997,15 @@ func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 }
 
 func enrichExecutionRanks(blocks []*types.IndexPageDataBlocks, bt *db.Bigtable) error {
+	// Handle nil BigTable instance gracefully
+	if bt == nil {
+		log.Errorf("DEBUG: BigTable is nil in enrichExecutionRanks, skipping")
+		for _, b := range blocks {
+			b.ExecutionRanks = []int{} // Empty ranks when BigTable is not available
+		}
+		return nil
+	}
+
 	for _, b := range blocks {
 		if b.ExecutionBlockNumber == 0 {
 			continue
@@ -1230,18 +1239,6 @@ func EthStoreDisclaimer() string {
 
 // LatestIndexPageData returns the latest index page data
 func LatestIndexPageData() *types.IndexPageData {
-	// TEMPORARY: Force fresh data for testing execution ranks
-	log.Errorf("DEBUG: BYPASSING CACHE - getting fresh data")
-	if data, err := getIndexPageData(nil); err == nil {
-		log.Errorf("DEBUG: Fresh data has %d slots", len(data.Slots))
-		if len(data.Slots) > 0 {
-			log.Errorf("DEBUG: First slot has %d execution ranks", len(data.Slots[0].ExecutionRanks))
-		}
-		return data
-	} else {
-		log.Errorf("DEBUG: Error getting fresh data: %v", err)
-	}
-
 	wanted := &types.IndexPageData{}
 	cacheKey := fmt.Sprintf("%d:frontend:indexPageData", utils.Config.Chain.ClConfig.DepositChainID)
 
