@@ -53,35 +53,39 @@
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
               <td>
-                <!-- TEMPORARILY DISABLED Vue.js template to test Go template -->
-                <!--
+                <!-- Debug: Show Vue.js data -->
+                <div>
+                  <small>DEBUG Vue: {{ slot.execution_ranks ? slot.execution_ranks.length : 'undefined' }} ranks</small>
+                </div>
+                
+                <!-- Parallel blocks tree for Vue.js data -->
                 <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="parallel-blocks-tree">
                   <div v-if="slot.execution_ranks.length === 1" class="single-block">
                     <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
-                       class="block-link" 
-                       v-text="'Block ' + addCommas(slot.execution_ranks[0].block_number)"></a>
-                    <small class="text-muted ml-1" v-text="addCommas(slot.execution_ranks[0].gas_used) + ' gas'"></small>
+                       class="block-link">
+                       Block {{ slot.execution_ranks[0].block_number }}
+                    </a>
+                    <small class="text-muted ml-1">{{ slot.execution_ranks[0].gas_used }} gas</small>
                   </div>
                   <div v-else class="multiple-blocks">
                     <div class="parallel-summary">
-                      <span class="badge badge-info" v-text="slot.execution_ranks.length + ' Parallel Blocks'"></span>
+                      <span class="badge badge-info">{{ slot.execution_ranks.length }} Parallel Blocks</span>
                     </div>
                     <div class="blocks-tree mt-1">
                       <div v-for="(rank, index) in slot.execution_ranks" class="block-item">
-                        <span class="rank-indicator" v-text="'R' + rank.rank"></span>
+                        <span class="rank-indicator">R{{ rank.rank }}</span>
                         <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
-                           class="block-link" 
-                           v-text="addCommas(rank.block_number)"></a>
-                        <small class="text-muted" v-text="addCommas(rank.gas_used) + ' gas'"></small>
+                           class="block-link">
+                           Block {{ rank.block_number }}
+                        </a>
+                        <small class="text-muted">{{ rank.gas_used }} gas</small>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div v-else class="no-blocks">
-                  <span class="text-muted">-</span>
+                  <span class="text-muted">No execution blocks</span>
                 </div>
-                -->
-                <span>GO TEMPLATE WILL RENDER HERE</span>
               </td>
             </tr>
           </tbody>
