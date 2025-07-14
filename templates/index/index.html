@@ -20,8 +20,21 @@
             methods: {
                 getTimeAgo: function(timestamp) {
                     if (!timestamp) return '';
+                    
+                    // Handle both Unix timestamp (number) and ISO date string
+                    var unixTime;
+                    if (typeof timestamp === 'string') {
+                        // ISO date string from JSON - convert to Unix timestamp
+                        unixTime = Math.floor(new Date(timestamp).getTime() / 1000);
+                    } else {
+                        // Already a Unix timestamp
+                        unixTime = timestamp;
+                    }
+                    
+                    if (isNaN(unixTime)) return '';
+                    
                     var now = Math.floor(Date.now() / 1000);
-                    var diff = now - timestamp;
+                    var diff = now - unixTime;
                     if (diff < 60) return diff + 's ago';
                     if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
                     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
@@ -76,6 +89,17 @@
                 },
                 getGasText: function(gasUsed) {
                     return (gasUsed / 1000000).toFixed(1) + 'M';
+                },
+                getBlockDotPosition: function(index, total) {
+                    // Calculate position along the line (10% to 90% to leave margins)
+                    var leftPercent = 10 + (index * 80 / Math.max(1, total - 1));
+                    if (total === 1) leftPercent = 50; // Center single dot
+                    return {left: leftPercent + '%'};
+                },
+                getBlockDotClass: function(gasUsed) {
+                    if (gasUsed > 25000000) return 'gas-high';
+                    if (gasUsed > 15000000) return 'gas-medium';
+                    return 'gas-low';
                 }
             }
         };

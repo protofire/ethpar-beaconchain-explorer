@@ -46,98 +46,47 @@
                 <span class="badge rounded-pill text-bg-secondary">Unknown</span>
               </td>
               <td>
-                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="new Date(slot.ts * 1000).toLocaleString()" v-text="getTimeAgo(slot.ts)"></span>
+                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="new Date(slot.ts).toLocaleString()" v-text="getTimeAgo(slot.ts)"></span>
               </td>
               <td v-if="slot.slot !== 0" v-html="slot.proposer_formatted"></td>
               <td v-else>N/A</td>
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
               <td>
-                <!-- Parallel blocks graph for Vue.js data -->
-                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="parallel-blocks-graph">
-                  <div v-if="slot.execution_ranks.length === 1" class="single-execution-block">
-                    <div class="block-node single">
-                      <div class="block-header">
-                        <span class="rank-badge primary" v-text="'R' + slot.execution_ranks[0].rank"></span>
-                        <div class="block-status online"></div>
+                <!-- Line graph visualization for execution blocks -->
+                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="execution-blocks-line-graph">
+                  <div class="line-graph-container">
+                    <!-- Horizontal line -->
+                    <div class="graph-line"></div>
+                    
+                    <!-- Block dots positioned along the line -->
+                    <div v-for="(rank, index) in slot.execution_ranks" 
+                         class="block-dot"
+                         v-bind:class="'rank-' + rank.rank"
+                         v-bind:style="getBlockDotPosition(index, slot.execution_ranks.length)"
+                         v-bind:data-rank="rank.rank">
+                      
+                      <!-- Dot circle with rank -->
+                      <div class="dot-circle" v-bind:class="getBlockDotClass(rank.gas_used)">
+                        <span class="rank-number" v-text="rank.rank"></span>
                       </div>
-                      <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
-                         class="block-number" v-text="slot.execution_ranks[0].block_number"></a>
-                      <div class="gas-meter">
-                        <div class="gas-bar" v-bind:style="getGasBarStyle(slot.execution_ranks[0].gas_used)"></div>
-                        <span class="gas-text" v-text="getGasText(slot.execution_ranks[0].gas_used)"></span>
+                      
+                      <!-- Block info tooltip on hover -->
+                      <div class="block-tooltip">
+                        <div class="tooltip-header">
+                          <span class="block-rank">Rank {{ rank.rank }}</span>
+                          <span class="gas-usage" v-text="getGasText(rank.gas_used)"></span>
+                        </div>
+                        <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
+                           class="block-link" v-text="'Block ' + rank.block_number"></a>
                       </div>
-                    </div>
-                  </div>
-                  <div v-else class="multiple-execution-blocks">
-                    <!-- Central slot hub -->
-                    <div class="slot-hub">
-                      <div class="hub-core">
-                        <span class="slot-number" v-text="slot.slot"></span>
-                        <div class="hub-pulse"></div>
-                      </div>
-                      <div class="connection-count" v-text="slot.execution_ranks.length + ' blocks'"></div>
                     </div>
                     
-                    <!-- Sophisticated network graph -->
-                    <div class="network-graph">
-                      <!-- SVG for curved connections -->
-                      <svg class="connection-svg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
-                        <defs>
-                          <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:0.8" />
-                            <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.6" />
-                          </linearGradient>
-                          <filter id="glow">
-                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                            <feMerge> 
-                              <feMergeNode in="coloredBlur"/>
-                              <feMergeNode in="SourceGraphic"/>
-                            </feMerge>
-                          </filter>
-                        </defs>
-                        
-                        <!-- Dynamic curved paths for each block -->
-                        <path v-for="(rank, index) in slot.execution_ranks"
-                              v-bind:d="getCurvedPath(index, slot.execution_ranks.length)"
-                              stroke="url(#connectionGradient)"
-                              stroke-width="2"
-                              fill="none"
-                              filter="url(#glow)"
-                              class="connection-path"
-                              v-bind:style="{animationDelay: (index * 0.2) + 's'}">
-                        </path>
-                      </svg>
-                      
-                      <div v-for="(rank, index) in slot.execution_ranks" 
-                           class="execution-block"
-                           v-bind:class="['rank-' + rank.rank, 'position-' + index]"
-                           v-bind:style="getBlockPosition(index, slot.execution_ranks.length)"
-                           v-bind:data-rank="rank.rank">
-                        
-                        <div class="block-glow"></div>
-                        <div class="block-content">
-                          <div class="block-header">
-                              <span class="rank-badge" v-bind:class="'type-' + (rank.rank % 5)" v-text="'R' + rank.rank"></span>
-                            <div class="block-status" v-bind:class="getBlockStatus(rank.gas_used)"></div>
-                          </div>
-                          
-                          <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
-                             class="block-number" v-text="rank.block_number"></a>
-                          
-                          <div class="metrics">
-                            <div class="gas-metric">
-                              <div class="metric-label">Gas</div>
-                              <div class="gas-meter">
-                                <div class="gas-fill" v-bind:style="getGasBarStyle(rank.gas_used)"></div>
-                              </div>
-                              <div class="metric-value" v-text="getGasText(rank.gas_used)"></div>
-                            </div>
-                          </div>
-                          
-                          <div class="block-particles"></div>
-                        </div>
-                      </div>
+                    <!-- Graph labels -->
+                    <div class="graph-labels">
+                      <span class="label-left">Rank 0</span>
+                      <span class="label-center" v-text="slot.execution_ranks.length + ' blocks'"></span>
+                      <span class="label-right" v-text="'Rank ' + (Math.max(...slot.execution_ranks.map(r => r.rank)))"></span>
                     </div>
                   </div>
                 </div>
@@ -189,109 +138,57 @@
                   <td>{{ formatAddCommas $slot.Attestations }}</td>
                   <td>{{ formatAddCommas $slot.Deposits }}</td>
                   <td>
-                    <!-- Parallel blocks graph for server-side data -->
+                    <!-- Line graph visualization for execution blocks (server-side) -->
                     {{ if $slot.ExecutionRanks }}
-                      {{ if eq (len $slot.ExecutionRanks) 1 }}
-                        <!-- Single execution block -->
-                        <div class="single-execution-block">
-                          <div class="block-node single">
-                            <div class="block-header">
-                              <span class="rank-badge primary">R{{ (index $slot.ExecutionRanks 0).Rank }}</span>
-                              <div class="block-status online"></div>
-                            </div>
-                            <a href="/block/{{ (index $slot.ExecutionRanks 0).BlockNumber }}/rank/{{ (index $slot.ExecutionRanks 0).Rank }}" class="block-number">
-                              {{ (index $slot.ExecutionRanks 0).BlockNumber }}
-                            </a>
-                            <div class="gas-meter">
-                              <div class="gas-bar" data-gas-used="{{ (index $slot.ExecutionRanks 0).GasUsed }}"></div>
-                              <span class="gas-text" data-gas-used="{{ (index $slot.ExecutionRanks 0).GasUsed }}"></span>
-                            </div>
-                          </div>
-                        </div>
-                      {{ else }}
-                        <!-- Multiple parallel execution blocks  -->
-                        <div class="multiple-execution-blocks">
-                          <!-- Central slot hub -->
-                          <div class="slot-hub">
-                            <div class="hub-core">
-                              <span class="slot-number">{{ $slot.Slot }}</span>
-                              <div class="hub-pulse"></div>
-                            </div>
-                            <div class="connection-count">{{ len $slot.ExecutionRanks }} blocks</div>
-                          </div>
+                      <div class="execution-blocks-line-graph">
+                        <div class="line-graph-container">
+                          <!-- Horizontal line -->
+                          <div class="graph-line"></div>
                           
-                          <!-- Network graph -->
-                          <div class="network-graph">
-                            <!-- SVG for curved connections -->
-                            <svg class="connection-svg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
-                              <defs>
-                                <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:0.8" />
-                                  <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.6" />
-                                </linearGradient>
-                                <filter id="glow">
-                                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                                  <feMerge> 
-                                    <feMergeNode in="coloredBlur"/>
-                                    <feMergeNode in="SourceGraphic"/>
-                                  </feMerge>
-                                </filter>
-                              </defs>
+                          <!-- Block dots positioned along the line -->
+                          {{ range $index, $rank := $slot.ExecutionRanks }}
+                            <div class="block-dot rank-{{ $rank.Rank }}" 
+                                 data-rank="{{ $rank.Rank }}"
+                                 data-position="{{ $index }}"
+                                 data-total="{{ len $slot.ExecutionRanks }}">
                               
-                              <!-- Simple connecting lines for each block -->
-                              {{ range $index, $rank := $slot.ExecutionRanks }}
-                                <line x1="200" y1="80" 
-                                      x2="200" y2="200"
-                                      stroke="url(#connectionGradient)"
-                                      stroke-width="2"
-                                      filter="url(#glow)"
-                                      class="connection-path"
-                                      opacity="0.7">
-                                </line>
-                              {{ end }}
-                            </svg>
-                            
-                            <!-- Execution blocks in a simple layout -->
-                            <div class="execution-blocks-container">
-                              {{ range $index, $rank := $slot.ExecutionRanks }}
-                                <div class="execution-block rank-{{ $rank.Rank }} position-{{ $index }}"
-                                     data-rank="{{ $rank.Rank }}">
-                                
-                                <div class="block-glow"></div>
-                                <div class="block-content">
-                                  <div class="block-header">
-                                    <span class="rank-badge rank-color-{{ $rank.Rank }}">R{{ $rank.Rank }}</span>
-                                    <div class="block-status gas-status" data-gas-used="{{ $rank.GasUsed }}"></div>
-                                  </div>
-                                  
-                                  <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" class="block-number">
-                                    {{ $rank.BlockNumber }}
-                                  </a>
-                                  
-                                  <div class="metrics">
-                                    <div class="gas-metric">
-                                      <div class="metric-label">Gas</div>
-                                      <div class="gas-meter">
-                                        <div class="gas-fill" data-gas-used="{{ $rank.GasUsed }}"></div>
-                                      </div>
-                                      <div class="metric-value" data-gas-used="{{ $rank.GasUsed }}"></div>
-                                    </div>
-                                  </div>
-                                  
-                                  <div class="block-particles"></div>
-                                </div>
+                              <!-- Dot circle with rank -->
+                              <div class="dot-circle" data-gas-used="{{ $rank.GasUsed }}">
+                                <span class="rank-number">{{ $rank.Rank }}</span>
                               </div>
-                            {{ end }}
+                              
+                              <!-- Block info tooltip on hover -->
+                              <div class="block-tooltip">
+                                <div class="tooltip-header">
+                                  <span class="block-rank">Rank {{ $rank.Rank }}</span>
+                                  <span class="gas-usage" data-gas-used="{{ $rank.GasUsed }}"></span>
+                                </div>
+                                <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
+                                   class="block-link">Block {{ $rank.BlockNumber }}</a>
+                              </div>
                             </div>
+                          {{ end }}
+                          
+                          <!-- Graph labels -->
+                          <div class="graph-labels">
+                            <span class="label-left">Rank 0</span>
+                            <span class="label-center">{{ len $slot.ExecutionRanks }} blocks</span>
+                            {{ $maxRank := 0 }}
+                            {{ range $slot.ExecutionRanks }}
+                              {{ if gt .Rank $maxRank }}{{ $maxRank = .Rank }}{{ end }}
+                            {{ end }}
+                            <span class="label-right">Rank {{ $maxRank }}</span>
                           </div>
                         </div>
-                      {{ end }}
+                      </div>
                     {{ else if gt $slot.ParallelBlocksCount 0 }}
                       <span class="badge badge-info">{{ $slot.ParallelBlocksCount }} Blocks</span>
                     {{ else }}
-                      <div class="empty-state">
-                        <div class="empty-icon">⚡</div>
-                        <span>No execution</span>
+                      <div class="no-execution-blocks">
+                        <div class="empty-state">
+                          <div class="empty-icon">⚡</div>
+                          <span>No execution</span>
+                        </div>
                       </div>
                     {{ end }}
                   </td>
@@ -321,492 +218,333 @@
     $(document).ready(function() {
       formatTimestamps();
       
-      // Set gas bar widths and text from data attributes
-      $('.gas-bar[data-gas-used], .gas-fill[data-gas-used]').each(function() {
-        var gasUsed = parseInt($(this).data('gas-used')) || 0;
-        var percentage = Math.min(100, (gasUsed / 30000000) * 100);
-        $(this).css('width', percentage + '%');
+      // Position block dots along the line for server-side rendered content
+      $('.block-dot[data-position]').each(function() {
+        var $dot = $(this);
+        var position = parseInt($dot.data('position'));
+        var total = parseInt($dot.data('total'));
+        
+        // Calculate position along the line (10% to 90% to leave margins)
+        var leftPercent = 10 + (position * 80 / Math.max(1, total - 1));
+        if (total === 1) leftPercent = 50; // Center single dot
+        
+        $dot.css('left', leftPercent + '%');
       });
       
-      $('.gas-text[data-gas-used], .metric-value[data-gas-used]').each(function() {
+      // Set gas usage colors and text for server-side rendered content
+      $('.gas-usage[data-gas-used], .metric-value[data-gas-used]').each(function() {
         var gasUsed = parseInt($(this).data('gas-used')) || 0;
         var gasInM = (gasUsed / 1000000).toFixed(1) + 'M';
         $(this).text(gasInM);
       });
       
-      // Set gas status colors
-      $('.gas-status[data-gas-used]').each(function() {
+      // Set dot circle colors based on gas usage
+      $('.dot-circle[data-gas-used]').each(function() {
         var gasUsed = parseInt($(this).data('gas-used')) || 0;
         var $this = $(this);
-        $this.removeClass('high medium low');
+        $this.removeClass('gas-high gas-medium gas-low');
         if (gasUsed > 25000000) {
-          $this.addClass('high');
+          $this.addClass('gas-high');
         } else if (gasUsed > 15000000) {
-          $this.addClass('medium');
+          $this.addClass('gas-medium');
         } else {
-          $this.addClass('low');
+          $this.addClass('gas-low');
         }
       });
       
-      // Set rank badge colors
-      $('.rank-badge').each(function() {
-        var $this = $(this);
-        var classes = $this.attr('class').split(' ');
-        var rankClass = classes.find(function(cls) { return cls.startsWith('rank-color-'); });
-        if (rankClass) {
-          var rank = parseInt(rankClass.replace('rank-color-', '')) || 0;
-          var colorType = rank % 5;
-          $this.removeClass('type-0 type-1 type-2 type-3 type-4');
-          $this.addClass('type-' + colorType);
-        }
+      // Calculate max rank for labels
+      $('.execution-blocks-line-graph').each(function() {
+        var $graph = $(this);
+        var maxRank = 0;
+        $graph.find('.block-dot[data-rank]').each(function() {
+          var rank = parseInt($(this).data('rank'));
+          maxRank = Math.max(maxRank, rank);
+        });
+        $graph.find('.label-right').text('Rank ' + maxRank);
       });
     });
   </script>
 
   <style>
-    /* === SOPHISTICATED PARALLEL BLOCKS NETWORK GRAPH === */
-    .parallel-blocks-graph {
-      min-width: 280px;
-      padding: 12px;
+    /* === LINE GRAPH VISUALIZATION FOR EXECUTION BLOCKS === */
+    .execution-blocks-line-graph {
+      min-width: 200px;
+      padding: 16px;
       position: relative;
       background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
       border-radius: 12px;
       border: 1px solid #e2e8f0;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
     
-    /* === SINGLE EXECUTION BLOCK === */
-    .single-execution-block {
+    .line-graph-container {
+      position: relative;
+      height: 60px;
+      margin: 12px 0;
+    }
+    
+    /* Horizontal line */
+    .graph-line {
+      position: absolute;
+      top: 50%;
+      left: 10%;
+      right: 10%;
+      height: 3px;
+      background: linear-gradient(90deg, #e2e8f0 0%, #4f46e5 50%, #e2e8f0 100%);
+      border-radius: 2px;
+      transform: translateY(-50%);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      animation: lineAppear 1s ease-out;
+    }
+    
+    @keyframes lineAppear {
+      from {
+        width: 0;
+        left: 50%;
+        right: 50%;
+      }
+      to {
+        left: 10%;
+        right: 10%;
+      }
+    }
+    
+    /* Block dots positioned along the line */
+    .block-dot {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      cursor: pointer;
+      animation: dotAppear 0.8s ease-out;
+      animation-fill-mode: both;
+    }
+    
+    @keyframes dotAppear {
+      from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+    }
+    
+    /* Dot circle with rank number */
+    .dot-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border: 3px solid white;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
       display: flex;
+      align-items: center;
       justify-content: center;
-      padding: 8px;
-    }
-    
-    .single-execution-block .block-node {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: 2px solid #4f46e5;
-      border-radius: 12px;
-      padding: 12px 16px;
-      color: white;
-      box-shadow: 0 8px 25px rgba(79, 70, 229, 0.3);
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       overflow: hidden;
     }
     
-    .single-execution-block .block-node::before {
+    /* Gas usage based colors */
+    .dot-circle.gas-high {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+    
+    .dot-circle.gas-medium {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    }
+    
+    .dot-circle.gas-low {
+      background: linear-gradient(135deg, #10b981, #059669);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    }
+    
+    .dot-circle::before {
       content: '';
       position: absolute;
       top: 0;
       left: -100%;
       width: 100%;
       height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
       transition: left 0.6s;
     }
     
-    .single-execution-block .block-node:hover::before {
+    .block-dot:hover .dot-circle::before {
       left: 100%;
     }
     
-    .single-execution-block .block-node:hover {
-      transform: translateY(-4px) scale(1.02);
-      box-shadow: 0 12px 35px rgba(79, 70, 229, 0.4);
+    .block-dot:hover .dot-circle {
+      transform: scale(1.2);
+      box-shadow: 0 8px 20px rgba(79, 70, 229, 0.5);
     }
     
-    /* === MULTIPLE EXECUTION BLOCKS NETWORK === */
-    .multiple-execution-blocks {
-      position: relative;
-      min-height: 280px;
-      padding: 20px;
+    .rank-number {
+      color: white;
+      font-weight: bold;
+      font-size: 0.75rem;
+      z-index: 1;
     }
     
-    /* Central slot hub */
-    .slot-hub {
+    /* Tooltip that appears on hover */
+    .block-tooltip {
       position: absolute;
-      top: 20px;
+      bottom: 45px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 20;
-      text-align: center;
-    }
-    
-    .hub-core {
-      position: relative;
-      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-      color: white;
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 0.9rem;
-      box-shadow: 0 8px 25px rgba(30, 41, 59, 0.4);
-      border: 3px solid #64748b;
-      margin: 0 auto 8px;
-    }
-    
-    .hub-pulse {
-      position: absolute;
-      top: -3px;
-      left: -3px;
-      right: -3px;
-      bottom: -3px;
-      border: 2px solid #4f46e5;
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: 1; }
-      100% { transform: scale(1.3); opacity: 0; }
-    }
-    
-    .connection-count {
-      font-size: 0.75rem;
-      color: #64748b;
-      font-weight: 600;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 4px 8px;
-      border-radius: 12px;
+      background: white;
       border: 1px solid #e2e8f0;
-    }
-    
-    /* Network graph container */
-    .network-graph {
-      position: relative;
-      width: 100%;
-      height: 220px;
-      margin-top: 40px;
-    }
-    
-    /* Execution blocks container */
-    .execution-blocks-container {
-      position: relative;
-      width: 100%;
-      height: 180px;
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      flex-wrap: wrap;
-      gap: 10px;
-      padding: 20px 10px;
-    }
-    
-    /* SVG connections */
-    .connection-svg {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
+      border-radius: 8px;
+      padding: 8px 12px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      z-index: 20;
       pointer-events: none;
     }
     
-    .connection-path {
-      animation: pathAppear 1s ease-out;
-      filter: drop-shadow(0 2px 8px rgba(79, 70, 229, 0.3));
-    }
-    
-    @keyframes pathAppear {
-      from {
-        stroke-dasharray: 200;
-        stroke-dashoffset: 200;
-        opacity: 0;
-      }
-      to {
-        stroke-dasharray: 200;
-        stroke-dashoffset: 0;
-        opacity: 1;
-      }
-    }
-    
-    /* Execution blocks */
-    .execution-block {
-      position: relative;
-      width: 140px;
-      background: #ffffff;
-      border: 2px solid #e2e8f0;
-      border-radius: 16px;
-      padding: 12px;
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 10;
-      cursor: pointer;
-      animation: blockSlideIn 0.8s ease-out;
-      flex: 0 0 auto;
-    }
-    
-    @keyframes blockSlideIn {
-      from {
-        opacity: 0;
-        transform: translateY(30px) scale(0.8);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-    
-    .execution-block:hover {
-      transform: translateY(-6px) scale(1.05);
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
-      border-color: #4f46e5;
-      z-index: 25;
-    }
-    
-    /* Block glow effect */
-    .block-glow {
+    .block-tooltip::after {
+      content: '';
       position: absolute;
-      top: -2px;
-      left: -2px;
-      right: -2px;
-      bottom: -2px;
-      background: linear-gradient(135deg, #4f46e5, #06b6d4, #10b981);
-      border-radius: 18px;
-      opacity: 0;
-      transition: opacity 0.4s ease;
-      z-index: -1;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: white;
     }
     
-    .execution-block:hover .block-glow {
-      opacity: 0.6;
-      animation: glowPulse 2s infinite;
+    .block-dot:hover .block-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(-4px);
     }
     
-    @keyframes glowPulse {
-      0%, 100% { opacity: 0.6; }
-      50% { opacity: 0.8; }
-    }
-    
-    /* Block header */
-    .block-header {
+    .tooltip-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      gap: 12px;
+      margin-bottom: 4px;
     }
     
-    .rank-badge {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 0.7rem;
-      font-weight: bold;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      min-width: 36px;
-      text-align: center;
-    }
-    
-    /* Different rank badge colors */
-    .rank-badge.type-0 { background: linear-gradient(135deg, #10b981, #059669); }
-    .rank-badge.type-1 { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .rank-badge.type-2 { background: linear-gradient(135deg, #ef4444, #dc2626); }
-    .rank-badge.type-3 { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-    .rank-badge.type-4 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-    
-    /* Block status indicator */
-    .block-status {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      border: 2px solid white;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-    
-    .block-status.high { background: #ef4444; }
-    .block-status.medium { background: #f59e0b; }
-    .block-status.low { background: #10b981; }
-    .block-status.online { background: #10b981; }
-    
-    /* Block number link */
-    .block-number {
-      display: block;
-      color: #1e293b;
-      text-decoration: none;
-      font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-      font-weight: 700;
-      font-size: 0.9rem;
-      padding: 6px 10px;
-      background: linear-gradient(135deg, #f8fafc, #e2e8f0);
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      transition: all 0.3s ease;
-      margin-bottom: 10px;
-      text-align: center;
-    }
-    
-    .block-number:hover {
-      background: linear-gradient(135deg, #4f46e5, #7c3aed);
-      color: white;
-      text-decoration: none;
-      transform: scale(1.02);
-      box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
-    }
-    
-    /* Metrics section */
-    .metrics {
-      margin-top: 8px;
-    }
-    
-    .gas-metric {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .block-rank {
       font-size: 0.75rem;
-    }
-    
-    .metric-label {
-      color: #64748b;
       font-weight: 600;
-      min-width: 28px;
-    }
-    
-    .gas-meter {
-      flex: 1;
-      height: 6px;
-      background: #e2e8f0;
-      border-radius: 3px;
-      overflow: hidden;
-      position: relative;
-    }
-    
-    .gas-fill, .gas-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #10b981 0%, #fbbf24 50%, #ef4444 100%);
-      border-radius: 3px;
-      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-    }
-    
-    .gas-fill::after, .gas-bar::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-      animation: shimmer 2s infinite;
-    }
-    
-    @keyframes shimmer {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
-    }
-    
-    .metric-value {
       color: #374151;
-      font-weight: 700;
-      min-width: 32px;
-      text-align: right;
     }
     
-    .gas-text {
-      color: #374151;
-      font-weight: 700;
+    .gas-usage {
+      font-size: 0.7rem;
+      color: #6b7280;
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    
+    .block-link {
+      display: block;
+      color: #4f46e5;
+      text-decoration: none;
       font-size: 0.75rem;
-      min-width: 32px;
-      text-align: right;
+      font-weight: 600;
+      transition: color 0.2s ease;
     }
     
-    /* Block particles effect */
-    .block-particles {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
-      overflow: hidden;
-      border-radius: 16px;
+    .block-link:hover {
+      color: #7c3aed;
+      text-decoration: underline;
     }
     
-    .execution-block:hover .block-particles::before {
-      content: '';
-      position: absolute;
-      width: 4px;
-      height: 4px;
-      background: #4f46e5;
-      border-radius: 50%;
-      animation: particle 3s infinite;
+    /* Graph labels */
+    .graph-labels {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      font-size: 0.7rem;
+      color: #6b7280;
     }
     
-    @keyframes particle {
-      0% {
-        opacity: 0;
-        transform: translateY(100%) translateX(50px);
-      }
-      10% {
-        opacity: 1;
-      }
-      90% {
-        opacity: 1;
-      }
-      100% {
-        opacity: 0;
-        transform: translateY(-20px) translateX(-30px);
-      }
+    .label-left, .label-right {
+      font-weight: 600;
+    }
+    
+    .label-center {
+      background: #f3f4f6;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-weight: 500;
     }
     
     /* Empty state */
+    .no-execution-blocks {
+      min-width: 120px;
+    }
+    
     .empty-state {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
       color: #9ca3af;
       background: linear-gradient(135deg, #f9fafb, #f3f4f6);
       border: 2px dashed #d1d5db;
-      border-radius: 12px;
-      min-height: 80px;
+      border-radius: 8px;
+      min-height: 60px;
     }
     
     .empty-icon {
-      font-size: 1.5rem;
-      margin-bottom: 8px;
+      font-size: 1.2rem;
+      margin-bottom: 4px;
       opacity: 0.6;
     }
     
     .empty-state span {
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       font-weight: 500;
     }
     
+    /* Animation delays for staggered dot appearance */
+    .block-dot.rank-0 { animation-delay: 0.1s; }
+    .block-dot.rank-1 { animation-delay: 0.2s; }
+    .block-dot.rank-2 { animation-delay: 0.3s; }
+    .block-dot.rank-3 { animation-delay: 0.4s; }
+    .block-dot.rank-4 { animation-delay: 0.5s; }
+    .block-dot.rank-5 { animation-delay: 0.6s; }
+    .block-dot.rank-6 { animation-delay: 0.7s; }
+    .block-dot.rank-7 { animation-delay: 0.8s; }
+    
     /* Responsive design */
     @media (max-width: 768px) {
-      .parallel-blocks-graph {
-        min-width: 240px;
+      .execution-blocks-line-graph {
+        min-width: 160px;
+        padding: 12px;
       }
       
-      .execution-block {
-        width: 120px;
-        padding: 8px;
-      }
-      
-      .hub-core {
-        width: 50px;
+      .line-graph-container {
         height: 50px;
-        font-size: 0.8rem;
       }
       
-      .network-graph {
-        height: 180px;
+      .dot-circle {
+        width: 28px;
+        height: 28px;
+      }
+      
+      .rank-number {
+        font-size: 0.65rem;
+      }
+      
+      .block-tooltip {
+        font-size: 0.65rem;
+        padding: 6px 8px;
       }
     }
-    
-    /* Animation delays for staggered appearance */
-    .execution-block.position-0 { animation-delay: 0.1s; }
-    .execution-block.position-1 { animation-delay: 0.2s; }
-    .execution-block.position-2 { animation-delay: 0.3s; }
-    .execution-block.position-3 { animation-delay: 0.4s; }
-    .execution-block.position-4 { animation-delay: 0.5s; }
-    .execution-block.position-5 { animation-delay: 0.6s; }
-    .execution-block.position-6 { animation-delay: 0.7s; }
   </style>
 {{ end }}
