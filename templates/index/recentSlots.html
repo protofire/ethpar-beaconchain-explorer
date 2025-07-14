@@ -204,9 +204,11 @@
                             </a>
                             <div class="gas-meter">
                               {{ $gasPercent := 0.0 }}
-                              {{ if gt (index $slot.ExecutionRanks 0).GasUsed 0 }}{{ $gasPercent = mul (div (index $slot.ExecutionRanks 0).GasUsed 30000000.0) 100.0 }}{{ end }}
-                              <div class="gas-bar" style="width: {{ printf "%.1f" $gasPercent }}%"></div>
-                              <span class="gas-text">{{ printf "%.1f" (div (index $slot.ExecutionRanks 0).GasUsed 1000000.0) }}M</span>
+                              {{ if gt (index $slot.ExecutionRanks 0).GasUsed 0 }}
+                                {{ $gasPercent = mul (div (printf "%.0f" (index $slot.ExecutionRanks 0).GasUsed) 30000000.0) 100.0 }}
+                              {{ end }}
+                              <div class="gas-bar" data-gas-percent="{{ printf "%.1f" $gasPercent }}"></div>
+                              <span class="gas-text">{{ printf "%.1f" (div (printf "%.0f" (index $slot.ExecutionRanks 0).GasUsed) 1000000.0) }}M</span>
                             </div>
                           </div>
                         </div>
@@ -240,41 +242,24 @@
                                 </filter>
                               </defs>
                               
-                              <!-- Curved paths for each block -->
+                              <!-- Simple connecting lines for each block -->
                               {{ range $index, $rank := $slot.ExecutionRanks }}
-                                {{ $x1 := 200 }}{{ $y1 := 80 }}
-                                {{ $x2 := 200 }}{{ $y2 := 150 }}
-                                {{ if eq $index 0 }}{{ $x2 = 200 }}{{ $y2 = 220 }}{{ end }}
-                                {{ if eq $index 1 }}{{ $x2 = 320 }}{{ $y2 = 180 }}{{ end }}
-                                {{ if eq $index 2 }}{{ $x2 = 80 }}{{ $y2 = 180 }}{{ end }}
-                                {{ if eq $index 3 }}{{ $x2 = 320 }}{{ $y2 = 120 }}{{ end }}
-                                {{ if eq $index 4 }}{{ $x2 = 80 }}{{ $y2 = 120 }}{{ end }}
-                                {{ if eq $index 5 }}{{ $x2 = 280 }}{{ $y2 = 220 }}{{ end }}
-                                {{ if eq $index 6 }}{{ $x2 = 120 }}{{ $y2 = 220 }}{{ end }}
-                                <path d="M{{ $x1 }},{{ $y1 }} Q{{ add $x1 20 }},{{ add $y1 40 }} {{ $x2 }},{{ $y2 }}"
+                                <line x1="200" y1="80" 
+                                      x2="200" y2="200"
                                       stroke="url(#connectionGradient)"
                                       stroke-width="2"
-                                      fill="none"
                                       filter="url(#glow)"
-                                      class="connection-path">
-                                </path>
+                                      class="connection-path"
+                                      opacity="0.7">
+                                </line>
                               {{ end }}
                             </svg>
                             
-                            <!-- Execution blocks -->
-                            {{ range $index, $rank := $slot.ExecutionRanks }}
-                              {{ $left := 50 }}{{ $top := 40 }}
-                              {{ if eq $index 0 }}{{ $left = 50 }}{{ $top = 75 }}{{ end }}
-                              {{ if eq $index 1 }}{{ $left = 75 }}{{ $top = 50 }}{{ end }}
-                              {{ if eq $index 2 }}{{ $left = 25 }}{{ $top = 50 }}{{ end }}
-                              {{ if eq $index 3 }}{{ $left = 75 }}{{ $top = 25 }}{{ end }}
-                              {{ if eq $index 4 }}{{ $left = 25 }}{{ $top = 25 }}{{ end }}
-                              {{ if eq $index 5 }}{{ $left = 65 }}{{ $top = 75 }}{{ end }}
-                              {{ if eq $index 6 }}{{ $left = 35 }}{{ $top = 75 }}{{ end }}
-                              
-                              <div class="execution-block rank-{{ $rank.Rank }} position-{{ $index }}"
-                                   style="left: {{ $left }}%; top: {{ $top }}%"
-                                   data-rank="{{ $rank.Rank }}">
+                            <!-- Execution blocks in a simple layout -->
+                            <div class="execution-blocks-container">
+                              {{ range $index, $rank := $slot.ExecutionRanks }}
+                                <div class="execution-block rank-{{ $rank.Rank }} position-{{ $index }}"
+                                     data-rank="{{ $rank.Rank }}">
                                 
                                 <div class="block-glow"></div>
                                 <div class="block-content">
@@ -292,10 +277,12 @@
                                       <div class="metric-label">Gas</div>
                                       <div class="gas-meter">
                                         {{ $gasPercent := 0.0 }}
-                                        {{ if gt $rank.GasUsed 0 }}{{ $gasPercent = mul (div $rank.GasUsed 30000000.0) 100.0 }}{{ end }}
-                                        <div class="gas-fill" style="width: {{ printf "%.1f" $gasPercent }}%"></div>
+                                        {{ if gt $rank.GasUsed 0 }}
+                                          {{ $gasPercent = mul (div (printf "%.0f" $rank.GasUsed) 30000000.0) 100.0 }}
+                                        {{ end }}
+                                        <div class="gas-fill" data-gas-percent="{{ printf "%.1f" $gasPercent }}"></div>
                                       </div>
-                                      <div class="metric-value">{{ printf "%.1f" (div $rank.GasUsed 1000000.0) }}M</div>
+                                      <div class="metric-value">{{ printf "%.1f" (div (printf "%.0f" $rank.GasUsed) 1000000.0) }}M</div>
                                     </div>
                                   </div>
                                   
@@ -303,6 +290,7 @@
                                 </div>
                               </div>
                             {{ end }}
+                            </div>
                           </div>
                         </div>
                       {{ end }}
@@ -339,6 +327,12 @@
     // Format timestamps after DOM is ready
     $(document).ready(function() {
       formatTimestamps();
+      
+      // Set gas bar widths from data attributes
+      $('.gas-bar[data-gas-percent], .gas-fill[data-gas-percent]').each(function() {
+        var percentage = $(this).data('gas-percent');
+        $(this).css('width', Math.min(100, percentage) + '%');
+      });
     });
   </script>
 
@@ -461,6 +455,19 @@
       margin-top: 40px;
     }
     
+    /* Execution blocks container */
+    .execution-blocks-container {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 20px 10px;
+    }
+    
     /* SVG connections */
     .connection-svg {
       position: absolute;
@@ -492,7 +499,7 @@
     
     /* Execution blocks */
     .execution-block {
-      position: absolute;
+      position: relative;
       width: 140px;
       background: #ffffff;
       border: 2px solid #e2e8f0;
@@ -503,6 +510,7 @@
       z-index: 10;
       cursor: pointer;
       animation: blockSlideIn 0.8s ease-out;
+      flex: 0 0 auto;
     }
     
     @keyframes blockSlideIn {
