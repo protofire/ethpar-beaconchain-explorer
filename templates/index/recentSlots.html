@@ -57,18 +57,18 @@
                 <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="parallel-blocks-graph">
                   <div v-if="slot.execution_ranks.length === 1" class="single-execution-block">
                     <div class="block-node single">
-                      <span class="rank-badge primary">R{{ slot.execution_ranks[0].rank }}</span>
+                      <span class="rank-badge primary">R${ slot.execution_ranks[0].rank }</span>
                       <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
-                         class="block-number">{{ slot.execution_ranks[0].block_number }}</a>
+                         class="block-number">${ slot.execution_ranks[0].block_number }</a>
                       <div class="gas-meter">
                         <div class="gas-bar" v-bind:style="{width: Math.min(100, (slot.execution_ranks[0].gas_used / 30000000) * 100) + '%'}"></div>
-                        <span class="gas-text">{{ (slot.execution_ranks[0].gas_used / 1000000).toFixed(1) }}M</span>
+                        <span class="gas-text">${ (slot.execution_ranks[0].gas_used / 1000000).toFixed(1) }M</span>
                       </div>
                     </div>
                   </div>
                   <div v-else class="multiple-execution-blocks">
                     <div class="slot-root">
-                      <span class="slot-indicator">Slot {{ slot.slot }}</span>
+                      <span class="slot-indicator">Slot ${ slot.slot }</span>
                       <div class="execution-branch"></div>
                     </div>
                     <div class="parallel-graph">
@@ -78,12 +78,12 @@
                            v-bind:style="{top: (index * 45) + 'px'}">
                         <div class="connection-line" v-bind:style="{height: (index * 45 + 22) + 'px'}"></div>
                         <div class="block-content">
-                          <span class="rank-badge" v-bind:class="'rank-' + rank.rank">R{{ rank.rank }}</span>
+                          <span class="rank-badge" v-bind:class="'rank-' + rank.rank">R${ rank.rank }</span>
                           <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
-                             class="block-number">{{ rank.block_number }}</a>
+                             class="block-number">${ rank.block_number }</a>
                           <div class="gas-meter">
                             <div class="gas-bar" v-bind:style="{width: Math.min(100, (rank.gas_used / 30000000) * 100) + '%'}"></div>
-                            <span class="gas-text">{{ (rank.gas_used / 1000000).toFixed(1) }}M</span>
+                            <span class="gas-text">${ (rank.gas_used / 1000000).toFixed(1) }M</span>
                           </div>
                         </div>
                       </div>
