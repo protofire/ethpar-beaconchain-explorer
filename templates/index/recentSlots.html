@@ -53,31 +53,45 @@
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
               <td>
-                <!-- Parallel blocks tree for Vue.js data -->
-                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="parallel-blocks-tree">
-                  <div v-if="slot.execution_ranks.length === 1" class="single-block">
-                    <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
-                       class="block-link"
-                       v-text="'Block ' + slot.execution_ranks[0].block_number"></a>
-                    <small class="gas-info" v-text="(slot.execution_ranks[0].gas_used / 1000000).toFixed(1) + 'M gas'"></small>
-                  </div>
-                  <div v-else class="multiple-blocks">
-                    <div class="parallel-summary">
-                      <span class="badge badge-primary" v-text="slot.execution_ranks.length + ' Parallel Blocks'"></span>
+                <!-- Parallel blocks graph for Vue.js data -->
+                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="parallel-blocks-graph">
+                  <div v-if="slot.execution_ranks.length === 1" class="single-execution-block">
+                    <div class="block-node single">
+                      <span class="rank-badge primary">R{{ slot.execution_ranks[0].rank }}</span>
+                      <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
+                         class="block-number">{{ slot.execution_ranks[0].block_number }}</a>
+                      <div class="gas-meter">
+                        <div class="gas-bar" v-bind:style="{width: Math.min(100, (slot.execution_ranks[0].gas_used / 30000000) * 100) + '%'}"></div>
+                        <span class="gas-text">{{ (slot.execution_ranks[0].gas_used / 1000000).toFixed(1) }}M</span>
+                      </div>
                     </div>
-                    <div class="blocks-tree">
-                      <div v-for="(rank, index) in slot.execution_ranks" class="block-item">
-                        <span class="rank-indicator" v-text="'R' + rank.rank"></span>
-                        <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
-                           class="block-link"
-                           v-text="rank.block_number"></a>
-                        <small class="gas-info" v-text="(rank.gas_used / 1000000).toFixed(1) + 'M'"></small>
+                  </div>
+                  <div v-else class="multiple-execution-blocks">
+                    <div class="slot-root">
+                      <span class="slot-indicator">Slot {{ slot.slot }}</span>
+                      <div class="execution-branch"></div>
+                    </div>
+                    <div class="parallel-graph">
+                      <div v-for="(rank, index) in slot.execution_ranks" 
+                           class="block-node" 
+                           v-bind:class="'rank-' + rank.rank"
+                           v-bind:style="{top: (index * 45) + 'px'}">
+                        <div class="connection-line" v-bind:style="{height: (index * 45 + 22) + 'px'}"></div>
+                        <div class="block-content">
+                          <span class="rank-badge" v-bind:class="'rank-' + rank.rank">R{{ rank.rank }}</span>
+                          <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
+                             class="block-number">{{ rank.block_number }}</a>
+                          <div class="gas-meter">
+                            <div class="gas-bar" v-bind:style="{width: Math.min(100, (rank.gas_used / 30000000) * 100) + '%'}"></div>
+                            <span class="gas-text">{{ (rank.gas_used / 1000000).toFixed(1) }}M</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div v-else class="no-blocks">
-                  <span class="text-muted">No execution blocks</span>
+                <div v-else class="no-execution-blocks">
+                  <span class="text-muted">No execution</span>
                 </div>
               </td>
             </tr>
@@ -121,30 +135,43 @@
                   <td>{{ formatAddCommas $slot.Attestations }}</td>
                   <td>{{ formatAddCommas $slot.Deposits }}</td>
                   <td>
-                    <!-- Parallel blocks tree for server-side data -->
+                    <!-- Parallel blocks graph for server-side data -->
                     {{ if $slot.ExecutionRanks }}
                       {{ if eq (len $slot.ExecutionRanks) 1 }}
                         <!-- Single execution block -->
-                        <div class="single-block">
-                          <a href="/block/{{ (index $slot.ExecutionRanks 0).BlockNumber }}/rank/{{ (index $slot.ExecutionRanks 0).Rank }}" class="block-link">
-                            Block {{ (index $slot.ExecutionRanks 0).BlockNumber }}
-                          </a>
-                          <small class="text-muted ml-1">{{ (index $slot.ExecutionRanks 0).GasUsed }} gas</small>
+                        <div class="single-execution-block">
+                          <div class="block-node single">
+                            <span class="rank-badge primary">R{{ (index $slot.ExecutionRanks 0).Rank }}</span>
+                            <a href="/block/{{ (index $slot.ExecutionRanks 0).BlockNumber }}/rank/{{ (index $slot.ExecutionRanks 0).Rank }}" class="block-number">
+                              {{ (index $slot.ExecutionRanks 0).BlockNumber }}
+                            </a>
+                            <div class="gas-meter">
+                              <div class="gas-bar" style="width: {{ printf "%.1f" (mul (div (index $slot.ExecutionRanks 0).GasUsed 30000000.0) 100) }}%"></div>
+                              <span class="gas-text">{{ printf "%.1f" (div (index $slot.ExecutionRanks 0).GasUsed 1000000.0) }}M</span>
+                            </div>
+                          </div>
                         </div>
                       {{ else }}
-                        <!-- Multiple parallel execution blocks - TREE VIEW -->
-                        <div class="multiple-blocks">
-                          <div class="parallel-summary">
-                            <span class="badge badge-info">{{ len $slot.ExecutionRanks }} Parallel Blocks</span>
+                        <!-- Multiple parallel execution blocks - GRAPH VIEW -->
+                        <div class="multiple-execution-blocks">
+                          <div class="slot-root">
+                            <span class="slot-indicator">Slot {{ $slot.Slot }}</span>
+                            <div class="execution-branch"></div>
                           </div>
-                          <div class="blocks-tree mt-1">
+                          <div class="parallel-graph">
                             {{ range $index, $rank := $slot.ExecutionRanks }}
-                              <div class="block-item">
-                                <span class="rank-indicator">R{{ $rank.Rank }}</span>
-                                <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" class="block-link">
-                                  {{ $rank.BlockNumber }}
-                                </a>
-                                <small class="text-muted">{{ $rank.GasUsed }} gas</small>
+                              <div class="block-node rank-{{ $rank.Rank }}" style="top: {{ mul $index 45 }}px">
+                                <div class="connection-line" style="height: {{ add (mul $index 45) 22 }}px"></div>
+                                <div class="block-content">
+                                  <span class="rank-badge rank-{{ $rank.Rank }}">R{{ $rank.Rank }}</span>
+                                  <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" class="block-number">
+                                    {{ $rank.BlockNumber }}
+                                  </a>
+                                  <div class="gas-meter">
+                                    <div class="gas-bar" style="width: {{ printf "%.1f" (mul (div $rank.GasUsed 30000000.0) 100) }}%"></div>
+                                    <span class="gas-text">{{ printf "%.1f" (div $rank.GasUsed 1000000.0) }}M</span>
+                                  </div>
+                                </div>
                               </div>
                             {{ end }}
                           </div>
@@ -184,197 +211,269 @@
   </script>
 
   <style>
-    .parallel-blocks-tree {
-      text-align: left;
-      min-width: 180px;
+    /* === PARALLEL BLOCKS GRAPH STYLES === */
+    .parallel-blocks-graph {
+      min-width: 220px;
+      padding: 8px;
+      position: relative;
     }
     
-    .single-block {
-      font-size: 0.9rem;
+    /* Single execution block styling */
+    .single-execution-block {
       display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.25rem;
-      background: #f8f9fa;
-      border-radius: 0.25rem;
-      border-left: 3px solid #28a745;
+      justify-content: center;
     }
     
-    .multiple-blocks {
-      font-size: 0.85rem;
+    .single-execution-block .block-node {
+      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+      border: 2px solid #2196f3;
+      border-radius: 8px;
+      padding: 8px 12px;
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+      transition: all 0.3s ease;
     }
     
-    .parallel-summary {
-      margin-bottom: 0.5rem;
+    .single-execution-block .block-node:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+    }
+    
+    /* Multiple execution blocks container */
+    .multiple-execution-blocks {
+      position: relative;
+      min-height: 200px;
+    }
+    
+    /* Slot root node at the top */
+    .slot-root {
+      position: relative;
       text-align: center;
+      margin-bottom: 20px;
+      z-index: 10;
     }
     
-    /* Tree container with vertical line */
-    .blocks-tree {
+    .slot-indicator {
+      background: linear-gradient(135deg, #4a5568, #2d3748);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       position: relative;
-      margin-left: 0.75rem;
-      padding-left: 1rem;
+      display: inline-block;
     }
     
-    /* Main vertical line */
-    .blocks-tree::before {
-      content: "";
+    /* Main branching line from slot */
+    .execution-branch {
       position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0.5rem;
-      width: 2px;
-      background: #6c757d;
-      border-radius: 1px;
+      top: 100%;
+      left: 50%;
+      width: 3px;
+      height: 25px;
+      background: linear-gradient(to bottom, #4a5568, #718096);
+      transform: translateX(-50%);
+      border-radius: 2px;
     }
     
-    /* Individual tree items */
-    .block-item {
+    /* Parallel graph container */
+    .parallel-graph {
       position: relative;
-      margin-bottom: 0.5rem;
-      padding-left: 1.25rem;
-      padding-top: 0.25rem;
-      padding-bottom: 0.25rem;
-      background: #f8f9fa;
-      border-radius: 0.25rem;
-      border: 1px solid #e9ecef;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      transition: all 0.2s ease;
+      padding: 20px 0;
+      min-height: 150px;
     }
     
-    .block-item:hover {
-      background: #e9ecef;
-      transform: translateX(2px);
-    }
-    
-    /* Horizontal connecting line */
-    .block-item::before {
-      content: "";
+    /* Individual block nodes */
+    .block-node {
       position: absolute;
-      left: -1.25rem;
-      top: 50%;
-      width: 1rem;
-      height: 2px;
-      background: #6c757d;
-      transform: translateY(-50%);
-    }
-    
-    /* Connection dot */
-    .block-item::after {
-      content: "";
-      position: absolute;
-      left: -0.4rem;
-      top: 50%;
-      width: 8px;
-      height: 8px;
       background: #fff;
-      border: 2px solid #007bff;
-      border-radius: 50%;
-      transform: translateY(-50%);
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 8px 12px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+      transition: all 0.3s ease;
+      width: 180px;
+      z-index: 5;
+    }
+    
+    /* Position blocks in a fan/tree pattern */
+    .block-node:nth-child(1) { left: 50%; transform: translateX(-50%); }
+    .block-node:nth-child(2) { left: 20%; }
+    .block-node:nth-child(3) { left: 80%; transform: translateX(-100%); }
+    .block-node:nth-child(4) { left: 10%; }
+    .block-node:nth-child(5) { left: 90%; transform: translateX(-100%); }
+    .block-node:nth-child(6) { left: 30%; }
+    .block-node:nth-child(7) { left: 70%; transform: translateX(-100%); }
+    
+    /* Connection lines from slot to each block */
+    .connection-line {
+      position: absolute;
+      background: linear-gradient(135deg, #4a5568, #718096);
+      width: 2px;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 1px;
       z-index: 1;
     }
     
-    /* Special styling for last item to end the vertical line */
-    .block-item:last-child::before {
-      box-shadow: 0 0.75rem 0 0 #f8f9fa;
+    /* Add connecting dots at junction points */
+    .connection-line::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 6px;
+      height: 6px;
+      background: #4a5568;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 0 2px #4a5568;
     }
     
-    /* Rank indicators with better colors */
-    .rank-indicator {
-      background: #6c757d;
+    /* Block content layout */
+    .block-content {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
+    }
+    
+    /* Rank badges with dynamic colors */
+    .rank-badge {
+      background: linear-gradient(135deg, #667eea, #764ba2);
       color: white;
-      padding: 0.2rem 0.4rem;
-      border-radius: 0.3rem;
+      padding: 4px 8px;
+      border-radius: 12px;
       font-size: 0.7rem;
-      min-width: 30px;
-      text-align: center;
-      flex-shrink: 0;
       font-weight: bold;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    
-    /* Different colors for each rank */
-    .block-item:nth-child(1) .rank-indicator {
-      background: linear-gradient(135deg, #28a745, #20c997);
-    }
-    
-    .block-item:nth-child(2) .rank-indicator {
-      background: linear-gradient(135deg, #ffc107, #fd7e14);
-    }
-    
-    .block-item:nth-child(3) .rank-indicator {
-      background: linear-gradient(135deg, #dc3545, #e83e8c);
-    }
-    
-    .block-item:nth-child(4) .rank-indicator {
-      background: linear-gradient(135deg, #6f42c1, #6610f2);
-    }
-    
-    .block-item:nth-child(n+5) .rank-indicator {
-      background: linear-gradient(135deg, #17a2b8, #6f42c1);
-    }
-    
-    /* Block links with better styling */
-    .block-link {
-      color: #007bff;
-      text-decoration: none;
-      font-family: 'Courier New', monospace;
-      font-weight: 500;
-      padding: 0.2rem 0.4rem;
-      border-radius: 0.2rem;
-      background: rgba(0, 123, 255, 0.1);
-      transition: all 0.2s ease;
-      flex-grow: 1;
-    }
-    
-    .block-link:hover {
-      text-decoration: none;
-      background: rgba(0, 123, 255, 0.2);
-      color: #0056b3;
-    }
-    
-    /* Gas usage info */
-    .gas-info {
-      color: #6c757d;
-      font-size: 0.7rem;
-      background: #fff;
-      padding: 0.15rem 0.3rem;
-      border-radius: 0.2rem;
-      border: 1px solid #dee2e6;
-      border-left: 3px solid #28a745;
-      white-space: nowrap;
-    }
-    
-    /* No blocks message */
-    .no-blocks {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      min-width: 32px;
       text-align: center;
-      color: #6c757d;
-      font-style: italic;
-      padding: 0.5rem;
     }
     
-    /* Animation for tree items */
-    @keyframes slideIn {
+    /* Different colors for different ranks */
+    .rank-0 { border-color: #10b981; }
+    .rank-0 .rank-badge { background: linear-gradient(135deg, #10b981, #059669); }
+    
+    .rank-1 { border-color: #f59e0b; }
+    .rank-1 .rank-badge { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    
+    .rank-2 { border-color: #ef4444; }
+    .rank-2 .rank-badge { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    
+    .rank-3 { border-color: #8b5cf6; }
+    .rank-3 .rank-badge { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+    
+    .rank-4 { border-color: #06b6d4; }
+    .rank-4 .rank-badge { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+    
+    /* Block number links */
+    .block-number {
+      color: #1e293b;
+      text-decoration: none;
+      font-family: 'JetBrains Mono', 'Monaco', 'Consolas', monospace;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s ease;
+      font-size: 0.85rem;
+    }
+    
+    .block-number:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+      text-decoration: none;
+      transform: scale(1.02);
+    }
+    
+    /* Gas usage meter */
+    .gas-meter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+    }
+    
+    .gas-bar {
+      height: 4px;
+      background: linear-gradient(90deg, #10b981, #fbbf24, #ef4444);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+      position: relative;
+      flex: 1;
+    }
+    
+    .gas-text {
+      font-size: 0.7rem;
+      color: #64748b;
+      font-weight: 500;
+      min-width: 32px;
+      text-align: right;
+    }
+    
+    /* Hover effects for blocks */
+    .block-node:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+      border-color: #3b82f6;
+      z-index: 10;
+    }
+    
+    .block-node:hover .connection-line {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    }
+    
+    /* No execution blocks message */
+    .no-execution-blocks {
+      text-align: center;
+      color: #9ca3af;
+      font-style: italic;
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      border: 1px dashed #d1d5db;
+    }
+    
+    /* Animations */
+    @keyframes blockAppear {
       from {
         opacity: 0;
-        transform: translateX(-20px);
+        transform: translateY(20px) scale(0.8);
       }
       to {
         opacity: 1;
-        transform: translateX(0);
+        transform: translateY(0) scale(1);
       }
     }
     
-    .block-item {
-      animation: slideIn 0.3s ease-out;
+    .block-node {
+      animation: blockAppear 0.6s ease-out;
     }
     
-    .block-item:nth-child(1) { animation-delay: 0.0s; }
-    .block-item:nth-child(2) { animation-delay: 0.1s; }
-    .block-item:nth-child(3) { animation-delay: 0.2s; }
-    .block-item:nth-child(4) { animation-delay: 0.3s; }
-    .block-item:nth-child(5) { animation-delay: 0.4s; }
+    .block-node:nth-child(1) { animation-delay: 0.1s; }
+    .block-node:nth-child(2) { animation-delay: 0.2s; }
+    .block-node:nth-child(3) { animation-delay: 0.3s; }
+    .block-node:nth-child(4) { animation-delay: 0.4s; }
+    .block-node:nth-child(5) { animation-delay: 0.5s; }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .parallel-blocks-graph {
+        min-width: 180px;
+      }
+      
+      .block-node {
+        width: 140px;
+        padding: 6px 8px;
+      }
+      
+      .block-number {
+        font-size: 0.75rem;
+      }
+    }
   </style>
 {{ end }}
