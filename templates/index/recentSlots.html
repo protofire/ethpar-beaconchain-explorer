@@ -58,14 +58,14 @@
                   <div v-if="slot.execution_ranks.length === 1" class="single-execution-block">
                     <div class="block-node single">
                       <div class="block-header">
-                        <span class="rank-badge primary">R{{ slot.execution_ranks[0].rank }}</span>
+                        <span class="rank-badge primary">R${ slot.execution_ranks[0].rank }</span>
                         <div class="block-status online"></div>
                       </div>
                       <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
-                         class="block-number">{{ slot.execution_ranks[0].block_number }}</a>
+                         class="block-number">${ slot.execution_ranks[0].block_number }</a>
                       <div class="gas-meter">
                         <div class="gas-bar" v-bind:style="{width: Math.min(100, (slot.execution_ranks[0].gas_used / 30000000) * 100) + '%'}"></div>
-                        <span class="gas-text">{{ (slot.execution_ranks[0].gas_used / 1000000).toFixed(1) }}M</span>
+                        <span class="gas-text">${ (slot.execution_ranks[0].gas_used / 1000000).toFixed(1) }M</span>
                       </div>
                     </div>
                   </div>
@@ -109,7 +109,6 @@
                         </path>
                       </svg>
                       
-                      <!-- Execution blocks positioned in a sophisticated pattern -->
                       <div v-for="(rank, index) in slot.execution_ranks" 
                            class="execution-block"
                            v-bind:class="['rank-' + rank.rank, 'position-' + index]"
@@ -120,13 +119,13 @@
                         <div class="block-content">
                           <div class="block-header">
                             <span class="rank-badge" v-bind:class="'type-' + (rank.rank % 5)">
-                              R{{ rank.rank }}
+                              R${ rank.rank }
                             </span>
                             <div class="block-status" v-bind:class="getBlockStatus(rank.gas_used)"></div>
                           </div>
                           
                           <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
-                             class="block-number">{{ rank.block_number }}</a>
+                             class="block-number">${ rank.block_number }</a>
                           
                           <div class="metrics">
                             <div class="gas-metric">
@@ -134,7 +133,7 @@
                               <div class="gas-meter">
                                 <div class="gas-fill" v-bind:style="{width: Math.min(100, (rank.gas_used / 30000000) * 100) + '%'}"></div>
                               </div>
-                              <div class="metric-value">{{ (rank.gas_used / 1000000).toFixed(1) }}M</div>
+                              <div class="metric-value">${ (rank.gas_used / 1000000).toFixed(1) }M</div>
                             </div>
                           </div>
                           
