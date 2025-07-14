@@ -215,16 +215,28 @@
       formatTimestamps();
       
       // Position block dots along the line for server-side rendered content
-      $('.block-dot[data-position]').each(function() {
-        var $dot = $(this);
-        var position = parseInt($dot.data('position'));
-        var total = parseInt($dot.data('total'));
+      $('.execution-blocks-line-graph').each(function() {
+        var $graph = $(this);
+        var $dots = $graph.find('.block-dot[data-position]');
         
-        // Calculate position along the line (10% to 90% to leave margins)
-        var leftPercent = 10 + (position * 80 / Math.max(1, total - 1));
-        if (total === 1) leftPercent = 50; // Center single dot
-        
-        $dot.css('left', leftPercent + '%');
+        $dots.each(function() {
+          var $dot = $(this);
+          var position = parseInt($dot.data('position'));
+          var total = parseInt($dot.data('total'));
+          
+          // Calculate position along the line (10% to 90% to leave margins)
+          var leftPercent;
+          if (total === 1) {
+            leftPercent = 50; // Center single dot
+          } else {
+            leftPercent = 10 + (position * 80 / (total - 1));
+          }
+          
+          $dot.css({
+            'left': leftPercent + '%',
+            'position': 'absolute'
+          });
+        });
       });
       
       // Set gas usage colors and text for server-side rendered content
@@ -271,12 +283,16 @@
       border-radius: 12px;
       border: 1px solid #e2e8f0;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      display: block;
+      overflow: visible;
     }
     
     .line-graph-container {
       position: relative;
       height: 60px;
       margin: 12px 0;
+      width: 100%;
+      display: block;
     }
     
     /* Horizontal line */
@@ -291,6 +307,8 @@
       transform: translateY(-50%);
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       animation: lineAppear 1s ease-out;
+      display: block;
+      z-index: 1;
     }
     
     @keyframes lineAppear {
@@ -314,6 +332,7 @@
       cursor: pointer;
       animation: dotAppear 0.8s ease-out;
       animation-fill-mode: both;
+      display: block;
     }
     
     @keyframes dotAppear {
