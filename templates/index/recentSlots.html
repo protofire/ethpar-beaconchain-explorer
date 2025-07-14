@@ -242,16 +242,16 @@
                               
                               <!-- Curved paths for each block -->
                               {{ range $index, $rank := $slot.ExecutionRanks }}
-                                {{ $x1 := 200.0 }}{{ $y1 := 80.0 }}
-                                {{ $x2 := 200.0 }}{{ $y2 := 150.0 }}
-                                {{ if eq $index 0 }}{{ $x2 = 200.0 }}{{ $y2 = 220.0 }}{{ end }}
-                                {{ if eq $index 1 }}{{ $x2 = 320.0 }}{{ $y2 = 180.0 }}{{ end }}
-                                {{ if eq $index 2 }}{{ $x2 = 80.0 }}{{ $y2 = 180.0 }}{{ end }}
-                                {{ if eq $index 3 }}{{ $x2 = 320.0 }}{{ $y2 = 120.0 }}{{ end }}
-                                {{ if eq $index 4 }}{{ $x2 = 80.0 }}{{ $y2 = 120.0 }}{{ end }}
-                                {{ if eq $index 5 }}{{ $x2 = 280.0 }}{{ $y2 = 220.0 }}{{ end }}
-                                {{ if eq $index 6 }}{{ $x2 = 120.0 }}{{ $y2 = 220.0 }}{{ end }}
-                                <path d="M{{ printf "%.0f" $x1 }},{{ printf "%.0f" $y1 }} Q{{ printf "%.0f" (add $x1 20.0) }},{{ printf "%.0f" (add $y1 40.0) }} {{ printf "%.0f" $x2 }},{{ printf "%.0f" $y2 }}"
+                                {{ $x1 := 200 }}{{ $y1 := 80 }}
+                                {{ $x2 := 200 }}{{ $y2 := 150 }}
+                                {{ if eq $index 0 }}{{ $x2 = 200 }}{{ $y2 = 220 }}{{ end }}
+                                {{ if eq $index 1 }}{{ $x2 = 320 }}{{ $y2 = 180 }}{{ end }}
+                                {{ if eq $index 2 }}{{ $x2 = 80 }}{{ $y2 = 180 }}{{ end }}
+                                {{ if eq $index 3 }}{{ $x2 = 320 }}{{ $y2 = 120 }}{{ end }}
+                                {{ if eq $index 4 }}{{ $x2 = 80 }}{{ $y2 = 120 }}{{ end }}
+                                {{ if eq $index 5 }}{{ $x2 = 280 }}{{ $y2 = 220 }}{{ end }}
+                                {{ if eq $index 6 }}{{ $x2 = 120 }}{{ $y2 = 220 }}{{ end }}
+                                <path d="M{{ $x1 }},{{ $y1 }} Q{{ add $x1 20 }},{{ add $y1 40 }} {{ $x2 }},{{ $y2 }}"
                                       stroke="url(#connectionGradient)"
                                       stroke-width="2"
                                       fill="none"
