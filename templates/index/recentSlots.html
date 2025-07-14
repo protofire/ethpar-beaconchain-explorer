@@ -316,7 +316,7 @@
   </div>
   
   <script>
-    // Vue.js methods for sophisticated positioning - Define FIRST
+    // Vue.js methods for sophisticated positioning - Define IMMEDIATELY (not in document ready)
     if (typeof Vue !== 'undefined') {
       // Add methods to Vue instance if it exists
       Vue.mixin({
@@ -375,7 +375,9 @@
         }
       });
     }
+  </script>
 
+  <script>
     // Format timestamps after DOM is ready
     $(document).ready(function() {
       formatTimestamps();
