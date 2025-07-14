@@ -173,11 +173,7 @@
                           <div class="graph-labels">
                             <span class="label-left">Rank 0</span>
                             <span class="label-center">{{ len $slot.ExecutionRanks }} blocks</span>
-                            {{ $maxRank := 0 }}
-                            {{ range $slot.ExecutionRanks }}
-                              {{ if gt .Rank $maxRank }}{{ $maxRank = .Rank }}{{ end }}
-                            {{ end }}
-                            <span class="label-right">Rank {{ $maxRank }}</span>
+                            <span class="label-right">Rank ?</span>
                           </div>
                         </div>
                       </div>
