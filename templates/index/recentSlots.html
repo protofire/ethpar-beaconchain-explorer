@@ -160,8 +160,8 @@
                           </div>
                           <div class="parallel-graph">
                             {{ range $index, $rank := $slot.ExecutionRanks }}
-                              <div class="block-node rank-{{ $rank.Rank }}" style="top: {{ mul $index 45.0 }}px">
-                                <div class="connection-line" style="height: {{ add (mul $index 45.0) 22.0 }}px"></div>
+                              <div class="block-node rank-{{ $rank.Rank }}" style="top: {{ mul (printf "%.0f" $index) 45.0 }}px">
+                                <div class="connection-line" style="height: {{ add (mul (printf "%.0f" $index) 45.0) 22.0 }}px"></div>
                                 <div class="block-content">
                                   <span class="rank-badge rank-{{ $rank.Rank }}">R{{ $rank.Rank }}</span>
                                   <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" class="block-number">
