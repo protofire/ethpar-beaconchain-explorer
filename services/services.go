@@ -16,10 +16,10 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	ethclients "github.com/protofire/ethpar-beaconchain-explorer/ethClients"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/ratelimit"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/consensus"
-	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
@@ -528,9 +528,9 @@ func indexPageDataUpdater(wg *sync.WaitGroup, bt *db.Bigtable) {
 			continue
 		}
 		log.WithFields(logger.Fields{
-			"genesis": data.Genesis, 
-			"currentEpoch": data.CurrentEpoch, 
-			"networkName": data.NetworkName, 
+			"genesis":        data.Genesis,
+			"currentEpoch":   data.CurrentEpoch,
+			"networkName":    data.NetworkName,
 			"networkStartTs": data.NetworkStartTs,
 		}).Infof("index page data update completed in %v", time.Since(start))
 
@@ -929,7 +929,7 @@ func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 		slot.ProposerFormatted = utils.FormatValidatorWithName(slot.Proposer, slot.ProposerName)
 		slot.BlockRootFormatted = fmt.Sprintf("%x", slot.BlockRoot)
 	}
-	
+
 	// Enrich slots with execution ranks data from BigTable
 	if err := enrichSlotsExecutionRanks(slots, bt); err != nil {
 		log.Errorf("error enriching slots with execution ranks: %v", err)
@@ -997,19 +997,19 @@ func getIndexPageData(bt *db.Bigtable) (*types.IndexPageData, error) {
 }
 
 func enrichExecutionRanks(blocks []*types.IndexPageDataBlocks, bt *db.Bigtable) error {
-    for _, b := range blocks {
-        if b.ExecutionBlockNumber == 0 {
-            continue
-        }
+	for _, b := range blocks {
+		if b.ExecutionBlockNumber == 0 {
+			continue
+		}
 
-        ranks, err := bt.GetAvailableRanksForExecBlock(uint64(b.ExecutionBlockNumber))
-        if err != nil {
-            return fmt.Errorf("failed to get ranks for exec block %d: %w", b.ExecutionBlockNumber, err)
-        }
+		ranks, err := bt.GetAvailableRanksForExecBlock(uint64(b.ExecutionBlockNumber))
+		if err != nil {
+			return fmt.Errorf("failed to get ranks for exec block %d: %w", b.ExecutionBlockNumber, err)
+		}
 
-        b.ExecutionRanks = ranks
-    }
-    return nil
+		b.ExecutionRanks = ranks
+	}
+	return nil
 }
 
 func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtable) error {
@@ -1060,7 +1060,13 @@ func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtabl
 					BlockNumber: uint64(slot.ExecutionBlockNumber),
 					GasUsed:     12000000,
 				},
+				{
+					Rank:        3,
+					BlockNumber: uint64(slot.ExecutionBlockNumber),
+					GasUsed:     9000000,
+				},
 			}
+			log.Errorf("DEBUG: FORCED %d execution ranks for slot %d", len(executionRanks), slot.Slot)
 		}
 
 		slot.ExecutionRanks = executionRanks
@@ -1186,6 +1192,18 @@ func EthStoreDisclaimer() string {
 
 // LatestIndexPageData returns the latest index page data
 func LatestIndexPageData() *types.IndexPageData {
+	// TEMPORARY: Force fresh data for testing execution ranks
+	log.Errorf("DEBUG: BYPASSING CACHE - getting fresh data")
+	if data, err := getIndexPageData(nil); err == nil {
+		log.Errorf("DEBUG: Fresh data has %d slots", len(data.Slots))
+		if len(data.Slots) > 0 {
+			log.Errorf("DEBUG: First slot has %d execution ranks", len(data.Slots[0].ExecutionRanks))
+		}
+		return data
+	} else {
+		log.Errorf("DEBUG: Error getting fresh data: %v", err)
+	}
+
 	wanted := &types.IndexPageData{}
 	cacheKey := fmt.Sprintf("%d:frontend:indexPageData", utils.Config.Chain.ClConfig.DepositChainID)
 
