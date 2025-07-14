@@ -1,38 +1,32 @@
-package exporter
+package eth2indexer
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"regexp"
 	"time"
-
-	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/types"
-	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
-	"github.com/prysmaticlabs/prysm/v5/contracts/deposit"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
+	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 	"github.com/prysmaticlabs/prysm/v5/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	"github.com/sirupsen/logrus"
+	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 )
 
 var eth1LookBack = uint64(100)
 var eth1MaxFetch = uint64(1000)
-var eth1DepositEventSignature = hash.Keccak256([]byte("DepositEvent(bytes,bytes,bytes,bytes,bytes)"))
-var eth1DepositContractFirstBlock uint64
-var eth1DepositContractAddress common.Address
-var eth1Client *ethclient.Client
-var eth1RPCClient *gethRPC.Client
 var infuraToMuchResultsErrorRE = regexp.MustCompile("query returned more than [0-9]+ results")
 var gethRequestEntityTooLargeRE = regexp.MustCompile("413 Request Entity Too Large")
+var eth1DepositEventSignature = hash.Keccak256([]byte("DepositEvent(bytes,bytes,bytes,bytes,bytes)"))
 
 // eth1DepositsExporter continuously fetches and verifies DepositEvent logs
 // from the configured Ethereum 1.0 deposit contract.
@@ -43,35 +37,28 @@ var gethRequestEntityTooLargeRE = regexp.MustCompile("413 Request Entity Too Lar
 //
 // This exporter plays a critical role in reconstructing the genesis validator set
 // and tracking new validator entries from the ETH1 chain.
-func eth1DepositsExporter() {
-	eth1DepositContractAddress = common.HexToAddress(utils.Config.Chain.ClConfig.DepositContractAddress)
-	eth1DepositContractFirstBlock = utils.Config.Indexer.Eth1DepositContractFirstBlock
-
-	rpcClient, err := gethRPC.Dial(utils.Config.Eth1GethEndpoint)
-	if err != nil {
-		utils.LogFatal(err, "new exporter geth client error", 0)
-	}
-	eth1RPCClient = rpcClient
-	client := ethclient.NewClient(rpcClient)
-	eth1Client = client
+func eth1DepositsExporter(p *IndexingParams) {
+	eth1DepositContractAddress := common.HexToAddress(p.ChainParams.Deposit.DepositContractAddress)
+	eth1DepositContractFirstBlock := p.Eth1DepositContractFirstBlock
 
 	lastFetchedBlock := uint64(0)
 
 	for {
 		t0 := time.Now()
 
-		var lastDepositBlock uint64
-		err = db.WriterDb.Get(&lastDepositBlock, "select coalesce(max(block_number),0) from eth1_deposits")
+		lastDepositBlock, err := p.Database.GetLastDepositBlock()
 		if err != nil {
-			logger.WithError(err).Errorf("error retrieving highest block_number of eth1-deposits from db")
+			p.Log.WithError(err).Errorf("error retrieving highest block_number of eth1-deposits from db")
 			time.Sleep(time.Second * 5)
 			continue
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		eth1Client := p.ExecClient.GetNativeClient()
+		rpcClient := p.ExecClient.GetRPCClient()
 		header, err := eth1Client.HeaderByNumber(ctx, nil)
 		if err != nil {
-			logger.WithError(err).Errorf("error getting header from eth1-client")
+			p.Log.WithError(err).Errorf("error getting header from eth1-client")
 			cancel()
 			time.Sleep(time.Second * 5)
 			continue
@@ -107,26 +94,26 @@ func eth1DepositsExporter() {
 			}
 		}
 
-		depositsToSave, err := fetchEth1Deposits(fromBlock, toBlock)
+		depositsToSave, err := fetchEth1Deposits(fromBlock, toBlock, eth1DepositContractAddress, eth1Client, rpcClient)
 		if err != nil {
 			if infuraToMuchResultsErrorRE.MatchString(err.Error()) || gethRequestEntityTooLargeRE.MatchString(err.Error()) {
 				toBlock = fromBlock + 100
 				if toBlock > blockHeight {
 					toBlock = blockHeight
 				}
-				logger.Infof("limiting block-range to %v-%v when fetching eth1-deposits due to too much results", fromBlock, toBlock)
-				depositsToSave, err = fetchEth1Deposits(fromBlock, toBlock)
+				p.Log.Infof("limiting block-range to %v-%v when fetching eth1-deposits due to too much results", fromBlock, toBlock)
+				depositsToSave, err = fetchEth1Deposits(fromBlock, toBlock, eth1DepositContractAddress, eth1Client, rpcClient)
 			}
 			if err != nil {
-				logger.WithError(err).WithField("fromBlock", fromBlock).WithField("toBlock", toBlock).Errorf("error fetching eth1-deposits")
+				p.Log.WithError(err).WithField("fromBlock", fromBlock).WithField("toBlock", toBlock).Errorf("error fetching eth1-deposits")
 				time.Sleep(time.Second * 5)
 				continue
 			}
 		}
 
-		err = saveEth1Deposits(depositsToSave)
+		err = p.Database.SaveEth1Deposits(depositsToSave)
 		if err != nil {
-			logger.WithError(err).Errorf("error saving eth1-deposits")
+			p.Log.WithError(err).Errorf("error saving eth1-deposits")
 			time.Sleep(time.Second * 5)
 			continue
 		}
@@ -135,7 +122,7 @@ func eth1DepositsExporter() {
 		lastFetchedBlock = toBlock
 
 		if len(depositsToSave) > 0 {
-			logger.WithFields(logrus.Fields{
+			p.Log.WithFields(logger.Fields{
 				"duration":      time.Since(t0),
 				"blockHeight":   blockHeight,
 				"fromBlock":     fromBlock,
@@ -154,20 +141,20 @@ func eth1DepositsExporter() {
 	}
 }
 
-func fetchEth1Deposits(fromBlock, toBlock uint64) (depositsToSave []*types.Eth1Deposit, err error) {
+func fetchEth1Deposits(fromBlock, toBlock uint64, address common.Address, client *ethclient.Client, rpcClient *gethRPC.Client) (depositsToSave []*types.Eth1Deposit, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	topic := common.BytesToHash(eth1DepositEventSignature[:])
 	qry := ethereum.FilterQuery{
 		Addresses: []common.Address{
-			eth1DepositContractAddress,
+			address,
 		},
 		FromBlock: new(big.Int).SetUint64(fromBlock),
 		ToBlock:   new(big.Int).SetUint64(toBlock),
 		Topics:    [][]common.Hash{{topic}},
 	}
 
-	depositLogs, err := eth1Client.FilterLogs(ctx, qry)
+	depositLogs, err := client.FilterLogs(ctx, qry)
 	if err != nil {
 		return depositsToSave, fmt.Errorf("error getting logs from eth1-client: %w", err)
 	}
@@ -211,7 +198,7 @@ func fetchEth1Deposits(fromBlock, toBlock uint64) (depositsToSave []*types.Eth1D
 		})
 	}
 
-	headers, txs, err := eth1BatchRequestHeadersAndTxs(blocksToFetch, txsToFetch)
+	headers, txs, err := eth1BatchRequestHeadersAndTxs(blocksToFetch, txsToFetch, rpcClient)
 	if err != nil {
 		return depositsToSave, fmt.Errorf("error getting eth1-blocks: %w\nblocks to fetch: %v\n tx to fetch: %v", err, blocksToFetch, txsToFetch)
 	}
@@ -245,69 +232,10 @@ func fetchEth1Deposits(fromBlock, toBlock uint64) (depositsToSave []*types.Eth1D
 	return depositsToSave, nil
 }
 
-func saveEth1Deposits(depositsToSave []*types.Eth1Deposit) error {
-	tx, err := db.WriterDb.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	insertDepositStmt, err := tx.Prepare(`
-		INSERT INTO eth1_deposits (
-			tx_hash,
-			tx_input,
-			tx_index,
-			block_number,
-			block_ts,
-			from_address,
-			from_address_text,
-			publickey,
-			withdrawal_credentials,
-			amount,
-			signature,
-			merkletree_index,
-			removed,
-			valid_signature
-		)
-		VALUES ($1, $2, $3, $4, TO_TIMESTAMP($5), $6, ENCODE($7, 'hex'), $8, $9, $10, $11, $12, $13, $14)
-		ON CONFLICT (merkletree_index) DO UPDATE SET
-			tx_input               = EXCLUDED.tx_input,
-			tx_index               = EXCLUDED.tx_index,
-			block_number           = EXCLUDED.block_number,
-			block_ts               = EXCLUDED.block_ts,
-			from_address           = EXCLUDED.from_address,
-			from_address_text      = EXCLUDED.from_address_text,
-			publickey              = EXCLUDED.publickey,
-			withdrawal_credentials = EXCLUDED.withdrawal_credentials,
-			amount                 = EXCLUDED.amount,
-			signature              = EXCLUDED.signature,
-			merkletree_index       = EXCLUDED.merkletree_index,
-			removed                = EXCLUDED.removed,
-			valid_signature        = EXCLUDED.valid_signature`)
-	if err != nil {
-		return err
-	}
-	defer insertDepositStmt.Close()
-
-	for _, d := range depositsToSave {
-		_, err := insertDepositStmt.Exec(d.TxHash, d.TxInput, d.TxIndex, d.BlockNumber, d.BlockTs, d.FromAddress, d.FromAddress, d.PublicKey, d.WithdrawalCredentials, d.Amount, d.Signature, d.MerkletreeIndex, d.Removed, d.ValidSignature)
-		if err != nil {
-			return fmt.Errorf("error saving eth1-deposit to db: %v: %w", fmt.Sprintf("%x", d.TxHash), err)
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("error committing db-tx for eth1-deposits: %w", err)
-	}
-
-	return nil
-}
-
 // eth1BatchRequestHeadersAndTxs requests the block range specified in the arguments.
 // Instead of requesting each block in one call, it batches all requests into a single rpc call.
 // This code is shamelessly stolen and adapted from https://github.com/prysmaticlabs/prysm/blob/2eac24c/beacon-chain/powchain/service.go#L473
-func eth1BatchRequestHeadersAndTxs(blocksToFetch []uint64, txsToFetch []string) (map[uint64]*gethTypes.Header, map[string]*gethTypes.Transaction, error) {
+func eth1BatchRequestHeadersAndTxs(blocksToFetch []uint64, txsToFetch []string, client *gethRPC.Client) (map[uint64]*gethTypes.Header, map[string]*gethTypes.Transaction, error) {
 	elems := make([]gethRPC.BatchElem, 0, len(blocksToFetch)+len(txsToFetch))
 	headers := make(map[uint64]*gethTypes.Header, len(blocksToFetch))
 	txs := make(map[string]*gethTypes.Transaction, len(txsToFetch))
@@ -353,7 +281,7 @@ func eth1BatchRequestHeadersAndTxs(blocksToFetch []uint64, txsToFetch []string) 
 			end = lenElems
 		}
 
-		ioErr := eth1RPCClient.BatchCall(elems[start:end])
+		ioErr := client.BatchCall(elems[start:end])
 		if ioErr != nil {
 			return nil, nil, ioErr
 		}

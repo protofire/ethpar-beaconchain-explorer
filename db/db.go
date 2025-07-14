@@ -29,6 +29,7 @@ import (
 	"github.com/pressly/goose/v3"
 	prysm_deposit "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 )
 
 //go:embed migrations/*.sql
@@ -211,48 +212,129 @@ func (pg *Postgres) GetGenesisDepositsCount() (uint64, error) {
 	return count, nil
 }
 
-func (pg *Postgres) ExportGenesisDeposits(ctx context.Context, validators []ValidatorData) error {
-	return pg.WithTx(ctx, func(tx *sqlx.Tx) error {
-		for i, v := range validators {
-			if i%1000 == 0 {
-				pg.Logger.Infof("exporting deposit for validator %d (%d/%d)", v.Index, i, len(validators))
-			}
-			if err := pg.InsertGenesisDepositTx(ctx, tx, v); err != nil {
-				return err
-			}
-		}
+func (pg *Postgres) SaveGenesisDeposits(genesisValidators *rpc_types.StandardValidatorsResponse) error {
+	tx, err := pg.Db.Beginx()
+	if err != nil {
+		pg.Logger.Errorf("error beginning db-tx when exporting genesis-deposits: %v", err)
+		return err
+	}
 
-		if err := pg.HydrateEth1SignaturesTx(ctx, tx); err != nil {
+	pg.Logger.Infof("exporting deposit data for %v genesis validators", len(genesisValidators.Data))
+	for i, validator := range genesisValidators.Data {
+		if i%1000 == 0 {
+			pg.Logger.Infof("exporting deposit data for genesis validator %v (%v/%v)", validator.Index, i, len(genesisValidators.Data))
+		}
+		_, err = tx.Exec(`INSERT INTO blocks_deposits (block_slot, block_root, block_index, publickey, withdrawalcredentials, amount, signature)
+		VALUES (0, '\x01', $1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+			validator.Index, utils.MustParseHex(validator.Validator.Pubkey), utils.MustParseHex(validator.Validator.WithdrawalCredentials), validator.Balance, []byte{0x0},
+		)
+		if err != nil {
+			tx.Rollback()
+			pg.Logger.Errorf("error exporting genesis-deposits: %v", err)
 			return err
 		}
+	}
 
-		if err := pg.UpdateGenesisDepositCountTx(ctx, tx, len(validators)); err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
-
-func (pg *Postgres) HydrateEth1SignaturesTx(ctx context.Context, tx *sqlx.Tx) error {
-	const query = `
-		UPDATE blocks_deposits
-		SET signature = a.signature
+	// hydrate the eth1 deposit signature for all genesis validators that have a corresponding eth1 deposit
+	_, err = tx.Exec(`
+		UPDATE blocks_deposits 
+		SET signature = a.signature 
 		FROM (
-			SELECT DISTINCT ON (publickey) publickey, signature
-			FROM eth1_deposits
-			WHERE valid_signature = true
-		) AS a
-		WHERE block_slot = 0
-		AND blocks_deposits.publickey = a.publickey
-		AND blocks_deposits.signature = '\x'`
-	_, err := tx.ExecContext(ctx, query)
-	return fmt.Errorf("hydrate eth1 signatures: %w", err)
+			SELECT DISTINCT ON(publickey) publickey, signature 
+			FROM eth1_deposits 
+			WHERE valid_signature = true) AS a 
+		WHERE block_slot = 0 AND blocks_deposits.publickey = a.publickey AND blocks_deposits.signature = '\x'`)
+	if err != nil {
+		tx.Rollback()
+		pg.Logger.Errorf("error hydrating eth1 data into genesis-deposits: %v", err)
+		return err
+	}
+
+	// update deposits-count
+	_, err = tx.Exec("UPDATE blocks SET depositscount = $1 WHERE slot = 0", len(genesisValidators.Data))
+	if err != nil {
+		tx.Rollback()
+		pg.Logger.Errorf("error updating deposit count for the genesis slot: %v", err)
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		pg.Logger.Errorf("error committing db-tx when exporting genesis-deposits: %v", err)
+		return err
+	}
+	return nil
 }
 
-func (pg *Postgres) UpdateGenesisDepositCountTx(ctx context.Context, tx *sqlx.Tx, count int) error {
-	_, err := tx.ExecContext(ctx, `UPDATE blocks SET depositscount = $1 WHERE slot = 0`, count)
-	return fmt.Errorf("update depositscount: %w", err)
+func (pg *Postgres) GetLastDepositBlock() (uint64, error) {
+	const query = `SELECT COALESCE(MAX(block_number),0) FROM eth1_deposits`
+	
+	var block uint64
+	err := pg.Db.Get(&block, query)
+	if err != nil {
+		return 0, fmt.Errorf("get last deposit block: %w", err)
+	}
+	return block, nil
+}
+
+func (pg *Postgres) SaveEth1Deposits(deps []*types.Eth1Deposit) error {
+	tx, err := pg.Db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	insertDepositStmt, err := tx.Prepare(`
+		INSERT INTO eth1_deposits (
+			tx_hash,
+			tx_input,
+			tx_index,
+			block_number,
+			block_ts,
+			from_address,
+			from_address_text,
+			publickey,
+			withdrawal_credentials,
+			amount,
+			signature,
+			merkletree_index,
+			removed,
+			valid_signature
+		)
+		VALUES ($1, $2, $3, $4, TO_TIMESTAMP($5), $6, ENCODE($7, 'hex'), $8, $9, $10, $11, $12, $13, $14)
+		ON CONFLICT (merkletree_index) DO UPDATE SET
+			tx_input               = EXCLUDED.tx_input,
+			tx_index               = EXCLUDED.tx_index,
+			block_number           = EXCLUDED.block_number,
+			block_ts               = EXCLUDED.block_ts,
+			from_address           = EXCLUDED.from_address,
+			from_address_text      = EXCLUDED.from_address_text,
+			publickey              = EXCLUDED.publickey,
+			withdrawal_credentials = EXCLUDED.withdrawal_credentials,
+			amount                 = EXCLUDED.amount,
+			signature              = EXCLUDED.signature,
+			merkletree_index       = EXCLUDED.merkletree_index,
+			removed                = EXCLUDED.removed,
+			valid_signature        = EXCLUDED.valid_signature`)
+	if err != nil {
+		return err
+	}
+	defer insertDepositStmt.Close()
+
+	for _, d := range deps {
+		_, err := insertDepositStmt.Exec(d.TxHash, d.TxInput, d.TxIndex, d.BlockNumber, d.BlockTs, d.FromAddress, d.FromAddress, d.PublicKey, d.WithdrawalCredentials, d.Amount, d.Signature, d.MerkletreeIndex, d.Removed, d.ValidSignature)
+		if err != nil {
+			return fmt.Errorf("error saving eth1-deposit to db: %v: %w", fmt.Sprintf("%x", d.TxHash), err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("error committing db-tx for eth1-deposits: %w", err)
+	}
+
+	return nil
 }
 
 func (pg *Postgres) GetEth1DepositsJoinEth2Deposits(

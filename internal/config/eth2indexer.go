@@ -22,14 +22,15 @@ type Eth2IndexerConfig struct {
 	BigTable  BigTableConfig        `mapstructure:"bigtable" validate:"required"`
 	Database  SqlDatabaseConfig     `mapstructure:"database" validate:"required"`
 	Indexing struct {
-		HistoricalPrice             bool `mapstructure:"historicalprice,omitempty"` 
-		PubKeyTagsExporter          bool `mapstructure:"pubkeytagsexporter,omitempty"` 
-		SyncCommitteesExporter      bool `mapstructure:"synccommitteesexporter,omitempty"` 
-		SyncCommitteesCountExporter bool `mapstructure:"synccommitteescountexporter,omitempty"` 
-		PendingQueueIndexer         bool `mapstructure:"pendingqueueindexer,omitempty"` 
-		SsvExporter                 bool `mapstructure:"ssvexporter,omitempty"`
-		RocketPoolExporter          bool `mapstructure:"rocketpoolexporter,omitempty"`
-		MevBoostRelayExporter       bool `mapstructure:"mevboostrelayexporter,omitempty"`   
+		Eth1DepositContractFirstBlock uint64 `mapstructure:"eth1depositcontractfirstblock,omitempty"` // TODO: move to chain params
+		HistoricalPrice               bool `mapstructure:"historicalprice,omitempty"` 
+		PubKeyTagsExporter            bool `mapstructure:"pubkeytagsexporter,omitempty"` 
+		SyncCommitteesExporter        bool `mapstructure:"synccommitteesexporter,omitempty"` 
+		SyncCommitteesCountExporter   bool `mapstructure:"synccommitteescountexporter,omitempty"` 
+		PendingQueueIndexer           bool `mapstructure:"pendingqueueindexer,omitempty"` 
+		SsvExporter                   bool `mapstructure:"ssvexporter,omitempty"`
+		RocketPoolExporter            bool `mapstructure:"rocketpoolexporter,omitempty"`
+		MevBoostRelayExporter         bool `mapstructure:"mevboostrelayexporter,omitempty"`   
 		EnsTransformer struct {
 			ValidRegistrarContracts []string `mapstructure:"validRegistrarContracts,omitempty"`
 		} `mapstructure:"ensTransformer,omitempty"`
@@ -76,6 +77,7 @@ func LoadEth2IndexerConfig(args []string) (*Eth2IndexerConfig, error) {
 	flags.Int("database.maxidleconns", 10, "Maximum number of idle connections to the database")
 	flags.Bool("database.ssl", false, "Database SSL mode")
 	
+	flags.Uint64("indexing.eth1depositcontractfirstblock", 0, "Eth1 Deposit Contract First Block")
 	flags.Bool("indexing.historicalprice", false, "Enable Historical Price service")
 	flags.Bool("indexing.pubkeytagsexporter", false, "Enable Public Keys Tags exporter")
 	flags.Bool("indexing.synccommitteesexporter", false, "Enable Sync Committees exporter")
