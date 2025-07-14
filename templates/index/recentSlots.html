@@ -203,12 +203,8 @@
                               {{ (index $slot.ExecutionRanks 0).BlockNumber }}
                             </a>
                             <div class="gas-meter">
-                              {{ $gasPercent := 0.0 }}
-                              {{ if gt (index $slot.ExecutionRanks 0).GasUsed 0 }}
-                                {{ $gasPercent = mul (div (printf "%.0f" (index $slot.ExecutionRanks 0).GasUsed) 30000000.0) 100.0 }}
-                              {{ end }}
-                              <div class="gas-bar" data-gas-percent="{{ printf "%.1f" $gasPercent }}"></div>
-                              <span class="gas-text">{{ printf "%.1f" (div (printf "%.0f" (index $slot.ExecutionRanks 0).GasUsed) 1000000.0) }}M</span>
+                              <div class="gas-bar" data-gas-used="{{ (index $slot.ExecutionRanks 0).GasUsed }}"></div>
+                              <span class="gas-text" data-gas-used="{{ (index $slot.ExecutionRanks 0).GasUsed }}"></span>
                             </div>
                           </div>
                         </div>
@@ -264,8 +260,8 @@
                                 <div class="block-glow"></div>
                                 <div class="block-content">
                                   <div class="block-header">
-                                    <span class="rank-badge type-{{ mod $rank.Rank 5 }}">R{{ $rank.Rank }}</span>
-                                    <div class="block-status {{ if gt $rank.GasUsed 25000000 }}high{{ else if gt $rank.GasUsed 15000000 }}medium{{ else }}low{{ end }}"></div>
+                                    <span class="rank-badge rank-color-{{ $rank.Rank }}">R{{ $rank.Rank }}</span>
+                                    <div class="block-status gas-status" data-gas-used="{{ $rank.GasUsed }}"></div>
                                   </div>
                                   
                                   <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" class="block-number">
@@ -276,13 +272,9 @@
                                     <div class="gas-metric">
                                       <div class="metric-label">Gas</div>
                                       <div class="gas-meter">
-                                        {{ $gasPercent := 0.0 }}
-                                        {{ if gt $rank.GasUsed 0 }}
-                                          {{ $gasPercent = mul (div (printf "%.0f" $rank.GasUsed) 30000000.0) 100.0 }}
-                                        {{ end }}
-                                        <div class="gas-fill" data-gas-percent="{{ printf "%.1f" $gasPercent }}"></div>
+                                        <div class="gas-fill" data-gas-used="{{ $rank.GasUsed }}"></div>
                                       </div>
-                                      <div class="metric-value">{{ printf "%.1f" (div (printf "%.0f" $rank.GasUsed) 1000000.0) }}M</div>
+                                      <div class="metric-value" data-gas-used="{{ $rank.GasUsed }}"></div>
                                     </div>
                                   </div>
                                   
@@ -328,10 +320,44 @@
     $(document).ready(function() {
       formatTimestamps();
       
-      // Set gas bar widths from data attributes
-      $('.gas-bar[data-gas-percent], .gas-fill[data-gas-percent]').each(function() {
-        var percentage = $(this).data('gas-percent');
-        $(this).css('width', Math.min(100, percentage) + '%');
+      // Set gas bar widths and text from data attributes
+      $('.gas-bar[data-gas-used], .gas-fill[data-gas-used]').each(function() {
+        var gasUsed = parseInt($(this).data('gas-used')) || 0;
+        var percentage = Math.min(100, (gasUsed / 30000000) * 100);
+        $(this).css('width', percentage + '%');
+      });
+      
+      $('.gas-text[data-gas-used], .metric-value[data-gas-used]').each(function() {
+        var gasUsed = parseInt($(this).data('gas-used')) || 0;
+        var gasInM = (gasUsed / 1000000).toFixed(1) + 'M';
+        $(this).text(gasInM);
+      });
+      
+      // Set gas status colors
+      $('.gas-status[data-gas-used]').each(function() {
+        var gasUsed = parseInt($(this).data('gas-used')) || 0;
+        var $this = $(this);
+        $this.removeClass('high medium low');
+        if (gasUsed > 25000000) {
+          $this.addClass('high');
+        } else if (gasUsed > 15000000) {
+          $this.addClass('medium');
+        } else {
+          $this.addClass('low');
+        }
+      });
+      
+      // Set rank badge colors
+      $('.rank-badge').each(function() {
+        var $this = $(this);
+        var classes = $this.attr('class').split(' ');
+        var rankClass = classes.find(function(cls) { return cls.startsWith('rank-color-'); });
+        if (rankClass) {
+          var rank = parseInt(rankClass.replace('rank-color-', '')) || 0;
+          var colorType = rank % 5;
+          $this.removeClass('type-0 type-1 type-2 type-3 type-4');
+          $this.addClass('type-' + colorType);
+        }
       });
     });
   </script>
