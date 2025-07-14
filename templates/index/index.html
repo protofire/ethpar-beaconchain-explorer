@@ -14,9 +14,76 @@
   {{ end }}
     <script>
         var creditsEnabled = {{ if  .SlotVizData }} false {{ else }} true {{ end }}
+        
+        // Vue.js mixin with helper methods for recent slots visualization
+        var recentSlotsMixin = {
+            methods: {
+                getTimeAgo: function(timestamp) {
+                    if (!timestamp) return '';
+                    var now = Math.floor(Date.now() / 1000);
+                    var diff = now - timestamp;
+                    if (diff < 60) return diff + 's ago';
+                    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+                    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+                    return Math.floor(diff / 86400) + 'd ago';
+                },
+                addCommas: function(num) {
+                    if (num === null || num === undefined) return '';
+                    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                },
+                formatGasUsed: function(gasUsed, gasLimit) {
+                    if (!gasUsed || !gasLimit) return '0%';
+                    var percentage = (gasUsed / gasLimit) * 100;
+                    return percentage.toFixed(1) + '%';
+                },
+                getGasBarWidth: function(gasUsed, gasLimit) {
+                    if (!gasUsed || !gasLimit) return 0;
+                    return Math.min((gasUsed / gasLimit) * 100, 100);
+                },
+                getBlockStatus: function(block) {
+                    if (!block) return 'empty';
+                    if (block.Status === '1') return 'proposed';
+                    if (block.Status === '2') return 'scheduled';
+                    if (block.Status === '3') return 'missed';
+                    return 'unknown';
+                },
+                getRankColor: function(rank) {
+                    var colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'];
+                    return colors[rank % colors.length] || '#7f7f7f';
+                },
+                getCurvedPath: function(index, total) {
+                    var angle = (index / total) * 360 * (3.14159 / 180);
+                    var centerX = 200, centerY = 80;
+                    var radius = 120;
+                    var x = centerX + radius * Math.sin(angle);
+                    var y = centerY + 80 * Math.cos(angle);
+                    var controlX = centerX + 20;
+                    var controlY = centerY + 40;
+                    return "M" + centerX + "," + centerY + " Q" + controlX + "," + controlY + " " + x + "," + y;
+                },
+                getBlockPosition: function(index, total) {
+                    var angle = (index / total) * 360 * (3.14159 / 180);
+                    var left = 50 + 30 * Math.sin(angle);
+                    var top = 40 + 25 * Math.cos(angle);
+                    return {
+                        left: left + '%',
+                        top: top + '%'
+                    };
+                },
+                getGasBarStyle: function(gasUsed) {
+                    var percentage = Math.min(100, (gasUsed / 30000000) * 100);
+                    return {width: percentage + '%'};
+                },
+                getGasText: function(gasUsed) {
+                    return (gasUsed / 1000000).toFixed(1) + 'M';
+                }
+            }
+        };
+        
         var app = new Vue({
             el: '#app',
             delimiters: ['${', '}'], // Standard vuejs template syntax conflicts with golang template syntax
+            mixins: [recentSlotsMixin],
             components: {
                 highcharts: HighchartsVue.Chart
             },
