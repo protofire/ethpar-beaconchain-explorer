@@ -46,7 +46,7 @@
                 <span class="badge rounded-pill text-bg-secondary">Unknown</span>
               </td>
               <td>
-                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="slot.ts | timestampTooltip" v-text="slot.ts | fromNow"></span>
+                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="new Date(slot.ts * 1000).toLocaleString()" v-text="getTimeAgo(slot.ts)"></span>
               </td>
               <td v-if="slot.slot !== 0" v-html="slot.proposer_formatted"></td>
               <td v-else>N/A</td>
@@ -849,6 +849,22 @@
           
           getGasText: function(gasUsed) {
             return (gasUsed / 1000000).toFixed(1) + 'M';
+          },
+          
+          getTimeAgo: function(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const now = Date.now() / 1000;
+            const diff = now - timestamp;
+            
+            if (diff < 60) return Math.floor(diff) + 's ago';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
+          },
+          
+          addCommas: function(num) {
+            if (num === null || num === undefined) return '';
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
           }
         }
       });
