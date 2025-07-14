@@ -46,7 +46,7 @@
                 <span class="badge rounded-pill text-bg-secondary">Unknown</span>
               </td>
               <td>
-                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="slot.ts | timestampTooltip">${slot.ts | fromNow}</span>
+                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="slot.ts | timestampTooltip" v-text="slot.ts | fromNow"></span>
               </td>
               <td v-if="slot.slot !== 0" v-html="slot.proposer_formatted"></td>
               <td v-else>N/A</td>
@@ -73,10 +73,10 @@
                     <!-- Central slot hub -->
                     <div class="slot-hub">
                       <div class="hub-core">
-                        <span class="slot-number">{{ slot.slot }}</span>
+                        <span class="slot-number" v-text="slot.slot"></span>
                         <div class="hub-pulse"></div>
                       </div>
-                      <div class="connection-count">{{ slot.execution_ranks.length }} blocks</div>
+                      <div class="connection-count" v-text="slot.execution_ranks.length + ' blocks'"></div>
                     </div>
                     
                     <!-- Sophisticated network graph -->
