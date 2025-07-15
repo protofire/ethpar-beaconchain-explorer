@@ -53,13 +53,27 @@
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
               <td>
-                <!-- Simple vertical list for execution blocks -->
-                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="execution-blocks-list">
-                  <div v-for="rank in slot.execution_ranks" class="execution-block-item">
-                    <span class="rank-badge" v-text="'R' + rank.rank"></span>
-                    <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
-                       class="block-link" v-text="'Block ' + rank.block_number"></a>
-                    <span class="gas-info" v-text="getGasText(rank.gas_used)"></span>
+                <!-- Vertical line with dots and execution blocks list -->
+                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="execution-blocks-container">
+                  <!-- Vertical line with dots -->
+                  <div class="execution-timeline">
+                    <div class="timeline-line"></div>
+                    <div v-for="(rank, index) in slot.execution_ranks" 
+                         class="timeline-dot"
+                         v-bind:style="{ top: (index * 32 + 16) + 'px' }"
+                         v-bind:class="getGasColorClass(rank.gas_used)">
+                      <span class="dot-rank" v-text="rank.rank"></span>
+                    </div>
+                  </div>
+                  
+                  <!-- Execution blocks list -->
+                  <div class="execution-blocks-list">
+                    <div v-for="rank in slot.execution_ranks" class="execution-block-item">
+                      <span class="rank-badge" v-text="rank.rank"></span>
+                      <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
+                         class="block-link" v-text="rank.block_number"></a>
+                      <span class="gas-info" v-text="getGasText(rank.gas_used)"></span>
+                    </div>
                   </div>
                 </div>
                 <div v-else class="no-execution-blocks">
@@ -107,17 +121,32 @@
                   <td>{{ formatAddCommas $slot.Attestations }}</td>
                   <td>{{ formatAddCommas $slot.Deposits }}</td>
                   <td>
-                    <!-- Simple vertical list for execution blocks (server-side) -->
+                    <!-- Vertical line with dots and execution blocks list (server-side) -->
                     {{ if $slot.ExecutionRanks }}
-                      <div class="execution-blocks-list">
-                        {{ range $rank := $slot.ExecutionRanks }}
-                          <div class="execution-block-item">
-                            <span class="rank-badge">R{{ $rank.Rank }}</span>
-                            <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
-                               class="block-link">Block {{ $rank.BlockNumber }}</a>
-                            <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
-                          </div>
-                        {{ end }}
+                      <div class="execution-blocks-container">
+                        <!-- Vertical line with dots -->
+                        <div class="execution-timeline">
+                          <div class="timeline-line"></div>
+                          {{ range $index, $rank := $slot.ExecutionRanks }}
+                            <div class="timeline-dot" 
+                                 data-position="{{ $index }}"
+                                 data-gas-used="{{ $rank.GasUsed }}">
+                              <span class="dot-rank">{{ $rank.Rank }}</span>
+                            </div>
+                          {{ end }}
+                        </div>
+                        
+                        <!-- Execution blocks list -->
+                        <div class="execution-blocks-list">
+                          {{ range $rank := $slot.ExecutionRanks }}
+                            <div class="execution-block-item">
+                              <span class="rank-badge">{{ $rank.Rank }}</span>
+                              <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
+                                 class="block-link">{{ $rank.BlockNumber }}</a>
+                              <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
+                            </div>
+                          {{ end }}
+                        </div>
                       </div>
                     {{ else if gt $slot.ParallelBlocksCount 0 }}
                       <span class="badge badge-info">{{ $slot.ParallelBlocksCount }} Blocks</span>
@@ -159,46 +188,145 @@
         var gasInM = (gasUsed / 1000000).toFixed(1) + 'M';
         $(this).text(gasInM);
       });
+      
+      // Position timeline dots for server-side rendered content
+      $('.timeline-dot[data-position]').each(function() {
+        var $dot = $(this);
+        var position = parseInt($dot.data('position'));
+        var topPos = position * 32 + 16;
+        $dot.css('top', topPos + 'px');
+      });
+      
+      // Set timeline dot colors based on gas usage
+      $('.timeline-dot[data-gas-used]').each(function() {
+        var gasUsed = parseInt($(this).data('gas-used')) || 0;
+        var $this = $(this);
+        $this.removeClass('gas-high gas-medium gas-low');
+        if (gasUsed > 25000000) {
+          $this.addClass('gas-high');
+        } else if (gasUsed > 15000000) {
+          $this.addClass('gas-medium');
+        } else {
+          $this.addClass('gas-low');
+        }
+      });
     });
   </script>
 
   <style>
-    /* === SIMPLE VERTICAL LIST FOR EXECUTION BLOCKS === */
+    /* === EXECUTION BLOCKS WITH VERTICAL TIMELINE === */
+    /* Higher specificity to override Bootstrap table styles */
+    .table .execution-blocks-container {
+      display: flex !important;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 200px;
+      padding: 0;
+      margin: 0;
+    }
+    
+    /* Vertical timeline with dots */
+    .execution-timeline {
+      position: relative;
+      width: 24px;
+      min-height: 100px;
+      flex-shrink: 0;
+    }
+    
+    .timeline-line {
+      position: absolute;
+      left: 50%;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: linear-gradient(180deg, #e2e8f0 0%, #4f46e5 50%, #e2e8f0 100%);
+      transform: translateX(-50%);
+      border-radius: 1px;
+    }
+    
+    .timeline-dot {
+      position: absolute !important;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #4f46e5;
+      border: 2px solid white;
+      box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      transition: all 0.3s ease;
+    }
+    
+    .timeline-dot:hover {
+      transform: translateX(-50%) scale(1.1);
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.5);
+    }
+    
+    /* Gas usage based colors for timeline dots - using !important for specificity */
+    .timeline-dot.gas-high {
+      background: #ef4444 !important;
+      box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3) !important;
+    }
+    
+    .timeline-dot.gas-medium {
+      background: #f59e0b !important;
+      box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3) !important;
+    }
+    
+    .timeline-dot.gas-low {
+      background: #10b981 !important;
+      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3) !important;
+    }
+    
+    .dot-rank {
+      color: white !important;
+      font-size: 0.6rem;
+      font-weight: bold;
+    }
+    
+    /* Execution blocks list */
     .execution-blocks-list {
-      display: flex;
+      display: flex !important;
       flex-direction: column;
       gap: 4px;
-      min-width: 180px;
+      flex: 1;
+      min-width: 140px;
     }
     
     .execution-block-item {
-      display: flex;
+      display: flex !important;
       align-items: center;
       gap: 8px;
-      padding: 4px 8px;
-      background: #f8fafc;
+      padding: 4px 8px !important;
+      background: #f8fafc !important;
       border-radius: 6px;
       border: 1px solid #e2e8f0;
       transition: background-color 0.2s ease;
+      min-height: 28px;
+      margin: 0 !important;
     }
     
     .execution-block-item:hover {
-      background: #f1f5f9;
+      background: #f1f5f9 !important;
     }
     
     .rank-badge {
-      background: #4f46e5;
-      color: white;
+      background: #4f46e5 !important;
+      color: white !important;
       padding: 2px 6px;
       border-radius: 4px;
       font-size: 0.7rem;
       font-weight: bold;
-      min-width: 24px;
+      min-width: 20px;
       text-align: center;
     }
     
     .block-link {
-      color: #1e40af;
+      color: #1e40af !important;
       text-decoration: none;
       font-size: 0.8rem;
       font-weight: 500;
@@ -206,27 +334,86 @@
     }
     
     .block-link:hover {
-      color: #1d4ed8;
+      color: #1d4ed8 !important;
       text-decoration: underline;
     }
     
     .gas-info {
       font-size: 0.7rem;
-      color: #6b7280;
-      background: #e5e7eb;
+      color: #6b7280 !important;
+      background: #e5e7eb !important;
       padding: 2px 6px;
       border-radius: 4px;
       white-space: nowrap;
     }
     
-    .no-execution-blocks {
-      padding: 8px;
+    .table .no-execution-blocks {
+      padding: 8px !important;
       text-align: center;
     }
     
     .no-execution-blocks .text-muted {
-      color: #9ca3af;
+      color: #9ca3af !important;
       font-size: 0.8rem;
+    }
+    
+    /* Dark theme support */
+    [data-theme="dark"] .execution-block-item {
+      background: #374151 !important;
+      border-color: #4b5563;
+    }
+    
+    [data-theme="dark"] .execution-block-item:hover {
+      background: #4b5563 !important;
+    }
+    
+    [data-theme="dark"] .gas-info {
+      background: #4b5563 !important;
+      color: #d1d5db !important;
+    }
+    
+    [data-theme="dark"] .timeline-line {
+      background: linear-gradient(180deg, #4b5563 0%, #6366f1 50%, #4b5563 100%);
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .table .execution-blocks-container {
+        gap: 8px !important;
+      }
+      
+      .execution-timeline {
+        width: 20px;
+      }
+      
+      .timeline-dot {
+        width: 16px !important;
+        height: 16px !important;
+      }
+      
+      .dot-rank {
+        font-size: 0.55rem !important;
+      }
+      
+      .execution-block-item {
+        padding: 3px 6px !important;
+        gap: 6px;
+      }
+      
+      .rank-badge {
+        padding: 1px 4px !important;
+        font-size: 0.65rem;
+        min-width: 18px;
+      }
+      
+      .block-link {
+        font-size: 0.75rem !important;
+      }
+      
+      .gas-info {
+        font-size: 0.65rem !important;
+        padding: 1px 4px !important;
+      }
     }
   </style>
 {{ end }}
