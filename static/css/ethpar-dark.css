@@ -243,7 +243,8 @@ a:hover {
 /* Primary execution block - dark theme */
 [data-theme="dark"] .primary-execution-block {
   display: flex !important;
-  align-items: center !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
   gap: 8px !important;
   padding: 4px 8px !important;
   background: rgba(124, 95, 176, 0.15) !important;
@@ -253,10 +254,19 @@ a:hover {
   min-height: 28px !important;
   margin: 0 !important;
   position: relative !important;
+  width: 100% !important;
 }
 
 [data-theme="dark"] .primary-execution-block:hover {
   background: rgba(124, 95, 176, 0.25) !important;
+}
+
+/* Primary block content (rank 0) - dark theme */
+[data-theme="dark"] .primary-block-content {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
 }
 
 /* Dropdown for additional ranks - dark theme */

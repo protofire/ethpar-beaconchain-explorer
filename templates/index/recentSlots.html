@@ -57,10 +57,12 @@
                 <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="execution-blocks-container">
                   <!-- Primary block (rank 0) always visible -->
                   <div class="primary-execution-block">
-                    <span class="rank-badge" v-text="slot.execution_ranks[0].rank"></span>
-                    <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
-                       class="block-link" v-text="slot.execution_ranks[0].block_number"></a>
-                    <span class="gas-info" v-text="getGasText(slot.execution_ranks[0].gas_used)"></span>
+                    <div class="primary-block-content">
+                      <span class="rank-badge" v-text="slot.execution_ranks[0].rank"></span>
+                      <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
+                         class="block-link" v-text="slot.execution_ranks[0].block_number"></a>
+                      <span class="gas-info" v-text="getGasText(slot.execution_ranks[0].gas_used)"></span>
+                    </div>
                     
                     <!-- Dropdown for additional ranks -->
                     <div v-if="slot.execution_ranks.length > 1" class="execution-ranks-dropdown">
@@ -134,14 +136,16 @@
                       <div class="execution-blocks-container">
                         <!-- Primary block (rank 0) always visible -->
                         <div class="primary-execution-block">
-                          {{ range $index, $rank := $slot.ExecutionRanks }}
-                            {{ if eq $index 0 }}
-                              <span class="rank-badge">{{ $rank.Rank }}</span>
-                              <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
-                                 class="block-link">{{ $rank.BlockNumber }}</a>
-                              <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
+                          <div class="primary-block-content">
+                            {{ range $index, $rank := $slot.ExecutionRanks }}
+                              {{ if eq $index 0 }}
+                                <span class="rank-badge">{{ $rank.Rank }}</span>
+                                <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
+                                   class="block-link">{{ $rank.BlockNumber }}</a>
+                                <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
+                              {{ end }}
                             {{ end }}
-                          {{ end }}
+                          </div>
                           
                           <!-- Dropdown for additional ranks -->
                           {{ if gt (len $slot.ExecutionRanks) 1 }}
