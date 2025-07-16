@@ -1036,7 +1036,7 @@ func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtabl
 					},
 					{
 						Rank:        1,
-						BlockNumber: uint64(slot.ExecutionBlockNumber), 
+						BlockNumber: uint64(slot.ExecutionBlockNumber),
 						GasUsed:     15000000,
 					},
 					{

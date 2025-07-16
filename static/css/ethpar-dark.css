@@ -227,106 +227,110 @@ a:hover {
   display: block !important;
 }
 
-/* === EXECUTION BLOCKS WITH VERTICAL TIMELINE - DARK THEME === */
+/* === EXECUTION BLOCKS WITH DROPDOWN - DARK THEME === */
 /* Higher specificity to override Bootstrap table styles */
 [data-theme="dark"] .table .execution-blocks-container,
 [data-theme="dark"] table .execution-blocks-container,
 [data-theme="dark"] td .execution-blocks-container {
   display: flex !important;
-  align-items: flex-start !important;
-  gap: 12px !important;
+  align-items: center !important;
+  gap: 8px !important;
   min-width: 200px !important;
   padding: 0 !important;
   margin: 0 !important;
 }
 
-/* Vertical timeline with dots - dark theme */
-[data-theme="dark"] .execution-timeline {
-  position: relative !important;
-  width: 24px !important;
-  min-height: 100px !important;
-  flex-shrink: 0 !important;
-}
-
-[data-theme="dark"] .timeline-line {
-  position: absolute !important;
-  left: 50% !important;
-  top: 8px !important;
-  bottom: 8px !important;
-  width: 2px !important;
-  background: linear-gradient(180deg, #4a4a4a 0%, var(--ethpar-primary) 50%, #4a4a4a 100%) !important;
-  transform: translateX(-50%) !important;
-  border-radius: 1px !important;
-}
-
-[data-theme="dark"] .timeline-dot {
-  position: absolute !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  width: 20px !important;
-  height: 20px !important;
-  border-radius: 50% !important;
-  background: var(--ethpar-primary) !important;
-  border: 2px solid #2a2a2a !important;
-  box-shadow: 0 2px 6px rgba(124, 95, 176, 0.4) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  z-index: 2 !important;
-  transition: all 0.3s ease !important;
-}
-
-[data-theme="dark"] .timeline-dot:hover {
-  transform: translateX(-50%) scale(1.1) !important;
-  box-shadow: 0 4px 12px rgba(124, 95, 176, 0.6) !important;
-}
-
-/* Gas usage based colors for timeline dots - dark theme */
-[data-theme="dark"] .timeline-dot.gas-high {
-  background: var(--ethpar-danger) !important;
-  box-shadow: 0 2px 6px rgba(199, 101, 132, 0.4) !important;
-}
-
-[data-theme="dark"] .timeline-dot.gas-medium {
-  background: var(--ethpar-warning) !important;
-  box-shadow: 0 2px 6px rgba(212, 168, 85, 0.4) !important;
-}
-
-[data-theme="dark"] .timeline-dot.gas-low {
-  background: var(--ethpar-success) !important;
-  box-shadow: 0 2px 6px rgba(92, 184, 154, 0.4) !important;
-}
-
-[data-theme="dark"] .dot-rank {
-  color: white !important;
-  font-size: 0.6rem !important;
-  font-weight: bold !important;
-}
-
-/* Execution blocks list - dark theme */
-[data-theme="dark"] .execution-blocks-list {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 4px !important;
-  flex: 1 !important;
-  min-width: 140px !important;
-}
-
-[data-theme="dark"] .execution-block-item {
+/* Primary execution block - dark theme */
+[data-theme="dark"] .primary-execution-block {
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
   padding: 4px 8px !important;
-  background: rgba(124, 95, 176, 0.1) !important;
+  background: rgba(124, 95, 176, 0.15) !important;
   border-radius: 6px !important;
-  border: 1px solid rgba(124, 95, 176, 0.2) !important;
+  border: 1px solid rgba(124, 95, 176, 0.3) !important;
   transition: background-color 0.2s ease !important;
   min-height: 28px !important;
   margin: 0 !important;
+  position: relative !important;
 }
 
-[data-theme="dark"] .execution-block-item:hover {
-  background: rgba(124, 95, 176, 0.15) !important;
+[data-theme="dark"] .primary-execution-block:hover {
+  background: rgba(124, 95, 176, 0.25) !important;
+}
+
+/* Dropdown for additional ranks - dark theme */
+[data-theme="dark"] .execution-ranks-dropdown {
+  position: relative !important;
+  display: inline-block !important;
+  margin-left: 4px !important;
+}
+
+[data-theme="dark"] .dropdown-toggle-btn {
+  background: var(--ethpar-primary) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  font-size: 0.7rem !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  transition: background-color 0.2s ease !important;
+}
+
+[data-theme="dark"] .dropdown-toggle-btn:hover {
+  background: rgba(124, 95, 176, 0.8) !important;
+}
+
+[data-theme="dark"] .dropdown-toggle-btn:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(124, 95, 176, 0.5) !important;
+}
+
+[data-theme="dark"] .additional-count {
+  font-weight: bold !important;
+  font-size: 0.65rem !important;
+}
+
+[data-theme="dark"] .dropdown-menu {
+  position: absolute !important;
+  top: 100% !important;
+  right: 0 !important;
+  z-index: 1000 !important;
+  background: #2a2a2a !important;
+  border: 1px solid rgba(124, 95, 176, 0.3) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  padding: 4px 0 !important;
+  margin: 2px 0 0 0 !important;
+  min-width: 200px !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  display: none !important;
+}
+
+[data-theme="dark"] .dropdown-menu.show {
+  display: block !important;
+}
+
+[data-theme="dark"] .dropdown-menu .execution-block-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 6px 12px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  transition: background-color 0.2s ease !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  color: #e2e2e2 !important;
+}
+
+[data-theme="dark"] .dropdown-menu .execution-block-item:hover {
+  background: rgba(124, 95, 176, 0.2) !important;
 }
 
 [data-theme="dark"] .rank-badge {
@@ -338,6 +342,7 @@ a:hover {
   font-weight: bold !important;
   min-width: 20px !important;
   text-align: center !important;
+  flex-shrink: 0 !important;
 }
 
 [data-theme="dark"] .block-link {
@@ -345,56 +350,62 @@ a:hover {
   text-decoration: none !important;
   font-weight: 500 !important;
   font-size: 0.8rem !important;
+  flex: 1 !important;
 }
 
 [data-theme="dark"] .block-link:hover {
-  color: var(--ethpar-accent) !important;
+  color: var(--ethpar-primary) !important;
   text-decoration: underline !important;
 }
 
 [data-theme="dark"] .gas-info {
-  color: #9ca3af !important;
+  color: #b0b0b0 !important;
   font-size: 0.7rem !important;
   font-weight: 500 !important;
-  margin-left: auto !important;
+  flex-shrink: 0 !important;
+  background: rgba(124, 95, 176, 0.2) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
 }
 
 [data-theme="dark"] .no-execution-blocks {
   padding: 8px !important;
   text-align: center !important;
-  color: #6b7280 !important;
 }
 
-/* Dark theme responsive adjustments */
+/* Dark theme responsive design */
 @media (max-width: 768px) {
   [data-theme="dark"] .execution-blocks-container {
     flex-direction: column !important;
-    gap: 8px !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
     min-width: 150px !important;
   }
   
-  [data-theme="dark"] .execution-timeline {
+  [data-theme="dark"] .primary-execution-block {
     width: 100% !important;
-    height: 20px !important;
-    min-height: 20px !important;
+    padding: 3px 6px !important;
+    gap: 6px !important;
   }
   
-  [data-theme="dark"] .timeline-line {
-    top: 50% !important;
-    bottom: auto !important;
-    left: 8px !important;
-    right: 8px !important;
-    width: auto !important;
-    height: 2px !important;
-    transform: translateY(-50%) !important;
-    background: linear-gradient(90deg, #4a4a4a 0%, var(--ethpar-primary) 50%, #4a4a4a 100%) !important;
+  [data-theme="dark"] .dropdown-menu {
+    right: auto !important;
+    left: 0 !important;
+    min-width: 180px !important;
   }
   
-  [data-theme="dark"] .timeline-dot {
-    position: relative !important;
-    left: auto !important;
-    transform: none !important;
-    display: inline-flex !important;
-    margin: 0 4px !important;
+  [data-theme="dark"] .rank-badge {
+    padding: 1px 4px !important;
+    font-size: 0.65rem !important;
+    min-width: 18px !important;
+  }
+  
+  [data-theme="dark"] .block-link {
+    font-size: 0.75rem !important;
+  }
+  
+  [data-theme="dark"] .gas-info {
+    font-size: 0.65rem !important;
+    padding: 1px 4px !important;
   }
 }

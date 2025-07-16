@@ -53,26 +53,34 @@
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
               <td>
-                <!-- Vertical line with dots and execution blocks list -->
+                <!-- Execution blocks with dropdown for multiple ranks -->
                 <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="execution-blocks-container">
-                  <!-- Vertical line with dots -->
-                  <div class="execution-timeline">
-                    <div class="timeline-line"></div>
-                    <div v-for="(rank, index) in slot.execution_ranks" 
-                         class="timeline-dot"
-                         v-bind:style="{ top: (index * 32 + 16) + 'px' }"
-                         v-bind:class="getGasColorClass(rank.gas_used)">
-                      <span class="dot-rank" v-text="rank.rank"></span>
-                    </div>
-                  </div>
-                  
-                  <!-- Execution blocks list -->
-                  <div class="execution-blocks-list">
-                    <div v-for="rank in slot.execution_ranks" class="execution-block-item">
-                      <span class="rank-badge" v-text="rank.rank"></span>
-                      <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
-                         class="block-link" v-text="rank.block_number"></a>
-                      <span class="gas-info" v-text="getGasText(rank.gas_used)"></span>
+                  <!-- Primary block (rank 0) always visible -->
+                  <div class="primary-execution-block">
+                    <span class="rank-badge" v-text="slot.execution_ranks[0].rank"></span>
+                    <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
+                       class="block-link" v-text="slot.execution_ranks[0].block_number"></a>
+                    <span class="gas-info" v-text="getGasText(slot.execution_ranks[0].gas_used)"></span>
+                    
+                    <!-- Dropdown for additional ranks -->
+                    <div v-if="slot.execution_ranks.length > 1" class="execution-ranks-dropdown">
+                      <button class="dropdown-toggle-btn" 
+                              v-bind:id="'dropdown-' + slot.slot"
+                              data-toggle="dropdown" 
+                              aria-haspopup="true" 
+                              aria-expanded="false">
+                        <i class="fa fa-chevron-down"></i>
+                        <span class="additional-count">+{{ slot.execution_ranks.length - 1 }}</span>
+                      </button>
+                      <div class="dropdown-menu" v-bind:aria-labelledby="'dropdown-' + slot.slot">
+                        <div v-for="(rank, index) in slot.execution_ranks.slice(1)" 
+                             class="dropdown-item execution-block-item">
+                          <span class="rank-badge" v-text="rank.rank"></span>
+                          <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
+                             class="block-link" v-text="rank.block_number"></a>
+                          <span class="gas-info" v-text="getGasText(rank.gas_used)"></span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -121,29 +129,42 @@
                   <td>{{ formatAddCommas $slot.Attestations }}</td>
                   <td>{{ formatAddCommas $slot.Deposits }}</td>
                   <td>
-                    <!-- Vertical line with dots and execution blocks list (server-side) -->
+                    <!-- Execution blocks with dropdown for multiple ranks (server-side) -->
                     {{ if $slot.ExecutionRanks }}
                       <div class="execution-blocks-container">
-                        <!-- Vertical line with dots -->
-                        <div class="execution-timeline">
-                          <div class="timeline-line"></div>
+                        <!-- Primary block (rank 0) always visible -->
+                        <div class="primary-execution-block">
                           {{ range $index, $rank := $slot.ExecutionRanks }}
-                            <div class="timeline-dot" 
-                                 data-position="{{ $index }}"
-                                 data-gas-used="{{ $rank.GasUsed }}">
-                              <span class="dot-rank">{{ $rank.Rank }}</span>
-                            </div>
-                          {{ end }}
-                        </div>
-                        
-                        <!-- Execution blocks list -->
-                        <div class="execution-blocks-list">
-                          {{ range $rank := $slot.ExecutionRanks }}
-                            <div class="execution-block-item">
+                            {{ if eq $index 0 }}
                               <span class="rank-badge">{{ $rank.Rank }}</span>
                               <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
                                  class="block-link">{{ $rank.BlockNumber }}</a>
                               <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
+                            {{ end }}
+                          {{ end }}
+                          
+                          <!-- Dropdown for additional ranks -->
+                          {{ if gt (len $slot.ExecutionRanks) 1 }}
+                            <div class="execution-ranks-dropdown">
+                              <button class="dropdown-toggle-btn" 
+                                      id="dropdown-{{ $slot.Slot }}"
+                                      type="button"
+                                      data-total-ranks="{{ len $slot.ExecutionRanks }}">
+                                <i class="fa fa-chevron-down"></i>
+                                <span class="additional-count"></span>
+                              </button>
+                              <div class="dropdown-menu">
+                                {{ range $index, $rank := $slot.ExecutionRanks }}
+                                  {{ if ne $index 0 }}
+                                    <div class="dropdown-item execution-block-item">
+                                      <span class="rank-badge">{{ $rank.Rank }}</span>
+                                      <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
+                                         class="block-link">{{ $rank.BlockNumber }}</a>
+                                      <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
+                                    </div>
+                                  {{ end }}
+                                {{ end }}
+                              </div>
                             </div>
                           {{ end }}
                         </div>
@@ -175,7 +196,6 @@
       </div>
     </div>
   </div>
-  </script>
 
   <!-- 
     Scripts moved to external files:

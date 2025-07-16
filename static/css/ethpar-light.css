@@ -211,92 +211,21 @@ a:hover {
   display: block !important;
 }
 
-/* === EXECUTION BLOCKS WITH VERTICAL TIMELINE === */
+/* === EXECUTION BLOCKS WITH DROPDOWN === */
 /* Higher specificity to override Bootstrap table styles */
 .table .execution-blocks-container,
 table .execution-blocks-container,
 td .execution-blocks-container {
   display: flex !important;
-  align-items: flex-start !important;
-  gap: 12px !important;
+  align-items: center !important;
+  gap: 8px !important;
   min-width: 200px !important;
   padding: 0 !important;
   margin: 0 !important;
 }
 
-/* Vertical timeline with dots */
-.execution-timeline {
-  position: relative !important;
-  width: 24px !important;
-  min-height: 100px !important;
-  flex-shrink: 0 !important;
-}
-
-.timeline-line {
-  position: absolute !important;
-  left: 50% !important;
-  top: 8px !important;
-  bottom: 8px !important;
-  width: 2px !important;
-  background: linear-gradient(180deg, #e2e8f0 0%, var(--ethpar-primary) 50%, #e2e8f0 100%) !important;
-  transform: translateX(-50%) !important;
-  border-radius: 1px !important;
-}
-
-.timeline-dot {
-  position: absolute !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  width: 20px !important;
-  height: 20px !important;
-  border-radius: 50% !important;
-  background: var(--ethpar-primary) !important;
-  border: 2px solid white !important;
-  box-shadow: 0 2px 6px rgba(124, 95, 176, 0.3) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  z-index: 2 !important;
-  transition: all 0.3s ease !important;
-}
-
-.timeline-dot:hover {
-  transform: translateX(-50%) scale(1.1) !important;
-  box-shadow: 0 4px 12px rgba(124, 95, 176, 0.5) !important;
-}
-
-/* Gas usage based colors for timeline dots - using theme colors */
-.timeline-dot.gas-high {
-  background: var(--ethpar-danger) !important;
-  box-shadow: 0 2px 6px rgba(199, 101, 132, 0.3) !important;
-}
-
-.timeline-dot.gas-medium {
-  background: var(--ethpar-warning) !important;
-  box-shadow: 0 2px 6px rgba(212, 168, 85, 0.3) !important;
-}
-
-.timeline-dot.gas-low {
-  background: var(--ethpar-success) !important;
-  box-shadow: 0 2px 6px rgba(92, 184, 154, 0.3) !important;
-}
-
-.dot-rank {
-  color: white !important;
-  font-size: 0.6rem !important;
-  font-weight: bold !important;
-}
-
-/* Execution blocks list */
-.execution-blocks-list {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 4px !important;
-  flex: 1 !important;
-  min-width: 140px !important;
-}
-
-.execution-block-item {
+/* Primary execution block (always visible) */
+.primary-execution-block {
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
@@ -307,9 +236,84 @@ td .execution-blocks-container {
   transition: background-color 0.2s ease !important;
   min-height: 28px !important;
   margin: 0 !important;
+  position: relative !important;
 }
 
-.execution-block-item:hover {
+.primary-execution-block:hover {
+  background: rgba(124, 95, 176, 0.1) !important;
+}
+
+/* Dropdown for additional ranks */
+.execution-ranks-dropdown {
+  position: relative !important;
+  display: inline-block !important;
+  margin-left: 4px !important;
+}
+
+.dropdown-toggle-btn {
+  background: var(--ethpar-primary) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  font-size: 0.7rem !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.dropdown-toggle-btn:hover {
+  background: rgba(124, 95, 176, 0.8) !important;
+}
+
+.dropdown-toggle-btn:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(124, 95, 176, 0.3) !important;
+}
+
+.additional-count {
+  font-weight: bold !important;
+  font-size: 0.65rem !important;
+}
+
+.dropdown-menu {
+  position: absolute !important;
+  top: 100% !important;
+  right: 0 !important;
+  z-index: 1000 !important;
+  background: white !important;
+  border: 1px solid rgba(124, 95, 176, 0.2) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  padding: 4px 0 !important;
+  margin: 2px 0 0 0 !important;
+  min-width: 200px !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  display: none !important;
+}
+
+.dropdown-menu.show {
+  display: block !important;
+}
+
+.dropdown-menu .execution-block-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 6px 12px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  transition: background-color 0.2s ease !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  color: inherit !important;
+}
+
+.dropdown-menu .execution-block-item:hover {
   background: rgba(124, 95, 176, 0.1) !important;
 }
 
@@ -322,6 +326,7 @@ td .execution-blocks-container {
   font-weight: bold !important;
   min-width: 20px !important;
   text-align: center !important;
+  flex-shrink: 0 !important;
 }
 
 .block-link {
@@ -329,6 +334,7 @@ td .execution-blocks-container {
   text-decoration: none !important;
   font-weight: 500 !important;
   font-size: 0.8rem !important;
+  flex: 1 !important;
 }
 
 .block-link:hover {
@@ -340,7 +346,10 @@ td .execution-blocks-container {
   color: #6b7280 !important;
   font-size: 0.7rem !important;
   font-weight: 500 !important;
-  margin-left: auto !important;
+  flex-shrink: 0 !important;
+  background: rgba(124, 95, 176, 0.1) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
 }
 
 .no-execution-blocks {
@@ -348,36 +357,39 @@ td .execution-blocks-container {
   text-align: center !important;
 }
 
-/* Dark theme responsive adjustments */
+/* Responsive design */
 @media (max-width: 768px) {
   .execution-blocks-container {
     flex-direction: column !important;
-    gap: 8px !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
     min-width: 150px !important;
   }
   
-  .execution-timeline {
+  .primary-execution-block {
     width: 100% !important;
-    height: 20px !important;
-    min-height: 20px !important;
+    padding: 3px 6px !important;
+    gap: 6px !important;
   }
   
-  .timeline-line {
-    top: 50% !important;
-    bottom: auto !important;
-    left: 8px !important;
-    right: 8px !important;
-    width: auto !important;
-    height: 2px !important;
-    transform: translateY(-50%) !important;
-    background: linear-gradient(90deg, #e2e8f0 0%, var(--ethpar-primary) 50%, #e2e8f0 100%) !important;
+  .dropdown-menu {
+    right: auto !important;
+    left: 0 !important;
+    min-width: 180px !important;
   }
   
-  .timeline-dot {
-    position: relative !important;
-    left: auto !important;
-    transform: none !important;
-    display: inline-flex !important;
-    margin: 0 4px !important;
+  .rank-badge {
+    padding: 1px 4px !important;
+    font-size: 0.65rem !important;
+    min-width: 18px !important;
+  }
+  
+  .block-link {
+    font-size: 0.75rem !important;
+  }
+  
+  .gas-info {
+    font-size: 0.65rem !important;
+    padding: 1px 4px !important;
   }
 }
