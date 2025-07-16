@@ -227,7 +227,8 @@ td .execution-blocks-container {
 /* Primary execution block (always visible) */
 .primary-execution-block {
   display: flex !important;
-  align-items: center !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
   gap: 8px !important;
   padding: 4px 8px !important;
   background: rgba(124, 95, 176, 0.05) !important;
@@ -237,17 +238,25 @@ td .execution-blocks-container {
   min-height: 28px !important;
   margin: 0 !important;
   position: relative !important;
+  width: 100% !important;
 }
 
 .primary-execution-block:hover {
   background: rgba(124, 95, 176, 0.1) !important;
 }
 
+/* Primary block content (rank 0) */
+.primary-block-content {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
 /* Dropdown for additional ranks */
 .execution-ranks-dropdown {
   position: relative !important;
-  display: inline-block !important;
-  margin-left: 4px !important;
+  width: 100% !important;
 }
 
 .dropdown-toggle-btn {
@@ -255,13 +264,16 @@ td .execution-blocks-container {
   color: white !important;
   border: none !important;
   border-radius: 4px !important;
-  padding: 2px 6px !important;
+  padding: 4px 8px !important;
   font-size: 0.7rem !important;
   cursor: pointer !important;
   display: flex !important;
   align-items: center !important;
-  gap: 3px !important;
+  justify-content: center !important;
+  gap: 4px !important;
   transition: background-color 0.2s ease !important;
+  width: 100% !important;
+  margin-top: 4px !important;
 }
 
 .dropdown-toggle-btn:hover {
@@ -281,6 +293,7 @@ td .execution-blocks-container {
 .dropdown-menu {
   position: absolute !important;
   top: 100% !important;
+  left: 0 !important;
   right: 0 !important;
   z-index: 1000 !important;
   background: white !important;
@@ -289,7 +302,7 @@ td .execution-blocks-container {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
   padding: 4px 0 !important;
   margin: 2px 0 0 0 !important;
-  min-width: 200px !important;
+  width: 100% !important;
   max-height: 300px !important;
   overflow-y: auto !important;
   display: none !important;
