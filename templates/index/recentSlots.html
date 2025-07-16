@@ -70,7 +70,7 @@
                               aria-haspopup="true" 
                               aria-expanded="false">
                         <i class="fa fa-chevron-down"></i>
-                        <span class="additional-count">+{{ slot.execution_ranks.length - 1 }}</span>
+                        <span class="additional-count">+${ slot.execution_ranks.length - 1 }</span>
                       </button>
                       <div class="dropdown-menu" v-bind:aria-labelledby="'dropdown-' + slot.slot">
                         <div v-for="(rank, index) in slot.execution_ranks.slice(1)" 
