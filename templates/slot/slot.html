@@ -311,7 +311,7 @@
         }
       }
     }
-    activateTabbarSwitcher("tabContent", "tab", "overview")
+    // activateTabbarSwitcher("tabContent", "tab", "overview")
   </script>
 
   <script>
@@ -466,16 +466,18 @@
             </div>
           </div>
         {{ end }}
-        <div class="tab-pane fade" id="attestationsTabPanel" role="tabpanel" aria-labelledby="attestations-tab">
-          <div class="card block-card">
-            <div style="margin-bottom: -.25rem;" class="card-body px-0 py-1">
-              <div class="row p-1 mx-0">
-                <h3 class="h5 col-md-12 text-center"><b>Showing {{ .AttestationsCount }} Attestations </b></h3>
+        {{ if gt .AttestationsCount 0 }}
+          <div class="tab-pane fade" id="attestationsTabPanel" role="tabpanel" aria-labelledby="attestations-tab">
+            <div class="card block-card">
+              <div style="margin-bottom: -.25rem;" class="card-body px-0 py-1">
+                <div class="row p-1 mx-0">
+                  <h3 class="h5 col-md-12 text-center"><b>Showing {{ .AttestationsCount }} Attestations </b></h3>
+                </div>
               </div>
             </div>
+            {{ template "block_attestations" . }}
           </div>
-          {{ template "block_attestations" . }}
-        </div>
+        {{ end }}
         {{ if .ExecutionData }}
           <div class="tab-pane fade" id="transactionsTabPanel" role="tabpanel" aria-labelledby="transactions-tab">
             <div class="card block-card py-1">
