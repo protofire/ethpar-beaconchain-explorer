@@ -182,7 +182,42 @@
             </div>
           {{ end }}
 
-          {{ with .ExecutionData }}
+          {{ if .ExecutionRanks }}
+            {{ range $index, $rank := .ExecutionRanks }}
+              {{ if eq $index 0 }}
+                <div class="row border-bottom p-3 mx-0">
+                  <div class="col-md-2">
+                    <span data-toggle="tooltip" data-placement="top" title="Beacon Block (Rank 0) - Primary execution block for this slot">Beacon Block (Rank {{ $rank.Rank }}):</span>
+                  </div>
+                  <div class="col-md-10">
+                    <div class="row p-1">
+                      <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Block Number, the height, not the slot">Block Number:</span></div>
+                      <div class="col-md-10 text-monospace text-break">
+                        <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}">{{ $rank.BlockNumber }}</a>
+                        <span class="badge bg-success text-white ml-2">Beacon Block</span>
+                      </div>
+                    </div>
+                    
+                    <div class="row p-1">
+                      <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Gas Used">Gas Used:</span></div>
+                      <div class="col-md-10 text-monospace text-break">{{ formatAddCommas $rank.GasUsed }}</div>
+                    </div>
+                    
+                    {{ if gt (len $.ExecutionRanks) 1 }}
+                      <div class="row p-1">
+                        <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Additional parallel execution blocks">Parallel Blocks:</span></div>
+                        <div class="col-md-10">
+                          <span class="badge bg-info text-white">{{ sub (len $.ExecutionRanks) 1 }} additional execution blocks</span>
+                          <small class="text-muted ml-2">See "Parallel Blocks" tab for details</small>
+                        </div>
+                      </div>
+                    {{ end }}
+                  </div>
+                </div>
+              {{ end }}
+            {{ end }}
+          {{ else }}
+            {{ with .ExecutionData }}
             <div class="row border-bottom p-3 mx-0">
               <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Received Eth Block headers and Deposit data">Execution Payload:</span></div>
               <div class="col-md-10">
@@ -295,6 +330,7 @@
                 </div>
               </div>
             </div>
+            {{ end }}
           {{ end }}
           <div class="row border-bottom p-3 mx-0">
             <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Amount of attestations included in this block by the block proposer">Attestations:</span></div>

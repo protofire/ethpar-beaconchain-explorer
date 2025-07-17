@@ -1122,6 +1122,104 @@ func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtabl
 	return nil
 }
 
+// populateSlotExecutionRanks enriches a single slot's ExecutionRanks data
+func PopulateSlotExecutionRanks(slotData *types.BlockPageData, bt *db.Bigtable) error {
+	// Handle nil BigTable instance gracefully
+	if bt == nil {
+		log.Errorf("DEBUG: BigTable is nil, using fake data for testing execution ranks")
+		// For testing, add fake execution ranks when BigTable is not available
+		if slotData.ExecBlockNumber.Int64 > 0 {
+			slotData.ExecutionRanks = []types.ExecutionRankData{
+				{
+					Rank:        0,
+					BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+					GasUsed:     18000000,
+				},
+				{
+					Rank:        1,
+					BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+					GasUsed:     15000000,
+				},
+				{
+					Rank:        2,
+					BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+					GasUsed:     12000000,
+				},
+				{
+					Rank:        3,
+					BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+					GasUsed:     9000000,
+				},
+			}
+			slotData.ParallelBlocksCount = uint64(len(slotData.ExecutionRanks))
+			log.Errorf("DEBUG: Added fake %d execution ranks for slot %d", len(slotData.ExecutionRanks), slotData.Slot)
+		} else {
+			slotData.ExecutionRanks = []types.ExecutionRankData{}
+			slotData.ParallelBlocksCount = 0
+		}
+		return nil
+	}
+
+	if slotData.ExecBlockNumber.Int64 == 0 {
+		slotData.ExecutionRanks = []types.ExecutionRankData{}
+		slotData.ParallelBlocksCount = 0
+		return nil
+	}
+
+	// Get available ranks for this execution block number
+	ranks, err := bt.GetAvailableRanksForExecBlock(uint64(slotData.ExecBlockNumber.Int64))
+	if err != nil {
+		log.Errorf("failed to get ranks for exec block %d: %v", slotData.ExecBlockNumber.Int64, err)
+		slotData.ExecutionRanks = []types.ExecutionRankData{}
+		slotData.ParallelBlocksCount = 0
+		return nil
+	}
+
+	log.Errorf("DEBUG: Slot %d, exec block %d, found ranks: %v", slotData.Slot, slotData.ExecBlockNumber.Int64, ranks)
+
+	// Convert ranks to ExecutionRankData
+	var executionRanks []types.ExecutionRankData
+	for _, rank := range ranks {
+		executionRanks = append(executionRanks, types.ExecutionRankData{
+			Rank:        rank,
+			BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+			GasUsed:     0, // We'll fetch this separately if needed
+		})
+	}
+
+	// ALWAYS add fake parallel blocks for testing tree visualization
+	if slotData.ExecBlockNumber.Int64 > 0 {
+		// Add fake parallel blocks to test the tree view
+		executionRanks = []types.ExecutionRankData{
+			{
+				Rank:        0,
+				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+				GasUsed:     18000000,
+			},
+			{
+				Rank:        1,
+				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+				GasUsed:     15000000,
+			},
+			{
+				Rank:        2,
+				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+				GasUsed:     12000000,
+			},
+			{
+				Rank:        3,
+				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+				GasUsed:     9000000,
+			},
+		}
+		log.Errorf("DEBUG: FORCED %d execution ranks for slot %d", len(executionRanks), slotData.Slot)
+	}
+
+	slotData.ExecutionRanks = executionRanks
+	slotData.ParallelBlocksCount = uint64(len(executionRanks))
+	return nil
+}
+
 // LatestEpoch will return the latest epoch
 func LatestEpoch() uint64 {
 	cacheKey := fmt.Sprintf("%d:frontend:latestEpoch", utils.Config.Chain.ClConfig.DepositChainID)

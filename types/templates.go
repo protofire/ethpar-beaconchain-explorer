@@ -703,6 +703,7 @@ type BlockPageData struct {
 	SyncCommittee     []uint64 // TODO: Setting it to contain the validator index
 	BlobSidecars      []*BlockPageBlobSidecar
 	ParallelBlocks    []*BlockPageParallelBlock // Parallel blocks included in this slot
+	ExecutionRanks    []ExecutionRankData       // For EthPar - detailed execution blocks data for this slot
 
 	Tags       TagMetadataSlice `db:"tags"`
 	IsValidMev bool             `db:"is_valid_mev"`
@@ -1117,8 +1118,8 @@ type ValidatorAttestationSlashing struct {
 	Epoch                  uint64        `db:"epoch" json:"epoch,omitempty"`
 	Slot                   uint64        `db:"slot" json:"slot,omitempty"`
 	Proposer               int64         `db:"proposer" json:"proposer,omitempty"`
-	Attestestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
-	Attestestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
+	Attestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
+	Attestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
 }
 
 type ValidatorProposerSlashing struct {
@@ -1146,8 +1147,8 @@ type ValidatorSlashing struct {
 	Slot                   uint64        `db:"slot" json:"slot,omitempty"`
 	Proposer               int64        `db:"proposer" json:"proposer,omitempty"`
 	SlashedValidator       *int64        `db:"slashedvalidator" json:"slashed_validator,omitempty"`
-	Attestestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
-	Attestestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
+	Attestation1Indices pq.Int64Array `db:"attestation1_indices" json:"attestation1_indices,omitempty"`
+	Attestation2Indices pq.Int64Array `db:"attestation2_indices" json:"attestation2_indices,omitempty"`
 	Type                   string        `db:"type" json:"type"`
 }
 
@@ -1433,6 +1434,7 @@ type ApiStatistics struct {
 }
 
 type RocketpoolPageData struct{}
+
 type RocketpoolPageDataMinipool struct {
 	TotalCount               uint64    `db:"total_count"`
 	RocketpoolStorageAddress []byte    `db:"rocketpool_storage_address"`

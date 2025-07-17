@@ -114,7 +114,7 @@ func ValidatorsSlashingsData(w http.ResponseWriter, r *http.Request) {
 		slashedValidators := []int64{}
 
 		if row.Type == "Attestation Violation" {
-			inter := intersect.Simple(row.Attestestation1Indices, row.Attestestation2Indices)
+			inter := intersect.Simple(row.Attestation1Indices, row.Attestation2Indices)
 			if len(inter) == 0 {
 				log.Warnf("No intersection found for attestation violation, proposer: %v, slot: %v", row.Proposer, row.Slot)
 			}

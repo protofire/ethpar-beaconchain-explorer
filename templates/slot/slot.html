@@ -380,11 +380,11 @@
 
       <ul style="margin-bottom: -1px; " class="nav nav-tabs justify-content-start" id="tab" role="tablist">
         <li class="nav-item">
-          <a class="nav-link active" id="overview-tab" data-toggle="tab" href="#overview" role="tab" aria-controls="overview" aria-selected="true">Overview</a>
+          <a class="nav-link active" id="overview-tab" data-toggle="tab" href="#overviewTabPanel" role="tab" aria-controls="overviewTabPanel" aria-selected="true">Overview</a>
         </li>
         {{ if gt .ParallelBlocksCount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="parallel-blocks-tab" data-toggle="tab" href="#parallel-blocksTabPanel" role="tab" aria-controls="parallel-blocksTabPanel" aria-selected="false">Parallel Blocks <span class="badge bg-secondary text-white">{{ .ParallelBlocksCount }}</span></a>
+            <a class="nav-link" id="parallel-blocks-tab" data-toggle="tab" href="#parallel-blocksTabPanel" role="tab" aria-controls="parallel-blocksTabPanel" aria-selected="false">Execution Blocks <span class="badge bg-secondary text-white">{{ .ParallelBlocksCount }}</span></a>
           </li>
         {{ end }}
         {{ with .ExecutionData }}
@@ -441,7 +441,7 @@
         }
       </style>
       <div class="tab-content" id="tabContent">
-        <div class="tab-pane fade" id="overviewTabPanel" role="tabpanel" aria-labelledby="overview-tab">
+        <div class="tab-pane fade show active" id="overviewTabPanel" role="tabpanel" aria-labelledby="overview-tab">
           <div class="card block-card">
             {{ template "block_overview" $ }}
           </div>
