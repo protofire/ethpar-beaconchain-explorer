@@ -390,48 +390,48 @@
         {{ end }}
         {{ with .ExecutionData }}
           <li class="nav-item">
-            <a class="nav-link" id="transactions-tab" data-toggle="tab" href="#transactions" role="tab" aria-controls="transactions" aria-selected="false">Transactions <span class="badge bg-secondary text-white">{{ .TxCount }}</span></a>
+            <a class="nav-link" id="transactions-tab" data-toggle="tab" href="#transactionsTabPanel" role="tab" aria-controls="transactionsTabPanel" aria-selected="false">Transactions <span class="badge bg-secondary text-white">{{ .TxCount }}</span></a>
           </li>
         {{ end }}
         <li class="nav-item">
-          <a class="nav-link" id="votes-tab" data-toggle="tab" href="#votes" role="tab" aria-controls="votes" aria-selected="false">Votes <span class="badge bg-secondary text-white">{{ .VotesCount }}</span></a>
+          <a class="nav-link" id="votes-tab" data-toggle="tab" href="#votesTabPanel" role="tab" aria-controls="votesTabPanel" aria-selected="false">Votes <span class="badge bg-secondary text-white">{{ .VotesCount }}</span></a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" id="attestations-tab" data-toggle="tab" href="#attestations" role="tab" aria-controls="attestations" aria-selected="false">Attestations <span class="badge bg-secondary text-white">{{ .AttestationsCount }}</span></a>
+          <a class="nav-link" id="attestations-tab" data-toggle="tab" href="#attestationsTabPanel" role="tab" aria-controls="attestationsTabPanel" aria-selected="false">Attestations <span class="badge bg-secondary text-white">{{ .AttestationsCount }}</span></a>
         </li>
         {{ if gt .DepositsCount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="deposits-tab" data-toggle="tab" href="#deposits" role="tab" aria-controls="deposits" aria-selected="false">Deposits <span class="badge bg-secondary text-white">{{ .DepositsCount }}</span></a>
+            <a class="nav-link" id="deposits-tab" data-toggle="tab" href="#depositsTabPanel" role="tab" aria-controls="depositsTabPanel" aria-selected="false">Deposits <span class="badge bg-secondary text-white">{{ .DepositsCount }}</span></a>
           </li>
         {{ end }}
         {{ if gt .VoluntaryExitscount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="voluntary-exits-tab" data-toggle="tab" href="#voluntary-exits" role="tab" aria-controls="voluntary-exits" aria-selected="false">Voluntary Exits <span class="badge bg-secondary text-white">{{ .VoluntaryExitscount }}</span></a>
+            <a class="nav-link" id="voluntary-exits-tab" data-toggle="tab" href="#voluntary-exitsTabPanel" role="tab" aria-controls="voluntary-exitsTabPanel" aria-selected="false">Voluntary Exits <span class="badge bg-secondary text-white">{{ .VoluntaryExitscount }}</span></a>
           </li>
         {{ end }}
         {{ if gt .AttesterSlashingsCount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="attester-slashings-tab" data-toggle="tab" href="#attester-slashings" role="tab" aria-controls="attester-slashings" aria-selected="false">Attester Slashings <span class="badge bg-secondary text-white">{{ .AttesterSlashingsCount }}</span></a>
+            <a class="nav-link" id="attester-slashings-tab" data-toggle="tab" href="#attester-slashingsTabPanel" role="tab" aria-controls="attester-slashingsTabPanel" aria-selected="false">Attester Slashings <span class="badge bg-secondary text-white">{{ .AttesterSlashingsCount }}</span></a>
           </li>
         {{ end }}
         {{ if gt .ProposerSlashingsCount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="proposer-slashings-tab" data-toggle="tab" href="#proposer-slashings" role="tab" aria-controls="proposer-slashings" aria-selected="false">Proposer Slashings <span class="badge bg-secondary text-white">{{ .ProposerSlashingsCount }}</span></a>
+            <a class="nav-link" id="proposer-slashings-tab" data-toggle="tab" href="#proposer-slashingsTabPanel" role="tab" aria-controls="proposer-slashingsTabPanel" aria-selected="false">Proposer Slashings <span class="badge bg-secondary text-white">{{ .ProposerSlashingsCount }}</span></a>
           </li>
         {{ end }}
         {{ if gt .WithdrawalCount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="withdrawal-tab" data-toggle="tab" href="#withdrawals" role="tab" aria-controls="withdrawal" aria-selected="false">Withdrawals <span class="badge bg-secondary text-white">{{ .WithdrawalCount }}</span></a>
+            <a class="nav-link" id="withdrawal-tab" data-toggle="tab" href="#withdrawalsTabPanel" role="tab" aria-controls="withdrawalsTabPanel" aria-selected="false">Withdrawals <span class="badge bg-secondary text-white">{{ .WithdrawalCount }}</span></a>
           </li>
         {{ end }}
         {{ if gt .BLSChangeCount 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="blsChange-tab" data-toggle="tab" href="#blsChange" role="tab" aria-controls="blsChange" aria-selected="false">BLS Change <span class="badge bg-secondary text-white">{{ .BLSChangeCount }}</span></a>
+            <a class="nav-link" id="blsChange-tab" data-toggle="tab" href="#blsChangeTabPanel" role="tab" aria-controls="blsChangeTabPanel" aria-selected="false">BLS Change <span class="badge bg-secondary text-white">{{ .BLSChangeCount }}</span></a>
           </li>
         {{ end }}
         {{ if gt (len .BlobSidecars) 0 }}
           <li class="nav-item">
-            <a class="nav-link" id="blobs-tab" data-toggle="tab" href="#blobs" role="tab" aria-controls="blobs" aria-selected="false">Blobs <span class="badge bg-secondary text-white">{{ len .BlobSidecars }}</span></a>
+            <a class="nav-link" id="blobs-tab" data-toggle="tab" href="#blobsTabPanel" role="tab" aria-controls="blobsTabPanel" aria-selected="false">Blobs <span class="badge bg-secondary text-white">{{ len .BlobSidecars }}</span></a>
           </li>
         {{ end }}
       </ul>
