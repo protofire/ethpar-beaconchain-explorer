@@ -5,7 +5,7 @@
     }
   </style>
   <div class="row p-1 mx-0">
-    <div class="col-md-12 text-center"><b>Showing {{ len .Block.ParallelBlocks }} Execution Blocks</b></div>
+    <div class="col-md-12 text-center"><b>Showing {{ len .Data.ParallelBlocks }} Execution Blocks</b></div>
   </div>
   <div class="table-responsive">
     <table class="table table-sm text-left">
@@ -20,7 +20,7 @@
           <th class="border-0">Transactions</th>
           <th class="border-0">Timestamp</th>
         </tr>
-        {{ range .Block.ParallelBlocks }}
+        {{ range .Data.ParallelBlocks }}
           <tr class="border-bottom">
             <td class="border-0">
               {{ if eq .Rank 0 }}

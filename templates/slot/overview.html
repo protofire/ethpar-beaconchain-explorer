@@ -182,8 +182,8 @@
             </div>
           {{ end }}
 
-          {{ if .ExecutionRanks }}
-            {{ range $index, $rank := .ExecutionRanks }}
+          {{ if .Data.ExecutionRanks }}
+            {{ range $index, $rank := .Data.ExecutionRanks }}
               {{ if eq $index 0 }}
                 <div class="row border-bottom p-3 mx-0">
                   <div class="col-md-2">
@@ -203,12 +203,12 @@
                       <div class="col-md-10 text-monospace text-break">{{ formatAddCommas $rank.GasUsed }}</div>
                     </div>
                     
-                    {{ if gt (len $.ExecutionRanks) 1 }}
+                    {{ if gt (len $.Data.ExecutionRanks) 1 }}
                       <div class="row p-1">
                         <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Additional parallel execution blocks">Parallel Blocks:</span></div>
                         <div class="col-md-10">
-                          <span class="badge bg-info text-white">{{ sub (len $.ExecutionRanks) 1 }} additional execution blocks</span>
-                          <small class="text-muted ml-2">See "Parallel Blocks" tab for details</small>
+                          <span class="badge bg-info text-white">{{ sub (len $.Data.ExecutionRanks) 1 }} additional execution blocks</span>
+                          <small class="text-muted ml-2">See "Execution Blocks" tab for details</small>
                         </div>
                       </div>
                     {{ end }}
@@ -217,7 +217,7 @@
               {{ end }}
             {{ end }}
           {{ else }}
-            {{ with .ExecutionData }}
+            {{ with .Data.ExecutionData }}
             <div class="row border-bottom p-3 mx-0">
               <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Received Eth Block headers and Deposit data">Execution Payload:</span></div>
               <div class="col-md-10">
@@ -299,7 +299,7 @@
 
                 <div class="row p-1">
                   <div class="col-md-2"><span data-toggle="tooltip" data-placement="top" title="Transactions">Transactions:</span></div>
-                  <div class="col-md-10 text-monospace text-break">{{ .TxCount }} {{ if gt .BlobTxCount 0 }}({{ .BlobTxCount }} Blob Transactions){{ end }}</div>
+                  <div class="col-md-10 text-monospace text-break">{{ .Data.TxCount }} {{ if gt .Data.BlobTxCount 0 }}({{ .Data.BlobTxCount }} Blob Transactions){{ end }}</div>
                 </div>
 
                 {{ if ge $.Data.Epoch config.Chain.ClConfig.DenebForkEpoch }}
