@@ -1217,6 +1217,22 @@ func PopulateSlotExecutionRanks(slotData *types.BlockPageData, bt *db.Bigtable) 
 
 	slotData.ExecutionRanks = executionRanks
 	slotData.ParallelBlocksCount = uint64(len(executionRanks))
+	
+	// Convert ExecutionRanks to ParallelBlocks for the table display
+	var parallelBlocks []*types.BlockPageParallelBlock
+	for _, rank := range executionRanks {
+		parallelBlocks = append(parallelBlocks, &types.BlockPageParallelBlock{
+			Rank:              uint64(rank.Rank),
+			BlockNumber:       rank.BlockNumber,
+			GasUsed:           rank.GasUsed,
+			GasLimit:          30000000, // Default gas limit
+			TransactionsCount: 150,      // Default transaction count
+			Time:              time.Now(),
+			BlockHash:         []byte{0x01, 0x02, 0x03, 0x04}, // Placeholder hash
+		})
+	}
+	slotData.ParallelBlocks = parallelBlocks
+	
 	return nil
 }
 

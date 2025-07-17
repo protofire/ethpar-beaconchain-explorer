@@ -393,9 +393,11 @@
             <a class="nav-link" id="transactions-tab" data-toggle="tab" href="#transactionsTabPanel" role="tab" aria-controls="transactionsTabPanel" aria-selected="false">Transactions <span class="badge bg-secondary text-white">{{ .TxCount }}</span></a>
           </li>
         {{ end }}
-        <li class="nav-item">
-          <a class="nav-link" id="votes-tab" data-toggle="tab" href="#votesTabPanel" role="tab" aria-controls="votesTabPanel" aria-selected="false">Votes <span class="badge bg-secondary text-white">{{ .VotesCount }}</span></a>
-        </li>
+        {{ if gt .VotesCount 0 }}
+          <li class="nav-item">
+            <a class="nav-link" id="votes-tab" data-toggle="tab" href="#votesTabPanel" role="tab" aria-controls="votesTabPanel" aria-selected="false">Votes <span class="badge bg-secondary text-white">{{ .VotesCount }}</span></a>
+          </li>
+        {{ end }}
         <li class="nav-item">
           <a class="nav-link" id="attestations-tab" data-toggle="tab" href="#attestationsTabPanel" role="tab" aria-controls="attestationsTabPanel" aria-selected="false">Attestations <span class="badge bg-secondary text-white">{{ .AttestationsCount }}</span></a>
         </li>
@@ -450,13 +452,8 @@
         {{ if gt .ParallelBlocksCount 0 }}
           <div class="tab-pane fade" id="parallel-blocksTabPanel" role="tabpanel" aria-labelledby="parallel-blocks-tab">
             <div class="card block-card">
-              <div style="margin-bottom: -.25rem;" class="card-body px-0 py-1">
-                <div class="row p-1 mx-0">
-                  <h3 class="h5 col-md-12 text-center"><b>Showing {{ .ParallelBlocksCount }} Parallel Blocks</b></h3>
-                </div>
-              </div>
+              {{ template "parallel_blocks" . }}
             </div>
-            {{ template "parallel_blocks" . }}
           </div>
         {{ end }}
         {{ if gt .VotesCount 0 }}
