@@ -1024,38 +1024,10 @@ func enrichExecutionRanks(blocks []*types.IndexPageDataBlocks, bt *db.Bigtable) 
 func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtable) error {
 	// Handle nil BigTable instance gracefully
 	if bt == nil {
-		log.Errorf("DEBUG: BigTable is nil, using fake data for testing")
-		// For testing, add fake execution ranks when BigTable is not available
+		log.Errorf("BigTable is nil, skipping execution ranks for recent slots")
 		for _, slot := range slots {
-			if slot.ExecutionBlockNumber > 0 {
-				slot.ExecutionRanks = []types.ExecutionRankData{
-					{
-						Rank:        0,
-						BlockNumber: uint64(slot.ExecutionBlockNumber),
-						GasUsed:     18000000,
-					},
-					{
-						Rank:        1,
-						BlockNumber: uint64(slot.ExecutionBlockNumber),
-						GasUsed:     15000000,
-					},
-					{
-						Rank:        2,
-						BlockNumber: uint64(slot.ExecutionBlockNumber),
-						GasUsed:     12000000,
-					},
-					{
-						Rank:        3,
-						BlockNumber: uint64(slot.ExecutionBlockNumber),
-						GasUsed:     9000000,
-					},
-				}
-				slot.ParallelBlocksCount = uint64(len(slot.ExecutionRanks))
-				log.Errorf("DEBUG: Added fake %d execution ranks for slot %d", len(slot.ExecutionRanks), slot.Slot)
-			} else {
-				slot.ExecutionRanks = []types.ExecutionRankData{}
-				slot.ParallelBlocksCount = 0
-			}
+			slot.ExecutionRanks = []types.ExecutionRankData{}
+			slot.ParallelBlocksCount = 0
 		}
 		return nil
 	}
@@ -1076,44 +1048,30 @@ func enrichSlotsExecutionRanks(slots []*types.IndexPageDataSlots, bt *db.Bigtabl
 			continue
 		}
 
-		log.Errorf("DEBUG: Slot %d, exec block %d, found ranks: %v", slot.Slot, slot.ExecutionBlockNumber, ranks)
+		log.Infof("Slot %d, exec block %d, found %d ranks", slot.Slot, slot.ExecutionBlockNumber, len(ranks))
 
-		// Convert ranks to ExecutionRankData
+		// Convert ranks to ExecutionRankData and fetch detailed block data
 		var executionRanks []types.ExecutionRankData
 		for _, rank := range ranks {
+			// Fetch detailed execution block data using BigTable
+			block, err := bt.GetBlockFromBlocksTable(uint64(slot.ExecutionBlockNumber), uint32(rank))
+			if err != nil {
+				log.Errorf("failed to get execution block data for rank %d: %v", rank, err)
+				// Add minimal data if block fetch fails
+				executionRanks = append(executionRanks, types.ExecutionRankData{
+					Rank:        rank,
+					BlockNumber: uint64(slot.ExecutionBlockNumber),
+					GasUsed:     0,
+				})
+				continue
+			}
+
+			// Add real execution rank data
 			executionRanks = append(executionRanks, types.ExecutionRankData{
 				Rank:        rank,
 				BlockNumber: uint64(slot.ExecutionBlockNumber),
-				GasUsed:     0, // We'll fetch this separately if needed
+				GasUsed:     block.GasUsed,
 			})
-		}
-
-		// ALWAYS add fake parallel blocks for testing tree visualization
-		if slot.ExecutionBlockNumber > 0 {
-			// Add fake parallel blocks to test the tree view
-			executionRanks = []types.ExecutionRankData{
-				{
-					Rank:        0,
-					BlockNumber: uint64(slot.ExecutionBlockNumber),
-					GasUsed:     18000000,
-				},
-				{
-					Rank:        1,
-					BlockNumber: uint64(slot.ExecutionBlockNumber),
-					GasUsed:     15000000,
-				},
-				{
-					Rank:        2,
-					BlockNumber: uint64(slot.ExecutionBlockNumber),
-					GasUsed:     12000000,
-				},
-				{
-					Rank:        3,
-					BlockNumber: uint64(slot.ExecutionBlockNumber),
-					GasUsed:     9000000,
-				},
-			}
-			log.Errorf("DEBUG: FORCED %d execution ranks for slot %d", len(executionRanks), slot.Slot)
 		}
 
 		slot.ExecutionRanks = executionRanks
