@@ -17,13 +17,7 @@
               <th>Proposer</th>
               <th>Attestations</th>
               <th>Deposits</th>
-              {{ if .Slots }}
-                {{ if gt (len .Slots) 0 }}
-                  {{ if gt (index .Slots 0).ParallelBlocksCount 0 }}
-                    <th>Parallel Blocks</th>
-                  {{ end }}
-                {{ end }}
-              {{ end }}
+              <th>Execution Blocks</th>
             </tr>
           </thead>
           <tbody v-if="page && page.slots && page.slots.length">
@@ -52,14 +46,49 @@
                 <span class="badge rounded-pill text-bg-secondary">Unknown</span>
               </td>
               <td>
-                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="slot.ts | timestampTooltip">${slot.ts | fromNow}</span>
+                <span data-toggle="tooltip" data-placement="top" v-bind:data-original-title="new Date(slot.ts).toLocaleString()" v-text="getTimeAgo(slot.ts)"></span>
               </td>
               <td v-if="slot.slot !== 0" v-html="slot.proposer_formatted"></td>
               <td v-else>N/A</td>
               <td v-html="slot.attestations"></td>
               <td v-html="slot.deposits"></td>
-              <td v-if="slot.parallel_blocks_count && slot.parallel_blocks_count > 0">
-                <span class="badge rounded-pill text-bg-info" v-text="slot.parallel_blocks_count"></span>
+              <td>
+                <!-- Execution blocks with dropdown for multiple ranks -->
+                <div v-if="slot.execution_ranks && slot.execution_ranks.length > 0" class="execution-blocks-container">
+                  <!-- Primary block (rank 0) always visible -->
+                  <div class="primary-execution-block">
+                    <div class="primary-block-content">
+                      <span class="rank-badge" v-text="slot.execution_ranks[0].rank"></span>
+                      <a v-bind:href="'/block/' + slot.execution_ranks[0].block_number + '/rank/' + slot.execution_ranks[0].rank" 
+                         class="block-link" v-text="slot.execution_ranks[0].block_number"></a>
+                      <span class="gas-info" v-text="getGasText(slot.execution_ranks[0].gas_used)"></span>
+                    </div>
+                    
+                    <!-- Dropdown for additional ranks -->
+                    <div v-if="slot.execution_ranks.length > 1" class="execution-ranks-dropdown">
+                      <button class="dropdown-toggle-btn" 
+                              v-bind:id="'dropdown-' + slot.slot"
+                              data-toggle="dropdown" 
+                              aria-haspopup="true" 
+                              aria-expanded="false">
+                        <i class="fa fa-chevron-down"></i>
+                        <span class="additional-count">+${ slot.execution_ranks.length - 1 }</span>
+                      </button>
+                      <div class="dropdown-menu" v-bind:aria-labelledby="'dropdown-' + slot.slot">
+                        <div v-for="(rank, index) in slot.execution_ranks.slice(1)" 
+                             class="dropdown-item execution-block-item">
+                          <span class="rank-badge" v-text="rank.rank"></span>
+                          <a v-bind:href="'/block/' + rank.block_number + '/rank/' + rank.rank" 
+                             class="block-link" v-text="rank.block_number"></a>
+                          <span class="gas-info" v-text="getGasText(rank.gas_used)"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="no-execution-blocks">
+                  <span class="text-muted">No execution</span>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -101,17 +130,63 @@
                   </td>
                   <td>{{ formatAddCommas $slot.Attestations }}</td>
                   <td>{{ formatAddCommas $slot.Deposits }}</td>
-                  {{ if gt $slot.ParallelBlocksCount 0 }}
-                    <td>
-                      <span class="badge rounded-pill text-bg-info">{{ $slot.ParallelBlocksCount }}</span>
-                    </td>
-                  {{ end }}
+                  <td>
+                    <!-- Execution blocks with dropdown for multiple ranks (server-side) -->
+                    {{ if $slot.ExecutionRanks }}
+                      <div class="execution-blocks-container">
+                        <!-- Primary block (rank 0) always visible -->
+                        <div class="primary-execution-block">
+                          <div class="primary-block-content">
+                            {{ range $index, $rank := $slot.ExecutionRanks }}
+                              {{ if eq $index 0 }}
+                                <span class="rank-badge">{{ $rank.Rank }}</span>
+                                <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
+                                   class="block-link">{{ $rank.BlockNumber }}</a>
+                                <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
+                              {{ end }}
+                            {{ end }}
+                          </div>
+                          
+                          <!-- Dropdown for additional ranks -->
+                          {{ if gt (len $slot.ExecutionRanks) 1 }}
+                            <div class="execution-ranks-dropdown">
+                              <button class="dropdown-toggle-btn" 
+                                      id="dropdown-{{ $slot.Slot }}"
+                                      type="button"
+                                      data-total-ranks="{{ len $slot.ExecutionRanks }}">
+                                <i class="fa fa-chevron-down"></i>
+                                <span class="additional-count"></span>
+                              </button>
+                              <div class="dropdown-menu">
+                                {{ range $index, $rank := $slot.ExecutionRanks }}
+                                  {{ if ne $index 0 }}
+                                    <div class="dropdown-item execution-block-item">
+                                      <span class="rank-badge">{{ $rank.Rank }}</span>
+                                      <a href="/block/{{ $rank.BlockNumber }}/rank/{{ $rank.Rank }}" 
+                                         class="block-link">{{ $rank.BlockNumber }}</a>
+                                      <span class="gas-info" data-gas-used="{{ $rank.GasUsed }}"></span>
+                                    </div>
+                                  {{ end }}
+                                {{ end }}
+                              </div>
+                            </div>
+                          {{ end }}
+                        </div>
+                      </div>
+                    {{ else if gt $slot.ParallelBlocksCount 0 }}
+                      <span class="badge badge-info">{{ $slot.ParallelBlocksCount }} Blocks</span>
+                    {{ else }}
+                      <div class="no-execution-blocks">
+                        <span class="text-muted">No execution</span>
+                      </div>
+                    {{ end }}
+                  </td>
                 </tr>
               {{ end }}
             {{ else }}
               <!-- No slots data available -->
               <tr>
-                <td colspan="6" class="text-center">
+                <td colspan="7" class="text-center">
                   <div class="p-3 text-muted">
                     <i class="fas fa-clock fa-2x mb-2"></i>
                     <br>
@@ -125,11 +200,15 @@
       </div>
     </div>
   </div>
-  
-  <script>
-    // Format timestamps after DOM is ready
-    $(document).ready(function() {
-      formatTimestamps();
-    });
-  </script>
+
+  <!-- 
+    Scripts moved to external files:
+    - Execution blocks initialization is handled by /js/execution-blocks.js
+    - Timestamp formatting is handled by the global formatTimestamps() function
+  -->
+
+  <!-- 
+    Style definitions moved to static/css/ethpar-light.css and static/css/ethpar-dark.css 
+    for better organization and to avoid duplication.
+  -->
 {{ end }}

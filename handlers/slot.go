@@ -95,6 +95,14 @@ func Slot(bt *db.Bigtable, rpc execution.ExecutionClient) http.HandlerFunc {
 		}
 
 		slotPageData, err := GetSlotPageData(uint64(blockSlot))
+		
+		// Populate ExecutionRanks for EthPar parallel execution visualization
+		if err == nil {
+			if err := services.PopulateSlotExecutionRanks(slotPageData, bt); err != nil {
+				log.Errorf("error populating execution ranks for slot %d: %v", blockSlot, err)
+			}
+		}
+		
 		if err == sql.ErrNoRows {
 			slot := uint64(blockSlot)
 			//Slot not in database -> Show future block

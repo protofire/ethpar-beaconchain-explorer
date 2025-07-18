@@ -1404,7 +1404,7 @@ func ValidatorSlashings(w http.ResponseWriter, r *http.Request) {
 	tableData := make([][]interface{}, 0, len(attesterSlashings)+len(proposerSlashings))
 	for _, b := range attesterSlashings {
 
-		inter := intersect.Simple(b.Attestestation1Indices, b.Attestestation2Indices)
+		inter := intersect.Simple(b.Attestation1Indices, b.Attestation2Indices)
 		slashedValidators := []int64{}
 		if len(inter) == 0 {
 			log.Warn("No intersection found for attestation violation")
