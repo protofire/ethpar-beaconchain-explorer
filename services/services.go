@@ -1177,60 +1177,64 @@ func PopulateSlotExecutionRanks(slotData *types.BlockPageData, bt *db.Bigtable) 
 
 	log.Errorf("DEBUG: Slot %d, exec block %d, found ranks: %v", slotData.Slot, slotData.ExecBlockNumber.Int64, ranks)
 
-	// Convert ranks to ExecutionRankData
+	// Convert ranks to ExecutionRankData and fetch detailed block data
 	var executionRanks []types.ExecutionRankData
+	var parallelBlocks []*types.BlockPageParallelBlock
+
 	for _, rank := range ranks {
+		// Fetch detailed execution block data using BigTable
+		block, err := bt.GetBlockFromBlocksTable(uint64(slotData.ExecBlockNumber.Int64), uint32(rank))
+		if err != nil {
+			log.Errorf("failed to get execution block data for rank %d: %v", rank, err)
+			// Add minimal data if block fetch fails
+			executionRanks = append(executionRanks, types.ExecutionRankData{
+				Rank:        rank,
+				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
+				GasUsed:     0,
+			})
+			continue
+		}
+
+		// Add to ExecutionRanks for overview display
 		executionRanks = append(executionRanks, types.ExecutionRankData{
 			Rank:        rank,
 			BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
-			GasUsed:     0, // We'll fetch this separately if needed
+			GasUsed:     block.GasUsed,
+		})
+
+		// Convert BaseFee from bytes to uint64
+		baseFee := uint64(0)
+		if len(block.BaseFee) > 0 {
+			baseFeeInt := new(big.Int).SetBytes(block.BaseFee)
+			if baseFeeInt.IsUint64() {
+				baseFee = baseFeeInt.Uint64()
+			}
+		}
+
+		// Add to ParallelBlocks for detailed table display  
+		parallelBlocks = append(parallelBlocks, &types.BlockPageParallelBlock{
+			Rank:              uint64(rank),
+			BlockNumber:       uint64(slotData.ExecBlockNumber.Int64),
+			BlockHash:         block.Hash,
+			ParentHash:        block.ParentHash,
+			FeeRecipient:      block.Coinbase,
+			GasUsed:           block.GasUsed,
+			GasLimit:          block.GasLimit,
+			TransactionsCount: uint64(len(block.Transactions)),
+			Time:              block.GetTime().AsTime(),
+			Timestamp:         uint64(block.GetTime().AsTime().Unix()),
+			BaseFeePerGas:     baseFee,
+			ExtraData:         block.Extra,
+			StateRoot:         block.Root,         // Root is the state root
+			ReceiptsRoot:      block.ReceiptHash,  // ReceiptHash is the receipts root
+			LogsBloom:         block.Bloom,
 		})
 	}
 
-	// ALWAYS add fake parallel blocks for testing tree visualization
-	if slotData.ExecBlockNumber.Int64 > 0 {
-		// Add fake parallel blocks to test the tree view
-		executionRanks = []types.ExecutionRankData{
-			{
-				Rank:        0,
-				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
-				GasUsed:     18000000,
-			},
-			{
-				Rank:        1,
-				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
-				GasUsed:     15000000,
-			},
-			{
-				Rank:        2,
-				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
-				GasUsed:     12000000,
-			},
-			{
-				Rank:        3,
-				BlockNumber: uint64(slotData.ExecBlockNumber.Int64),
-				GasUsed:     9000000,
-			},
-		}
-		log.Errorf("DEBUG: FORCED %d execution ranks for slot %d", len(executionRanks), slotData.Slot)
-	}
+	log.Infof("Successfully populated %d execution ranks for slot %d", len(executionRanks), slotData.Slot)
 
 	slotData.ExecutionRanks = executionRanks
 	slotData.ParallelBlocksCount = uint64(len(executionRanks))
-	
-	// Convert ExecutionRanks to ParallelBlocks for the table display
-	var parallelBlocks []*types.BlockPageParallelBlock
-	for _, rank := range executionRanks {
-		parallelBlocks = append(parallelBlocks, &types.BlockPageParallelBlock{
-			Rank:              uint64(rank.Rank),
-			BlockNumber:       rank.BlockNumber,
-			GasUsed:           rank.GasUsed,
-			GasLimit:          30000000, // Default gas limit
-			TransactionsCount: 150,      // Default transaction count
-			Time:              time.Now(),
-			BlockHash:         []byte{0x01, 0x02, 0x03, 0x04}, // Placeholder hash
-		})
-	}
 	slotData.ParallelBlocks = parallelBlocks
 	
 	return nil
