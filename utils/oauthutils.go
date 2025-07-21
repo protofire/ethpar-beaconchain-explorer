@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/context"
@@ -61,48 +60,9 @@ type OAuthErrorResponse struct {
 	Description string `json:"error_description"`
 }
 
-// CreateAccessToken Creates a new access token for a given user
-func CreateAccessToken(userID, appID, deviceID uint64, pkg, theme string) (string, int, error) {
-	expiresIn := Config.Frontend.JwtValidityInMinutes * 60
-
-	standardlaims := jwt.StandardClaims{
-		ExpiresAt: createExpiration(int64(expiresIn)),
-		Issuer:    Config.Frontend.JwtIssuer,
-	}
-
-	token := jwt.NewWithClaims(signingMethod, CustomClaims{
-		userID,
-		appID,
-		deviceID,
-		pkg,
-		theme,
-		standardlaims,
-	})
-
-	signKey, err := getSignKey()
-	if err != nil {
-		return "", 0, err
-	}
-
-	// Sign and get the complete encoded token as a string using the secret
-	tokenString, err := token.SignedString(signKey)
-	if err != nil {
-		logger.Errorf("Error signing an jwt token: %v", err)
-		return "", 0, err
-	}
-
-	return tokenString, expiresIn, nil
-}
-
 // ValidateAccessTokenGetClaims validates the jwt token and returns the UserID
 func ValidateAccessTokenGetClaims(tokenString string) (*CustomClaims, error) {
 	return accessTokenGetClaims(tokenString, true)
-}
-
-// UnsafeGetClaims this method returns the userID of a given jwt token WITHOUT VALIDATION
-// DO NOT USE THIS METHOD AS RELIABLE SOURCE FOR USERID
-func UnsafeGetClaims(tokenString string) (*CustomClaims, error) {
-	return accessTokenGetClaims(tokenString, false)
 }
 
 func stripOffBearerFromToken(tokenString string) (string, error) {
@@ -161,10 +121,6 @@ func accessTokenGetClaims(tokenStringFull string, validate bool) (*CustomClaims,
 	return nil, errors.New("token validity or claims cannot be verified")
 }
 
-func createExpiration(validForSeconds int64) int64 {
-	return time.Now().Unix() + validForSeconds
-}
-
 func getSignKey() ([]byte, error) {
 	signSecret, err := hex.DecodeString(Config.Frontend.JwtSigningSecret)
 	if err != nil {
@@ -174,20 +130,6 @@ func getSignKey() ([]byte, error) {
 	return signSecret, nil
 }
 
-// SendOAuthResponse creates and sends a OAuth response according to RFC6749
-func SendOAuthResponse(j *json.Encoder, route, accessToken, refreshToken string, expiresIn int) {
-	response := OAuthResponse{
-		AccessToken:  accessToken,
-		ExpiresIn:    expiresIn,
-		TokenType:    "bearer",
-		RefreshToken: refreshToken,
-	}
-	err := j.Encode(response)
-
-	if err != nil {
-		logger.Errorf("error serializing json error for API %v route: %v", route, err)
-	}
-}
 
 // SendOAuthErrorResponse creates and sends a OAuth error response according to RFC6749
 func SendOAuthErrorResponse(j *json.Encoder, route, errString, description string) {

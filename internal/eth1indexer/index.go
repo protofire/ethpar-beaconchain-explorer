@@ -8,7 +8,6 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/rpc/execution"
-	"github.com/protofire/ethpar-beaconchain-explorer/services"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 )
 
@@ -246,15 +245,6 @@ func IndexLive(p IndexingParams) error {
 			ProcessMetadataUpdates(p.Bigtable, p.Client, p.BalancePrefix, p.BalanceBatch, 10, p.Log)
 		}
 
-		if p.EnsUpdate {
-			err := p.Bigtable.ImportEnsUpdates(p.Client.GetNativeClient(), p.EnsBatch)
-			if err != nil {
-				p.Log.Errorf("error importing ens updates: %v", err)
-				continue
-			}
-		}
-
 		p.Log.Info("index run completed")
-		services.ReportStatus(p.ReportStatus, "eth1indexer", "Running", nil)
 	}
 }

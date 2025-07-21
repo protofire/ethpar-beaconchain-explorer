@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/protofire/ethpar-beaconchain-explorer/contracts/chainlink_feed"
+	//"github.com/protofire/ethpar-beaconchain-explorer/contracts/chainlink_feed"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

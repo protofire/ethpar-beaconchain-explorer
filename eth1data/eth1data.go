@@ -28,7 +28,7 @@ import (
 var logger = logrus.New().WithField("module", "eth1data")
 var ErrTxIsPending = errors.New("error retrieving data for tx: tx is still pending")
 
-func GetEth1Transaction(hash common.Hash, currency string, rpc execution.ExecutionClient, bt *db.Bigtable) (*types.Eth1TxData, error) {
+func GetEth1Transaction(hash common.Hash, currency string, rpc execution.ExecutionClient, bt *db.Bigtable, pg *db.Postgres) (*types.Eth1TxData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -40,7 +40,7 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 
 		data := wanted.(*types.Eth1TxData)
 		if data.BlockNumber != 0 {
-			if err := db.GetBlockStatus(data.BlockNumber, services.LatestFinalizedEpoch(), &data.Epoch); err != nil {
+			if err := pg.GetBlockStatus(data.BlockNumber, services.LatestFinalizedEpoch(), &data.Epoch); err != nil {
 				logger.Warningf("failed to get finalization stats for block %v", data.BlockNumber)
 				data.Epoch.Finalized = false
 				data.Epoch.Participation = -1
@@ -145,21 +145,69 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 			txPageData.ErrorMsg = errorMsg
 		}
 	} else {
-		txPageData.Transfers, err = bt.GetArbitraryTokenTransfersForTransaction(tx.Hash().Bytes())
+		// Step 1: Collect all unique addresses involved in ERC20 transfers
+		addresses, err := bt.GetAddressesInTokenTransfers(tx.Hash().Bytes())
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract transfer addresses: %w", err)
+		}
+
+		addressMap := make(map[string]string, len(addresses))
+		for _, addr := range addresses {
+			addressMap[addr] = ""
+		}
+
+		// Step 2: Use service layer to resolve names
+		nameService := services.AddressNamesService{BT: bt, PG: pg, Ctx: context.Background()}
+		resolvedNames, err := nameService.GetNamesForAddresses(addressMap)
+		if err != nil {
+			return nil, fmt.Errorf("error resolving address names: %w", err)
+		}
+
+		// Step 3: Get and format final token transfers
+		txPageData.Transfers, err = bt.GetArbitraryTokenTransfersForTransaction(tx.Hash().Bytes(), resolvedNames)
 		if err != nil {
 			return nil, fmt.Errorf("error loading token transfers from tx: %w", err)
 		}
 	}
-	txPageData.InternalTxns, err = bt.GetInternalTransfersForTransaction(tx.Hash().Bytes(), msg.From.Bytes(), data, currency)
+	// Step 1: Extract addresses from parity trace
+	internalAddresses, err := bt.GetAddressesInInternalTransfers(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract addresses from internal transfers: %w", err)
+	}
+
+	internalAddressMap := make(map[string]string, len(internalAddresses))
+	for _, addr := range internalAddresses {
+		internalAddressMap[addr] = ""
+	}
+
+	// Step 2: Resolve names using AddressNamesService
+	nameService := services.AddressNamesService{BT: bt, PG: pg, Ctx: context.Background()}
+	internalNames, err := nameService.GetNamesForAddresses(internalAddressMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve internal transfer names: %w", err)
+	}
+
+	// Step 3: Pass into updated method
+	txPageData.InternalTxns, err = bt.GetInternalTransfersForTransaction(
+		tx.Hash().Bytes(),
+		msg.From.Bytes(),
+		data,
+		currency,
+		internalNames,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error loading internal transfers from tx: %w", err)
 	}
-	txPageData.FromName, err = bt.GetAddressName(msg.From.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("error loading internal transfers from tx: %w", err)
+	}
+
+	txPageData.FromName, err = resolveAddressName(ctx, pg, bt, msg.From.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveing from name for tx: %w", err)
 	}
 	if msg.To != nil {
-		txPageData.ToName, err = bt.GetAddressName(msg.To.Bytes())
+		txPageData.ToName, err = resolveAddressName(ctx, pg, bt, msg.To.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("error retrieveing to name for tx: %w", err)
 		}
@@ -240,7 +288,7 @@ func GetEth1Transaction(hash common.Hash, currency string, rpc execution.Executi
 	}
 
 	if txPageData.BlockNumber != 0 {
-		if err := db.GetBlockStatus(txPageData.BlockNumber, services.LatestFinalizedEpoch(), &txPageData.Epoch); err != nil {
+		if err := pg.GetBlockStatus(txPageData.BlockNumber, services.LatestFinalizedEpoch(), &txPageData.Epoch); err != nil {
 			logger.Warningf("failed to get finalization stats for block %v: %v", txPageData.BlockNumber, err)
 			txPageData.Epoch.Finalized = false
 			txPageData.Epoch.Participation = -1
@@ -344,4 +392,21 @@ func getTransactionReceipt(ctx context.Context, rpc execution.ExecutionClient, h
 	}
 
 	return receipt, nil
+}
+
+func resolveAddressName(ctx context.Context, pg *db.Postgres, bt *db.Bigtable, address []byte) (string, error) {
+	name, err := pg.GetEnsNameForAddress(ctx, address)
+	if err != nil {
+		return "", fmt.Errorf("failed ENS lookup: %w", err)
+	}
+	if name != "" {
+		return name, nil
+	}
+
+	// Fallback to Bigtable if ENS name not found
+	name, err = bt.GetAddressName(ctx, address)
+	if err != nil {
+		return "", fmt.Errorf("failed Bigtable lookup: %w", err)
+	}
+	return name, nil
 }

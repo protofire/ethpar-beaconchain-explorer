@@ -2,8 +2,6 @@ package utils
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"html/template"
 	"math/big"
@@ -49,42 +47,8 @@ func Eth1TotalReward(block *types.Eth1BlockIndexed) *big.Int {
 	return totalReward.Add(totalReward, uncleReward)
 }
 
-func StripPrefix(hexStr string) string {
-	return strings.Replace(hexStr, "0x", "", 1)
-}
-
-func EthBytesToFloat(b []byte) float64 {
-	return WeiBytesToEther(b).InexactFloat64()
-}
-
 func FormatBlockNumber(number uint64) template.HTML {
 	return template.HTML(fmt.Sprintf("<a href=\"/block/%[1]d\">%[2]s</a>", number, FormatAddCommas(number)))
-}
-
-func FormatTxHash(hash string) template.HTML {
-	if len(hash) > 3 {
-		return template.HTML(fmt.Sprintf("<a class=\"text-monospace\" href=\"/tx/%s\">%s…</a>", hash, hash[:5]))
-	}
-	return template.HTML(fmt.Sprintf("<a class=\"text-monospace\" href=\"/tx/%s\">%s…</a>", hash, hash))
-}
-
-// func FormatHash(hash string) template.HTML {
-// 	hash = strings.Replace(hash, "0x", "", -1)
-// 	if len(hash) > 3 {
-// 		return template.HTML(fmt.Sprintf("<span class=\"text-monospace\">0x%#s…</span>", hash[:3]))
-// 	}
-// 	return template.HTML(fmt.Sprintf("<span class=\"text-monospace\">0x%#s</span>", hash))
-// }
-
-// func FormatTimestamp(ts int64) template.HTML {
-// 	return template.HTML(fmt.Sprintf("<span class=\"timestamp\" title=\"%v\" data-toggle=\"tooltip\" data-placement=\"top\" data-timestamp=\"%d\"></span>", time.Unix(ts, 0), ts))
-// }
-
-func FormatBlockHash(hash []byte) template.HTML {
-	if len(hash) < 20 {
-		return template.HTML("N/A")
-	}
-	return template.HTML(fmt.Sprintf(`<a class="text-monospace" href="/block/0x%x">0x%x…%x</a> %v`, hash, hash[:2], hash[len(hash)-2:], CopyButton(hex.EncodeToString(hash))))
 }
 
 func FormatTransactionHash(hash []byte, successful bool) template.HTML {
@@ -249,27 +213,6 @@ func FormatAddressAsLink(address []byte, name string, isContract bool) template.
 		ret = fmt.Sprintf("<a class=\"text-monospace\" href=\"/address/%s\">%s</a> %v", addressString, name, CopyButton(addressString))
 	} else {
 		ret = fmt.Sprintf("<a class=\"text-monospace\" href=\"/address/%s\">%s…%s</a> %v", addressString, addressString[:8], addressString[len(addressString)-6:], CopyButton(addressString))
-	}
-
-	if isContract {
-		ret = "<i class=\"fas fa-file-contract mr-1\"></i>" + ret
-	}
-	return template.HTML(ret)
-}
-
-func FormatAddressAsTokenLink(token, address []byte, name string, verified bool, isContract bool) template.HTML {
-	ret := ""
-	name = template.HTMLEscapeString(name)
-	addressString := FixAddressCasing(fmt.Sprintf("%x", address))
-
-	if len(name) > 0 {
-		if verified {
-			ret = fmt.Sprintf("<a class=\"text-monospace\" href=\"/token/%x?a=%s\">✔ %s (%s…%s)</a> %v", token, addressString, name, addressString[:8], addressString[len(addressString)-6:], CopyButton(addressString))
-		} else {
-			ret = fmt.Sprintf("<a class=\"text-monospace\" href=\"/token/%x?a=%s\">%s %s…%s</a> %v", token, addressString, name, addressString[:8], addressString[len(addressString)-6:], CopyButton(addressString))
-		}
-	} else {
-		ret = fmt.Sprintf("<a class=\"text-monospace\" href=\"/token/%x?a=%s\">%s…%s</a> %v", token, addressString, addressString[:8], addressString[len(addressString)-6:], CopyButton(addressString))
 	}
 
 	if isContract {
@@ -467,23 +410,4 @@ func FormatNumber(number interface{}) string {
 
 func FormatDifficulty(number *big.Int) string {
 	return fmt.Sprintf("%.1f T", decimal.NewFromBigInt(number, -12).InexactFloat64())
-}
-
-func FormatHashrate(h float64) template.HTML {
-	if h > 1e12 {
-		return template.HTML(fmt.Sprintf("%.1f TH/s", h/1e12))
-	}
-	return template.HTML(fmt.Sprintf("%.1f GH/s", h/1e9))
-}
-
-// func FormatPercentage(p float64, digits int) template.HTML {
-// 	return template.HTML(fmt.Sprintf("%."+strconv.Itoa(digits)+"f %%", p))
-// }
-
-func FormatTokenIcon(icon []byte, size int) template.HTML {
-	if icon == nil {
-		return template.HTML("")
-	}
-	icon64 := base64.StdEncoding.EncodeToString(icon)
-	return template.HTML(fmt.Sprintf("<img class=\"mb-1 mr-1\" src=\"data:image/gif;base64,%v\" width=\"%v\" height=\"%v\">", icon64, size, size))
 }

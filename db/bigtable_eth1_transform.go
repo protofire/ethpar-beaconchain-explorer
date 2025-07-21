@@ -9,6 +9,7 @@ import (
 	"github.com/protofire/ethpar-beaconchain-explorer/erc1155"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc721"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
@@ -27,16 +28,18 @@ import (
 // It transforms the block and strips any information that is not necessary for a blocks view
 //
 // It writes blocks to table data:
-//     Row:    <chainID>:B:<reversePaddedBlockNumber>:<rank>
-//     Family: f
-//     Column: data
-//     Cell:   Proto<Eth1BlockIndexed> (includes Rank)
+//
+//	Row:    <chainID>:B:<reversePaddedBlockNumber>:<rank>
+//	Family: f
+//	Column: data
+//	Cell:   Proto<Eth1BlockIndexed> (includes Rank)
 //
 // It also creates a secondary index by miner address to support reverse lookup:
-//     Row:    <chainID>:I:B:<Miner>:<reversePaddedBlockNumber>:<rank>
-//     Family: f
-//     Column: <chainID>:B:<reversePaddedBlockNumber>:<rank>
-//     Cell:   nil
+//
+//	Row:    <chainID>:I:B:<Miner>:<reversePaddedBlockNumber>:<rank>
+//	Family: f
+//	Column: <chainID>:B:<reversePaddedBlockNumber>:<rank>
+//	Cell:   nil
 func (bigtable *Bigtable) TransformBlock(block *types.Eth1Block, cache *freecache.Cache) (bulkData *types.BulkMutations, bulkMetadataUpdates *types.BulkMutations, err error) {
 	startTime := time.Now()
 	defer func() {
@@ -187,17 +190,19 @@ func (bigtable *Bigtable) TransformBlock(block *types.Eth1Block, cache *freecach
 // TransformTx extracts and indexes all transactions from a given Eth1 block.
 //
 // It writes transactions to table data:
-//     Row:    <chainID>:TX:<txHash>
-//     Family: f
-//     Column: data
-//     Cell:   Proto<Eth1TransactionIndexed>
+//
+//	Row:    <chainID>:TX:<txHash>
+//	Family: f
+//	Column: data
+//	Cell:   Proto<Eth1TransactionIndexed>
 //
 // It also creates a secondary indexes by attributes such as sender, receiver,
 // block number, method ID, timestamp, error, contract creation, etc.
-//     Row:    <chainID>:I:TX:<address>:<DIMENSION>:...:<reverseIndex>
-//     Family: f
-//     Column: <chainID>:TX:<txHash>
-//     Cell:   nil
+//
+//	Row:    <chainID>:I:TX:<address>:<DIMENSION>:...:<reverseIndex>
+//	Family: f
+//	Column: <chainID>:TX:<txHash>
+//	Cell:   nil
 //
 // Where DIMENSION ∈ {TO, TIME, BLOCK, METHOD, FROM, ERROR, CONTRACT}
 // and <reverseIndex> enables sorting by position or time (descending).
@@ -302,17 +307,20 @@ func (bigtable *Bigtable) TransformTx(blk *types.Eth1Block, cache *freecache.Cac
 // TransformBlobTx extracts and indexes all type-3 ("blob") transactions from a given Eth1 block.
 //
 // It writes each blob transaction to the data table as a serialized record:
-//     Row:    <chainID>:BTX:<txHash>
-//     Family: f
-//     Column: data
-//     Cell:   Proto<Eth1BlobTransactionIndexed> (includes Rank)
+//
+//	Row:    <chainID>:BTX:<txHash>
+//	Family: f
+//	Column: data
+//	Cell:   Proto<Eth1BlobTransactionIndexed> (includes Rank)
 //
 // Additionally, it builds secondary indexes for efficient lookup by sender, recipient,
 // timestamp, block number, and error status:
-//     Row:    <chainID>:I:BTX:<address>:<DIMENSION>:...:<reverseIndex>
-//     Family: f
-//     Column: <chainID>:BTX:<txHash>
-//     Cell:   nil
+//
+//	Row:    <chainID>:I:BTX:<address>:<DIMENSION>:...:<reverseIndex>
+//	Family: f
+//	Column: <chainID>:BTX:<txHash>
+//	Cell:   nil
+//
 // Where DIMENSION ∈ {TO, TIME, BLOCK, FROM, ERROR}
 // and <reverseIndex> allows reverse-ordered scans by time or position.
 func (bigtable *Bigtable) TransformBlobTx(blk *types.Eth1Block, cache *freecache.Cache) (bulkData *types.BulkMutations, bulkMetadataUpdates *types.BulkMutations, err error) {
@@ -402,11 +410,12 @@ func (bigtable *Bigtable) TransformBlobTx(blk *types.Eth1Block, cache *freecache
 // TransformContract processes contract creation and destruction events found in internal transactions.
 //
 // It writes contract lifecycle events to the metadata table:
-//     Row:    <chainID>:S:<contractAddress>
-//     Family: ACCOUNT_METADATA_FAMILY
-//     Column: ACCOUNT_IS_CONTRACT
-//     Timestamp: encoded from <blockNumber>, <txIndex>, <itxIndex>
-//     Cell:   Proto<IsContractUpdate>
+//
+//	Row:    <chainID>:S:<contractAddress>
+//	Family: ACCOUNT_METADATA_FAMILY
+//	Column: ACCOUNT_IS_CONTRACT
+//	Timestamp: encoded from <blockNumber>, <txIndex>, <itxIndex>
+//	Cell:   Proto<IsContractUpdate>
 //
 // A contract is marked as created if an internal transaction of type "create" is found.
 // A contract is marked as destroyed if an internal transaction of type "suicide" is found.
@@ -449,7 +458,7 @@ func (bigtable *Bigtable) TransformContract(blk *types.Eth1Block, cache *freecac
 				mutWrite := gcp_bigtable.NewMutation()
 				ts, err := encodeIsContractUpdateTs(blk.GetNumber(), uint64(i), uint64(j))
 				if err != nil {
-					utils.LogError(err, "error generating bigtable isContract timestamp", 0)
+					bigtable.log.Errorf("error generating bigtable isContract timestamp: %v", err)
 				} else {
 					mutWrite.Set(ACCOUNT_METADATA_FAMILY, ACCOUNT_IS_CONTRACT, ts, b)
 					contractUpdateWrites.Keys = append(contractUpdateWrites.Keys, fmt.Sprintf("%s:S:%x", bigtable.chainId, address))
@@ -466,23 +475,25 @@ func (bigtable *Bigtable) TransformContract(blk *types.Eth1Block, cache *freecac
 // TransformItx extracts and indexes all non-trivial internal transactions from a given Eth1 block.
 //
 // It writes each internal transaction to the data table:
-//     Row:    <chainID>:ITX:<txHash>:<reversedItxIndex>
-//     Family: f
-//     Column: data
-//     Cell:   Proto<Eth1InternalTransactionIndexed>
+//
+//	Row:    <chainID>:ITX:<txHash>:<reversedItxIndex>
+//	Family: f
+//	Column: data
+//	Cell:   Proto<Eth1InternalTransactionIndexed>
 //
 // For each valid internal transaction (excluding top-level and empty calls), secondary indexes are written:
-//     Row:    <chainID>:I:ITX:<from>:TO:<to>:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
-//     Row:    <chainID>:I:ITX:<to>:FROM:<from>:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
-//     Row:    <chainID>:I:ITX:<from>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
-//     Row:    <chainID>:I:ITX:<to>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
-//     Family: f
-//     Column: <chainID>:ITX:<txHash>:<reversedItxIndex>
-//     Cell:   nil
+//
+//	Row:    <chainID>:I:ITX:<from>:TO:<to>:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
+//	Row:    <chainID>:I:ITX:<to>:FROM:<from>:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
+//	Row:    <chainID>:I:ITX:<from>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
+//	Row:    <chainID>:I:ITX:<to>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedItxIndex>
+//	Family: f
+//	Column: <chainID>:ITX:<txHash>:<reversedItxIndex>
+//	Cell:   nil
 //
 // Special handling exists for internal transactions of type "delegatecall":
-//     - All corresponding cells in both data and index tables are deleted instead of written.
-//     - This is to avoid polluting the index with non-state-changing calls.
+//   - All corresponding cells in both data and index tables are deleted instead of written.
+//   - This is to avoid polluting the index with non-state-changing calls.
 //
 // Each internal transaction is linked to its parent transaction via `ParentHash`, and
 // is annotated with block number, timestamp, from/to, type, and rank for disambiguation.
@@ -578,22 +589,23 @@ func (bigtable *Bigtable) TransformItx(blk *types.Eth1Block, cache *freecache.Ca
 // TransformERC20 extracts and indexes all ERC-20 `Transfer` events from logs of transactions in a given Eth1 block.
 //
 // It writes each valid ERC-20 transfer log into the data table:
-//     Row:    <chainID>:ERC20:<txHash>:<reversedLogIndex>
-//     Family: f
-//     Column: data
-//     Cell:   Proto<Eth1ERC20Indexed>
+//
+//	Row:    <chainID>:ERC20:<txHash>:<reversedLogIndex>
+//	Family: f
+//	Column: data
+//	Cell:   Proto<Eth1ERC20Indexed>
 //
 // It also generates a variety of secondary indexes based on address, token, timestamp, direction, etc.:
 //
-//     Row:    <chainID>:I:ERC20:<from>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
-//     Row:    <chainID>:I:ERC20:<to>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
-//     Row:    <chainID>:I:ERC20:<token>:ALL:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
-//     Row:    <chainID>:I:ERC20:<token>:<from>:TIME:<reversedTimestamp>:... 
-//     Row:    <chainID>:I:ERC20:<token>:<to>:TIME:<reversedTimestamp>:...
-//     Row:    <chainID>:I:ERC20:<from>:TO:<to>:...
-//     Row:    <chainID>:I:ERC20:<to>:FROM:<from>:...
-//     Row:    <chainID>:I:ERC20:<from>:TOKEN_SENT:<token>:...
-//     Row:    <chainID>:I:ERC20:<to>:TOKEN_RECEIVED:<token>:...
+//	Row:    <chainID>:I:ERC20:<from>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
+//	Row:    <chainID>:I:ERC20:<to>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
+//	Row:    <chainID>:I:ERC20:<token>:ALL:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
+//	Row:    <chainID>:I:ERC20:<token>:<from>:TIME:<reversedTimestamp>:...
+//	Row:    <chainID>:I:ERC20:<token>:<to>:TIME:<reversedTimestamp>:...
+//	Row:    <chainID>:I:ERC20:<from>:TO:<to>:...
+//	Row:    <chainID>:I:ERC20:<to>:FROM:<from>:...
+//	Row:    <chainID>:I:ERC20:<from>:TOKEN_SENT:<token>:...
+//	Row:    <chainID>:I:ERC20:<to>:TOKEN_RECEIVED:<token>:...
 //
 // All indexes use the transaction index and log index to guarantee uniqueness and maintain order.
 //
@@ -709,23 +721,24 @@ func (bigtable *Bigtable) TransformERC20(blk *types.Eth1Block, cache *freecache.
 // TransformERC721 extracts and indexes all ERC-721 `Transfer` events from transaction logs in a given Eth1 block.
 //
 // It writes each valid ERC-721 transfer log into the data table:
-//     Row:    <chainID>:ERC721:<txHash>:<reversedLogIndex>
-//     Family: f
-//     Column: data
-//     Cell:   Proto<Eth1ERC721Indexed>
+//
+//	Row:    <chainID>:ERC721:<txHash>:<reversedLogIndex>
+//	Family: f
+//	Column: data
+//	Cell:   Proto<Eth1ERC721Indexed>
 //
 // It also generates a wide set of secondary indexes based on the sender, receiver,
 // token address, token ID, and timestamp:
 //
-//     Row:    <chainID>:I:ERC721:<from>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
-//     Row:    <chainID>:I:ERC721:<to>:TIME:<reversedTimestamp>:... 
-//     Row:    <chainID>:I:ERC721:<tokenAddress>:ALL:TIME:<...>
-//     Row:    <chainID>:I:ERC721:<tokenAddress>:<from>:TIME:<...>
-//     Row:    <chainID>:I:ERC721:<tokenAddress>:<to>:TIME:<...>
-//     Row:    <chainID>:I:ERC721:<from>:TO:<to>:<...>
-//     Row:    <chainID>:I:ERC721:<to>:FROM:<from>:<...>
-//     Row:    <chainID>:I:ERC721:<from>:TOKEN_SENT:<tokenAddress>:<...>
-//     Row:    <chainID>:I:ERC721:<to>:TOKEN_RECEIVED:<tokenAddress>:<...>
+//	Row:    <chainID>:I:ERC721:<from>:TIME:<reversedTimestamp>:<reversedTxIndex>:<reversedLogIndex>
+//	Row:    <chainID>:I:ERC721:<to>:TIME:<reversedTimestamp>:...
+//	Row:    <chainID>:I:ERC721:<tokenAddress>:ALL:TIME:<...>
+//	Row:    <chainID>:I:ERC721:<tokenAddress>:<from>:TIME:<...>
+//	Row:    <chainID>:I:ERC721:<tokenAddress>:<to>:TIME:<...>
+//	Row:    <chainID>:I:ERC721:<from>:TO:<to>:<...>
+//	Row:    <chainID>:I:ERC721:<to>:FROM:<from>:<...>
+//	Row:    <chainID>:I:ERC721:<from>:TOKEN_SENT:<tokenAddress>:<...>
+//	Row:    <chainID>:I:ERC721:<to>:TOKEN_RECEIVED:<tokenAddress>:<...>
 //
 // The index structure ensures efficient lookups for wallet activity, token-specific histories,
 // and aggregate analytics by participant or asset.
@@ -841,38 +854,40 @@ func (bigtable *Bigtable) TransformERC721(blk *types.Eth1Block, cache *freecache
 // Eth1 block.
 //
 // Primary storage
-//   Row:    <chainID>:ERC1155:<txHash>:<reversedLogIndex>
-//   Family: f
-//   Column: data
-//   Cell:   Proto<Eth1ERC1155Indexed> (includes Rank)
 //
-//   • For a `TransferSingle`, one record is written.  
-//   • For a `TransferBatch`, a separate record is written for **each**
-//     (id,value) pair in the batch.
+//	Row:    <chainID>:ERC1155:<txHash>:<reversedLogIndex>
+//	Family: f
+//	Column: data
+//	Cell:   Proto<Eth1ERC1155Indexed> (includes Rank)
+//
+//	• For a `TransferSingle`, one record is written.
+//	• For a `TransferBatch`, a separate record is written for **each**
+//	  (id,value) pair in the batch.
 //
 // Secondary indexes (reverse-sorted for efficient time scans)
-//   Row examples:
-//     <chainID>:I:ERC1155:<from>:TIME:<revTs>:<revTxIdx>:<revLogIdx>
-//     <chainID>:I:ERC1155:<to>:TIME:<revTs>:...                      // mirror view
-//     <chainID>:I:ERC1155:<tokenAddr>:ALL:TIME:<revTs>:...           // token-wide
-//     <chainID>:I:ERC1155:<tokenAddr>:<from>:TIME:<revTs>:...        // token + from
-//     <chainID>:I:ERC1155:<tokenAddr>:<to>:TIME:<revTs>:...          // token + to
-//     <chainID>:I:ERC1155:<from>:TO:<to>:<revTs>:...                 // pair flow
-//     <chainID>:I:ERC1155:<to>:FROM:<from>:<revTs>:...
-//     <chainID>:I:ERC1155:<from>:TOKEN_SENT:<tokenAddr>:<revTs>:...
-//     <chainID>:I:ERC1155:<to>:TOKEN_RECEIVED:<tokenAddr>:<revTs>:...
 //
-//   Family: f  
-//   Column: <chainID>:ERC1155:<txHash>:<reversedLogIndex> (value = nil)
+//	Row examples:
+//	  <chainID>:I:ERC1155:<from>:TIME:<revTs>:<revTxIdx>:<revLogIdx>
+//	  <chainID>:I:ERC1155:<to>:TIME:<revTs>:...                      // mirror view
+//	  <chainID>:I:ERC1155:<tokenAddr>:ALL:TIME:<revTs>:...           // token-wide
+//	  <chainID>:I:ERC1155:<tokenAddr>:<from>:TIME:<revTs>:...        // token + from
+//	  <chainID>:I:ERC1155:<tokenAddr>:<to>:TIME:<revTs>:...          // token + to
+//	  <chainID>:I:ERC1155:<from>:TO:<to>:<revTs>:...                 // pair flow
+//	  <chainID>:I:ERC1155:<to>:FROM:<from>:<revTs>:...
+//	  <chainID>:I:ERC1155:<from>:TOKEN_SENT:<tokenAddr>:<revTs>:...
+//	  <chainID>:I:ERC1155:<to>:TOKEN_RECEIVED:<tokenAddr>:<revTs>:...
+//
+//	Family: f
+//	Column: <chainID>:ERC1155:<txHash>:<reversedLogIndex> (value = nil)
 //
 // Balance updates
-//   • For each transfer, the sender (`From`) and recipient (`To`) are queued
+//   - For each transfer, the sender (`From`) and recipient (`To`) are queued
 //     for per-token balance refresh via `markBalanceUpdate`.
 //
 // Limits & safeguards
-//   • Respects `TX_PER_BLOCK_LIMIT` and `ITX_PER_TX_LIMIT` to avoid runaway
+//   - Respects `TX_PER_BLOCK_LIMIT` and `ITX_PER_TX_LIMIT` to avoid runaway
 //     memory usage.
-//   • Ignores logs whose signature does not match ERC-1155 transfer topics.
+//   - Ignores logs whose signature does not match ERC-1155 transfer topics.
 //
 // Returns two `BulkMutations` objects ready for `WriteBulk`, or an error if
 // marshalling fails or limits are exceeded.
@@ -1178,7 +1193,7 @@ func (bigtable *Bigtable) TransformWithdrawals(block *types.Eth1Block, cache *fr
 // It transforms the logs contained within a block and indexes ens relevant transactions and tags changes (to be verified from the node in a separate process)
 // ==================================================
 //
-// It indexes transactions
+// # It indexes transactions
 //
 // - by hashed ens name
 // Row:    <chainID>:ENS:I:H:<nameHash>:<txHash>
@@ -1271,7 +1286,7 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 			ethLog.Removed = log.GetRemoved()
 
 			for _, lTopic := range topics {
-				logFields := map[string]interface{}{
+				logFields := logger.Fields{
 					"block":       blk.GetNumber(),
 					"tx":          tx.GetHash(),
 					"logIndex":    j,
@@ -1284,7 +1299,7 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSRegistryNewResolver{}
 						err = ensContracts.ENSRegistryContract.UnpackLog(r, "NewResolver", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:H:%x", bigtable.chainId, r.Node)] = true
@@ -1293,7 +1308,7 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSRegistryNewOwner{}
 						err = ensContracts.ENSRegistryContract.UnpackLog(r, "NewOwner", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:A:%x", bigtable.chainId, r.Owner)] = true
@@ -1302,7 +1317,7 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSRegistryNewTTL{}
 						err = ensContracts.ENSRegistryContract.UnpackLog(r, "NewTTL", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:H:%x", bigtable.chainId, r.Node)] = true
@@ -1313,11 +1328,11 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSETHRegistrarControllerNameRegistered{}
 						err = ensContracts.ENSETHRegistrarControllerContract.UnpackLog(r, "NameRegistered", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error verifying ens-name: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
@@ -1327,11 +1342,11 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSETHRegistrarControllerNameRenewed{}
 						err = ensContracts.ENSETHRegistrarControllerContract.UnpackLog(r, "NameRenewed", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error verifying ens-name: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
@@ -1342,11 +1357,11 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSOldRegistrarControllerNameRegistered{}
 						err = ensContracts.ENSOldRegistrarControllerContract.UnpackLog(r, "NameRegistered", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error verifying ens-name: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
@@ -1356,11 +1371,11 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSOldRegistrarControllerNameRenewed{}
 						err = ensContracts.ENSOldRegistrarControllerContract.UnpackLog(r, "NameRenewed", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error verifying ens-name: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
@@ -1371,11 +1386,11 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSPublicResolverNameChanged{}
 						err = ensContracts.ENSPublicResolverContract.UnpackLog(r, "NameChanged", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						if err = verifyName(r.Name); err != nil {
-							utils.LogWarn(err, "error verifying ens-name", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error verifying ens-name: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:N:%s", bigtable.chainId, r.Name)] = true
@@ -1384,7 +1399,7 @@ func (bigtable *Bigtable) TransformEnsNameRegistered(blk *types.Eth1Block, cache
 						r := &ensContracts.ENSPublicResolverAddressChanged{}
 						err = ensContracts.ENSPublicResolverContract.UnpackLog(r, "AddressChanged", ethLog)
 						if err != nil {
-							utils.LogWarn(err, "error unpacking ens-log", 0, logFields)
+							bigtable.log.WithFields(logFields).Warnf("error unpacking ens-log: %v", err)
 							continue
 						}
 						keys[fmt.Sprintf("%s:ENS:V:H:%x", bigtable.chainId, r.Node)] = true

@@ -1,8 +1,6 @@
 package types
 
 import (
-	"github.com/protofire/ethpar-beaconchain-explorer/utils"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/davecgh/go-spew/spew"
 )
@@ -78,7 +76,6 @@ func (trace *ParityTraceResult) ConvertFields() ([]byte, []byte, []byte, string)
 		txType = trace.Action.CallType
 	default:
 		spew.Dump(trace)
-		utils.LogFatal(nil, "unknown trace type", 0, map[string]interface{}{"trace type": trace.Type, "tx hash": trace.TransactionHash})
 	}
 	return from, to, value, txType
 }

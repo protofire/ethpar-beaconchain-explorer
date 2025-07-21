@@ -128,23 +128,6 @@ func FormatBalanceSql(balanceInt sql.NullInt64, currency string) template.HTML {
 	return template.HTML(balance + " " + currency)
 }
 
-func FormatBalanceGwei(balance *int64, currency string) template.HTML {
-	if currency == Config.Frontend.ClCurrency {
-		if balance == nil {
-			return template.HTML("<span> 0.00000 " + currency + "</span>")
-		} else if *balance == 0 {
-			return template.HTML("0")
-		}
-
-		balanceF := float64(*balance)
-		if balanceF < 0 {
-			return template.HTML(fmt.Sprintf("<span class=\"text-danger\">%.0f GWei</span>", balanceF))
-		}
-		return template.HTML(fmt.Sprintf("<span class=\"text-success\">+%.0f GWei</span>", balanceF))
-	}
-	return FormatBalanceChange(balance, currency)
-}
-
 func ClToMainCurrency(valIf interface{}) decimal.Decimal {
 	val := IfToDec(valIf)
 	res := val.DivRound(decimal.NewFromInt(Config.Frontend.ClCurrencyDivisor), 18)
@@ -152,15 +135,6 @@ func ClToMainCurrency(valIf interface{}) decimal.Decimal {
 		return res
 	}
 	return res.Mul(decimal.NewFromFloat(price.GetPrice(Config.Frontend.ClCurrency, Config.Frontend.MainCurrency)))
-}
-
-func ElToMainCurrency(valIf interface{}) decimal.Decimal {
-	val := IfToDec(valIf)
-	res := val.DivRound(decimal.NewFromInt(Config.Frontend.ElCurrencyDivisor), 18)
-	if Config.Frontend.ElCurrency == Config.Frontend.MainCurrency {
-		return res
-	}
-	return res.Mul(decimal.NewFromFloat(price.GetPrice(Config.Frontend.ElCurrency, Config.Frontend.MainCurrency)))
 }
 
 func ClToCurrency(valIf interface{}, currency string) decimal.Decimal {
@@ -195,10 +169,6 @@ func FormatElCurrency(value interface{}, targetCurrency string, digitsAfterComma
 
 func FormatClCurrency(value interface{}, targetCurrency string, digitsAfterComma int, showCurrencySymbol, showPlusSign, colored, truncateAndAddTooltip bool) template.HTML {
 	return formatCurrency(ClToCurrency(value, Config.Frontend.ClCurrency), Config.Frontend.ClCurrency, targetCurrency, digitsAfterComma, showCurrencySymbol, showPlusSign, colored, truncateAndAddTooltip)
-}
-
-func FormatElCurrencyString(value interface{}, targetCurrency string, digitsAfterComma int, showCurrencySymbol, showPlusSign, truncateAndAddTooltip bool) string {
-	return formatCurrencyString(ElToCurrency(value, Config.Frontend.ElCurrency), Config.Frontend.ElCurrency, targetCurrency, digitsAfterComma, showCurrencySymbol, showPlusSign, truncateAndAddTooltip)
 }
 
 func FormatClCurrencyString(value interface{}, targetCurrency string, digitsAfterComma int, showCurrencySymbol, showPlusSign, truncateAndAddTooltip bool) string {
@@ -381,48 +351,6 @@ func FormatBalanceChange(balance *int64, currency string) template.HTML {
 		return template.HTML("<span class=\"text-danger\">" + balanceFormated + " " + currency + "</span>")
 	}
 	return template.HTML("pending")
-}
-
-// FormatBalance will return a string for a balance
-func FormatBalanceShort(balanceInt uint64, currency string) template.HTML {
-	exchangeRate := price.GetPrice(Config.Frontend.ClCurrency, currency)
-	balance := FormatFloat((float64(balanceInt)/float64(1e9))*float64(exchangeRate), 2)
-
-	return template.HTML(balance)
-}
-
-func FormatFloatWithDigits(num float64, min, max int) template.HTML {
-	return template.HTML(FormatFloatWithDigitsString(num, min, max))
-}
-
-// FormatFloatWithDigitsString formats num with max amount of digits after comma but stop after min number of non-zero-digits after comma. In other words it can be used to format a number with the least amount of characters keeping a threshold of significant digits.
-//
-// examples:
-//
-//	FormatFloatWithDigitsString(0.01234,2,2) = "0.01"
-//	FormatFloatWithDigitsString(0.01234,2,3) = "0.012"
-//	FormatFloatWithDigitsString(0.01234,2,4) = "0.012"
-//	FormatFloatWithDigitsString(0.01234,3,4) = "0.0123"
-func FormatFloatWithDigitsString(num float64, min, max int) string {
-	if max > 18 {
-		max = 18
-	}
-	if min > max {
-		min = max
-	}
-	a := fmt.Sprintf(fmt.Sprintf("%%.%df", max), num)
-	b := strings.Split(a, ".")
-	if len(b) < 2 {
-		return b[0]
-	}
-	idx := strings.IndexAny(b[1], "123456789")
-	if idx == -1 {
-		return b[0]
-	}
-	if idx+min > len(b[1]) {
-		return b[0] + "." + b[1]
-	}
-	return b[0] + "." + b[1][:idx+min]
 }
 
 func FormatAddCommasFormatted(num float64, precision uint) template.HTML {
@@ -641,12 +569,6 @@ func FormatCount(count uint64, finalized bool, shortenCalcHint bool) template.HT
 		return template.HTML("…")
 	}
 	return template.HTML(CalculatingHint)
-}
-
-func FormatEtherValue(currency string, ethPrice decimal.Decimal, currentPrice template.HTML) template.HTML {
-	p := message.NewPrinter(language.English)
-	currencySymbol := price.GetCurrencySymbol(currency)
-	return template.HTML(p.Sprintf(`<span>%[1]s %[2]s</span> <span class="text-muted">@ %[1]s%[3]s/%[4]s</span>`, currencySymbol, ethPrice.StringFixed(2), currentPrice, Config.Frontend.ElCurrency))
 }
 
 func FormatPricedValue(val interface{}, valueCurrency, targetCurrency string) template.HTML {

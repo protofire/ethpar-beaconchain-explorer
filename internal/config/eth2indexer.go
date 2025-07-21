@@ -61,6 +61,7 @@ func LoadEth2IndexerConfig(args []string) (*Eth2IndexerConfig, error) {
 
 	flags.String("consensus.client", "", "Consensus client, can be 'teku'. Other clients have not benn implemented yet")
 	flags.String("consensus.endpoint", "", "Consensus client REST API enpoint")
+	flags.String("consensus.mode", "archive", "Consensus Layer node data storage mode, can be 'archive' or 'pruned'")
 	
 	flags.String("bigtable.project", "emulated", "BigTable project")
 	flags.String("bigtable.instance", "emulated", "BigTable instance")
@@ -116,6 +117,7 @@ func LoadEth2IndexerConfig(args []string) (*Eth2IndexerConfig, error) {
 	v.AutomaticEnv()
 
 	// Defaults
+	v.SetDefault("consensus.mode", "archive")
 	v.SetDefault("bigtable.project", "emulated")
 	v.SetDefault("bigtable.instance", "emulated")
 	v.SetDefault("bigtable.emulated", false)

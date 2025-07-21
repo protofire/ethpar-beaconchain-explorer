@@ -39,7 +39,7 @@ var eth1DepositEventSignature = hash.Keccak256([]byte("DepositEvent(bytes,bytes,
 // and tracking new validator entries from the ETH1 chain.
 func eth1DepositsExporter(p *IndexingParams) {
 	eth1DepositContractAddress := common.HexToAddress(p.ChainParams.Deposit.DepositContractAddress)
-	eth1DepositContractFirstBlock := p.Eth1DepositContractFirstBlock
+	eth1DepositContractFirstBlock := p.Config.Indexing.Eth1DepositContractFirstBlock
 
 	lastFetchedBlock := uint64(0)
 

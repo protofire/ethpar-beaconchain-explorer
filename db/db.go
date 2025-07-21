@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"context"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/config"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
@@ -27,33 +28,13 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/pressly/goose/v3"
+	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 	prysm_deposit "github.com/prysmaticlabs/prysm/v5/contracts/deposit"
 	ethpb "github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1"
-	rpc_types "github.com/protofire/ethpar-beaconchain-explorer/rpc/types"
 )
 
 //go:embed migrations/*.sql
 var EmbedMigrations embed.FS
-
-// var DBPGX *pgxpool.Conn
-
-// type SQLReaderDb interface {
-// 	Close() error
-// 	Get(dest interface{}, query string, args ...interface{}) error
-// 	Select(dest interface{}, query string, args ...interface{}) error
-// 	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-// 	Query(query string, args ...any) (*sql.Rows, error)
-// 	Preparex(query string) (*sqlx.Stmt, error)
-// 	Rebind(query string) string
-// }
-
-// DB is a pointer to the explorer-database
-// var WriterDb *sqlx.DB
-// var ReaderDb SQLReaderDb
-
-// var ClickhouseReaderDb *sqlx.DB
-
-// var dblog = logger.New(nil).WithField("module", "db")
 
 var farFutureEpoch = uint64(18446744073709551615)
 var maxSqlNumber = uint64(9223372036854775807)
@@ -87,7 +68,7 @@ type Postgres struct {
 //   - error: If the connection or configuration is invalid.
 func MustInitDatabase(cfg *config.SqlDatabaseConfig, driverName string) (*Postgres, error) {
 	log := logger.New(nil).WithField("module", "postgres")
-	
+
 	var sslMode string
 	if cfg.Ssl {
 		sslMode = "enable"
@@ -167,6 +148,7 @@ func (pg *Postgres) ApplyEmbeddedDbSchema(version int64) error {
 // network_liveness table. If no rows exist, it returns 0 by default.
 //
 // The query uses COALESCE to avoid NULL results from MAX().
+// exporter
 func (pg *Postgres) GetPrevHeadEpoch() (uint64, error) {
 	const query = `SELECT COALESCE(MAX(headepoch), 0) FROM network_liveness`
 
@@ -180,6 +162,7 @@ func (pg *Postgres) GetPrevHeadEpoch() (uint64, error) {
 // InsertNetworkLivenessSnapshot stores a snapshot of the consensus layer's state
 // into the network_liveness table. It records the current timestamp along with
 // head, finalized, justified, and previous justified epochs.
+// exporter
 func (pg *Postgres) InsertNetworkLivenessSnapshot(
 	headEpoch, finalizedEpoch, justifiedEpoch, prevJustifiedEpoch uint64,
 ) error {
@@ -202,6 +185,7 @@ func (pg *Postgres) InsertNetworkLivenessSnapshot(
 
 // GetGenesisDepositsCount returns the number of deposit records included in the genesis block (slot 0).
 // These deposits are used to activate validators at chain start.
+// exporter
 func (pg *Postgres) GetGenesisDepositsCount() (uint64, error) {
 	const query = `SELECT COUNT(*) FROM blocks_deposits WHERE block_slot = 0`
 
@@ -212,6 +196,7 @@ func (pg *Postgres) GetGenesisDepositsCount() (uint64, error) {
 	return count, nil
 }
 
+// exporter
 func (pg *Postgres) SaveGenesisDeposits(genesisValidators *rpc_types.StandardValidatorsResponse) error {
 	tx, err := pg.Db.Beginx()
 	if err != nil {
@@ -267,9 +252,10 @@ func (pg *Postgres) SaveGenesisDeposits(genesisValidators *rpc_types.StandardVal
 	return nil
 }
 
+// exporter
 func (pg *Postgres) GetLastDepositBlock() (uint64, error) {
 	const query = `SELECT COALESCE(MAX(block_number),0) FROM eth1_deposits`
-	
+
 	var block uint64
 	err := pg.Db.Get(&block, query)
 	if err != nil {
@@ -278,6 +264,7 @@ func (pg *Postgres) GetLastDepositBlock() (uint64, error) {
 	return block, nil
 }
 
+// exporter
 func (pg *Postgres) SaveEth1Deposits(deps []*types.Eth1Deposit) error {
 	tx, err := pg.Db.Begin()
 	if err != nil {
@@ -338,9 +325,9 @@ func (pg *Postgres) SaveEth1Deposits(deps []*types.Eth1Deposit) error {
 }
 
 func (pg *Postgres) GetEth1DepositsJoinEth2Deposits(
-	query string, 
-	length, start uint64, 
-	orderBy, orderDir string, 
+	query string,
+	length, start uint64,
+	orderBy, orderDir string,
 	latestEpoch, validatorOnlineThresholdSlot uint64,
 ) ([]*types.EthOneDepositsData, uint64, error) {
 	// Initialize the return values
@@ -463,8 +450,8 @@ func (pg *Postgres) GetEth1DepositsJoinEth2Deposits(
 }
 
 func (pg *Postgres) GetEth1DepositsLeaderboard(
-	query string, 
-	length, start uint64, 
+	query string,
+	length, start uint64,
 	orderBy, orderDir string,
 ) ([]*types.EthOneDepositLeaderboardData, uint64, error) {
 	deposits := []*types.EthOneDepositLeaderboardData{}
@@ -529,8 +516,8 @@ func (pg *Postgres) GetEth1DepositsLeaderboard(
 }
 
 func (pg *Postgres) GetEth2Deposits(
-	query string, 
-	length, start uint64, 
+	query string,
+	length, start uint64,
 	orderBy, orderDir string,
 ) ([]*types.EthTwoDepositData, uint64, error) {
 	// Initialize the return values
@@ -673,7 +660,8 @@ func (pg *Postgres) GetLatestEpoch() (uint64, error) {
 	return epoch, nil
 }
 
-func GetAllSlots(tx *sqlx.Tx) ([]uint64, error) {
+// exporter
+func (pg *Postgres) GetAllSlots(tx *sqlx.Tx) ([]uint64, error) {
 	var slots []uint64
 	err := tx.Select(&slots, "SELECT slot FROM blocks ORDER BY slot")
 
@@ -684,7 +672,8 @@ func GetAllSlots(tx *sqlx.Tx) ([]uint64, error) {
 	return slots, nil
 }
 
-func SetSlotFinalizationAndStatus(slot uint64, finalized bool, status string, tx *sqlx.Tx) error {
+// exporter
+func (pg *Postgres) SetSlotFinalizationAndStatus(slot uint64, finalized bool, status string, tx *sqlx.Tx) error {
 	_, err := tx.Exec("UPDATE blocks SET finalized = $1, status = $2 WHERE slot = $3", finalized, status, slot)
 
 	if err != nil {
@@ -694,6 +683,7 @@ func SetSlotFinalizationAndStatus(slot uint64, finalized bool, status string, tx
 	return nil
 }
 
+// exporter
 type GetAllNonFinalizedSlotsRow struct {
 	Slot      uint64 `db:"slot"`
 	BlockRoot []byte `db:"blockroot"`
@@ -701,6 +691,7 @@ type GetAllNonFinalizedSlotsRow struct {
 	Status    string `db:"status"`
 }
 
+// exporter
 func (pg *Postgres) GetAllNonFinalizedSlots() ([]*GetAllNonFinalizedSlotsRow, error) {
 	var slots []*GetAllNonFinalizedSlotsRow
 	err := pg.Db.Select(&slots, "SELECT slot, blockroot, finalized, status FROM blocks WHERE NOT finalized ORDER BY slot")
@@ -720,7 +711,7 @@ func (pg *Postgres) GetLatestFinalizedEpoch() (uint64, error) {
 		if err == sql.ErrNoRows {
 			return 0, nil
 		}
-		utils.LogError(err, "error retrieving latest exported finalized epoch from the database", 0)
+		pg.Logger.Errorf("error retrieving latest exported finalized epoch from the database: %v", err)
 		return 0, err
 	}
 
@@ -743,148 +734,44 @@ func (pg *Postgres) GetValidatorIndex(publicKey []byte) (uint64, error) {
 	return index, err
 }
 
-func (pg *Postgres) GetNextPendingDeposit(pubkey []byte) (*types.PendingDeposit, error) {
-	entry, err := pg.GetPendingDeposits(pubkey, 1)
-	if len(entry) == 0 {
-		return &types.PendingDeposit{}, sql.ErrNoRows
-	}
-	return &entry[0], err
-}
-
-func (pg *Postgres) GetPendingDeposits(pubkey []byte, limit int) ([]types.PendingDeposit, error) {
-	var pendingDeposit []types.PendingDeposit
-	err := pg.Db.Select(&pendingDeposit, `SELECT id, est_clear_epoch, amount, withdrawal_credentials, signature FROM pending_deposits_queue WHERE pubkey = $1 ORDER BY id asc LIMIT $2`, pubkey, limit)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
-	}
-	return pendingDeposit, err
-}
-
 // GetValidatorDeposits will return eth1- and eth2-deposits for a public key from the database
-func (pg *Postgres) GetValidatorDeposits(publicKey []byte, bt *Bigtable) (*types.ValidatorDeposits, error) {
+func (pg *Postgres) GetValidatorDeposits(publicKey []byte) (*types.ValidatorDeposits, error) {
 	deposits := &types.ValidatorDeposits{}
+
 	err := pg.Db.Select(&deposits.Eth1Deposits, `
-		SELECT tx_hash, tx_input, tx_index, block_number, EXTRACT(epoch FROM block_ts)::INT as block_ts, from_address, publickey, withdrawal_credentials, amount, signature, merkletree_index, valid_signature
-		FROM eth1_deposits WHERE publickey = $1 ORDER BY block_number ASC`, publicKey)
+		SELECT tx_hash, tx_input, tx_index, block_number, 
+		       EXTRACT(epoch FROM block_ts)::INT as block_ts, 
+		       from_address, publickey, withdrawal_credentials, 
+		       amount, signature, merkletree_index, valid_signature
+		FROM eth1_deposits 
+		WHERE publickey = $1 
+		ORDER BY block_number ASC`, publicKey)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(deposits.Eth1Deposits) > 0 {
 		deposits.LastEth1DepositTs = deposits.Eth1Deposits[len(deposits.Eth1Deposits)-1].BlockTs
-
-		// retrieve address names from bigtable
-		names := make(map[string]string)
-		for _, v := range deposits.Eth1Deposits {
-			names[string(v.FromAddress)] = ""
-		}
-		names, _, err = bt.GetAddressesNamesArMetadata(&names, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		for k, v := range deposits.Eth1Deposits {
-			deposits.Eth1Deposits[k].FromName = names[string(v.FromAddress)]
-		}
 	}
 
 	err = pg.Db.Select(&deposits.Eth2Deposits, `
-		SELECT 
-			blocks_deposits.block_slot,
-			blocks_deposits.block_index,
-			blocks_deposits.block_root,
-			blocks_deposits.proof,
-			blocks_deposits.publickey,
-			blocks_deposits.withdrawalcredentials,
-			blocks_deposits.amount,
-			blocks_deposits.signature
-		FROM blocks_deposits
-		INNER JOIN blocks ON (blocks_deposits.block_root = blocks.blockroot AND blocks.status = '1') OR (blocks_deposits.block_slot = 0 AND blocks_deposits.block_slot = blocks.slot AND blocks_deposits.publickey = $1)
-		WHERE blocks_deposits.publickey = $1`, publicKey)
+		SELECT bd.block_slot, bd.block_index, bd.block_root, bd.proof, 
+		       bd.publickey, bd.withdrawalcredentials, bd.amount, bd.signature
+		FROM blocks_deposits bd
+		INNER JOIN blocks b 
+		ON (bd.block_root = b.blockroot AND b.status = '1') 
+		    OR (bd.block_slot = 0 AND bd.block_slot = b.slot AND bd.publickey = $1)
+		WHERE bd.publickey = $1`, publicKey)
 	if err != nil {
 		return nil, err
 	}
+
 	return deposits, nil
 }
 
-// UpdateCanonicalBlocks will update the blocks for an epoch range in the database
-func (pg *Postgres) UpdateCanonicalBlocks(startEpoch, endEpoch uint64, blocks []*types.MinimalBlock) error {
-	if len(blocks) == 0 {
-		return nil
-	}
-	start := time.Now()
-	defer func() {
-		metrics.TaskDuration.WithLabelValues("db_update_canonical_blocks").Observe(time.Since(start).Seconds())
-	}()
-
-	tx, err := pg.Db.Begin()
-	if err != nil {
-		return fmt.Errorf("error starting db transactions: %w", err)
-	}
-	defer tx.Rollback()
-
-	lastSlotNumber := uint64(0)
-	for _, block := range blocks {
-		if block.Slot > lastSlotNumber {
-			lastSlotNumber = block.Slot
-		}
-	}
-
-	_, err = tx.Exec("UPDATE blocks SET status = 3 WHERE epoch >= $1 AND epoch <= $2 AND (status = '1' OR status = '3') AND slot <= $3", startEpoch, endEpoch, lastSlotNumber)
-	if err != nil {
-		return err
-	}
-
-	for _, block := range blocks {
-		if block.Canonical {
-			pg.Logger.Infof("marking block %x at slot %v as canonical", block.BlockRoot, block.Slot)
-			_, err = tx.Exec("UPDATE blocks SET status = '1' WHERE blockroot = $1", block.BlockRoot)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return tx.Commit()
-}
-
-func (pg *Postgres) SetBlockStatus(blocks []*types.CanonBlock) error {
-	if len(blocks) == 0 {
-		return nil
-	}
-
-	tx, err := pg.Db.Begin()
-	if err != nil {
-		return fmt.Errorf("error starting db transactions: %w", err)
-	}
-	defer tx.Rollback()
-
-	canonBlocks := make(pq.ByteaArray, 0)
-	orphanedBlocks := make(pq.ByteaArray, 0)
-	for _, block := range blocks {
-		if !block.Canonical {
-			pg.Logger.Infof("marking block %x at slot %v as orphaned", block.BlockRoot, block.Slot)
-			orphanedBlocks = append(orphanedBlocks, block.BlockRoot)
-		} else {
-			pg.Logger.Infof("marking block %x at slot %v as canonical", block.BlockRoot, block.Slot)
-			canonBlocks = append(canonBlocks, block.BlockRoot)
-		}
-
-	}
-
-	_, err = tx.Exec("UPDATE blocks SET status = '1' WHERE blockroot = ANY($1)", canonBlocks)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec("UPDATE blocks SET status = '3' WHERE blockroot = ANY($1)", orphanedBlocks)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
-}
-
 // SaveValidatorQueue will save the validator queue into the database
-func SaveValidatorQueue(validators *types.ValidatorQueue, tx *sqlx.Tx) error {
+// exporter
+func (pg *Postgres) SaveValidatorQueue(validators *types.ValidatorQueue, tx *sqlx.Tx) error {
 	_, err := tx.Exec(`
 		INSERT INTO queue (ts, entering_validators_count, exiting_validators_count)
 		VALUES (date_trunc('hour', now()), $1, $2)
@@ -895,6 +782,7 @@ func SaveValidatorQueue(validators *types.ValidatorQueue, tx *sqlx.Tx) error {
 	return err
 }
 
+// exporter
 func (pg *Postgres) SaveBlock(block *types.Block, forceSlotUpdate bool, tx *sqlx.Tx) error {
 
 	blocksMap := make(map[uint64]map[string]*types.Block)
@@ -913,7 +801,8 @@ func (pg *Postgres) SaveBlock(block *types.Block, forceSlotUpdate bool, tx *sqlx
 }
 
 // SaveEpoch will save the epoch data into the database
-func SaveEpoch(epoch uint64, validators []*types.Validator, client consensus.ConsensusClient, tx *sqlx.Tx, log *logger.Logger) error {
+// exporter
+func (pg *Postgres) SaveEpoch(epoch uint64, validators []*types.Validator, client consensus.ConsensusClient, tx *sqlx.Tx, log *logger.Logger) error {
 	start := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_save_epoch").Observe(time.Since(start).Seconds())
@@ -1032,6 +921,7 @@ func SaveEpoch(epoch uint64, validators []*types.Validator, client consensus.Con
 	return nil
 }
 
+// exporter
 func saveGraffitiwall(block *types.Block, tx *sqlx.Tx, log *logger.Logger) error {
 	start := time.Now()
 	defer func() {
@@ -1092,13 +982,14 @@ func saveGraffitiwall(block *types.Block, tx *sqlx.Tx, log *logger.Logger) error
 	return nil
 }
 
-func SaveValidators(
-	epoch uint64, 
-	validators []*types.Validator, 
-	client consensus.ConsensusClient, 
-	activationBalanceBatchSize int, 
-	tx *sqlx.Tx, 
-	bt *Bigtable, 
+// exporter
+func (pg *Postgres) SaveValidators(
+	epoch uint64,
+	validators []*types.Validator,
+	client consensus.ConsensusClient,
+	activationBalanceBatchSize int,
+	tx *sqlx.Tx,
+	bt *Bigtable,
 	log *logger.Logger,
 ) error {
 	start := time.Now()
@@ -1448,9 +1339,10 @@ func (pg *Postgres) GetRelayDataForIndexedBlocks(blocks []*types.Eth1BlockIndexe
 	return relaysDataMap, nil
 }
 
+// exporter
 func saveBlocks(
-	blocks map[uint64]map[string]*types.Block, 
-	tx *sqlx.Tx, 
+	blocks map[uint64]map[string]*types.Block,
+	tx *sqlx.Tx,
 	forceSlotUpdate bool,
 	log *logger.Logger,
 ) error {
@@ -1826,7 +1718,8 @@ func saveBlocks(
 }
 
 // UpdateEpochStatus will update the epoch status in the database
-func UpdateEpochStatus(stats *types.ValidatorParticipation, tx *sqlx.Tx) error {
+// exporter
+func (pg *Postgres) UpdateEpochStatus(stats *types.ValidatorParticipation, tx *sqlx.Tx) error {
 	start := time.Now()
 	defer func() {
 		metrics.TaskDuration.WithLabelValues("db_update_epochs_status").Observe(time.Since(start).Seconds())
@@ -1872,7 +1765,8 @@ func (pg *Postgres) GetActiveValidatorCount() (uint64, error) {
 	return count, err
 }
 
-func UpdateQueueDeposits(tx *sqlx.Tx, log *logger.Logger) error {
+// exporter
+func (pg *Postgres) UpdateQueueDeposits(tx *sqlx.Tx, log *logger.Logger) error {
 	start := time.Now()
 	defer func() {
 		log.Infof("took %v seconds to update queue deposits", time.Since(start).Seconds())
@@ -2125,7 +2019,7 @@ func (pg *Postgres) GetSlotVizData(latestEpoch uint64) ([]*types.SlotVizEpochs, 
 		Previousjustified       bool
 	}
 
-	var blks []sqlBlocks = []sqlBlocks{}
+	var blks = []sqlBlocks{}
 	if latestEpoch > 4 {
 		latestEpoch = latestEpoch - 4
 	} else {
@@ -2249,11 +2143,6 @@ func (pg *Postgres) GetSlotVizData(latestEpoch uint64) ([]*types.SlotVizEpochs, 
 	}
 
 	return res, nil
-}
-
-func (pg *Postgres) GetBlockNumber(slot uint64) (block uint64, err error) {
-	err = pg.Db.Get(&block, `SELECT exec_block_number FROM blocks where slot >= $1 AND exec_block_number > 0 ORDER BY slot LIMIT 1`, slot)
-	return
 }
 
 func (pg *Postgres) SaveChartSeriesPoint(date time.Time, indicator string, value any) error {
@@ -3712,4 +3601,17 @@ func (pg *Postgres) GetValidatorAttestationHistoryForNotifications(startEpoch ui
 	}
 
 	return epochParticipation, nil
+}
+
+func (pg *Postgres) WithTx(ctx context.Context, fn func(*sqlx.Tx) error) error {
+	tx, err := pg.Db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // safe even if Commit is called
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

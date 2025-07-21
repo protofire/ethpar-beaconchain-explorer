@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -36,7 +37,7 @@ import (
 var validatorEditFlash = "edit_validator_flash"
 
 // Validator returns validator data using a go template
-func Validator(bt *db.Bigtable) http.HandlerFunc {
+func Validator(bt *db.Bigtable, pg *db.Postgres) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		validatorTemplateFiles := append(layoutTemplateFiles,
 			"validator/validator.html",
@@ -142,7 +143,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 				return
 			}
 			errFields["pubKey"] = pubKey
-			index, err = db.GetValidatorIndex(pubKey)
+			index, err = pg.GetValidatorIndex(pubKey)
 			if err != nil {
 				if err != sql.ErrNoRows {
 					utils.LogError(err, "error getting index for validator based on pubkey", 0, errFields)
@@ -152,7 +153,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 
 				// the validator might only have a public key but no index yet
 				var name string
-				err := db.ReaderDb.Get(&name, `SELECT name FROM validator_names WHERE publickey = $1`, pubKey)
+				err := pg.Db.Get(&name, `SELECT name FROM validator_names WHERE publickey = $1`, pubKey)
 				if err != nil && err != sql.ErrNoRows {
 					utils.LogError(err, "error getting validator-name from db for pubKey", 0, errFields)
 					validatorNotFound(data, w, r, vars, "")
@@ -163,7 +164,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 				}
 
 				var pool string
-				err = db.ReaderDb.Get(&pool, `SELECT pool FROM validator_pool WHERE publickey = $1`, pubKey)
+				err = pg.Db.Get(&pool, `SELECT pool FROM validator_pool WHERE publickey = $1`, pubKey)
 				if err != nil && err != sql.ErrNoRows {
 					utils.LogError(err, "error getting validator-pool from db for pubkey", 0, errFields)
 					validatorNotFound(data, w, r, vars, "")
@@ -176,9 +177,13 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 						validatorPageData.Name += fmt.Sprintf(" / Pool: %s", pool)
 					}
 				}
-				deposits, err := db.GetValidatorDeposits(pubKey, bt)
+				deposits, err := pg.GetValidatorDeposits(pubKey)
 				if err != nil {
 					utils.LogError(err, "error getting validator-deposits from db for pubkey", 0, errFields)
+				}
+				err = enrichEth1DepositsWithNames(bt, pg, r.Context(), deposits.Eth1Deposits)
+				if err != nil {
+					log.Warnf("failed to enrich address names: %v", err)
 				}
 				validatorPageData.DepositsCount = uint64(len(deposits.Eth1Deposits))
 				validatorPageData.ShowMultipleWithdrawalCredentialsWarning = hasMultipleWithdrawalCredentials(deposits)
@@ -281,7 +286,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 		data.Meta.Path = fmt.Sprintf("/validator/%v", index)
 
 		// we use MAX(validatorindex)+1 instead of COUNT(*) for querying the rank_count for performance-reasons
-		err = db.ReaderDb.Get(&validatorPageData, `
+		err = pg.Db.Get(&validatorPageData, `
 			SELECT
 				validators.pubkey,
 				validators.validatorindex,
@@ -377,25 +382,10 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 		if lastStatsDay > 30 {
 			lowerBoundDay = lastStatsDay - 30
 		}
+		
+		validatorPageData.IncomeHistoryChartData = make([]*types.ChartDataPoint, 0) // Price data is not available yet for EthPar
+
 		g := errgroup.Group{}
-		g.Go(func() error {
-			start := time.Now()
-			defer func() {
-				timings.Charts = time.Since(start)
-			}()
-
-			incomeHistoryChartData, err := db.GetValidatorIncomeHistoryChart([]uint64{index}, currency, lastFinalizedEpoch, lowerBoundDay, bt)
-			if err != nil {
-				return fmt.Errorf("error calling db.GetValidatorIncomeHistoryChart: %w", err)
-			}
-
-			if isPreGenesis {
-				incomeHistoryChartData = make([]*types.ChartDataPoint, 0)
-			}
-
-			validatorPageData.IncomeHistoryChartData = incomeHistoryChartData
-			return nil
-		})
 
 		g.Go(func() error {
 			start := time.Now()
@@ -445,18 +435,18 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 				// if we are currently past the cappella fork epoch, we can calculate the withdrawal information
 
 				validatorSlice := []uint64{index}
-				withdrawalsCount, err := db.GetTotalWithdrawalsCount(validatorSlice)
+				withdrawalsCount, err := pg.GetTotalWithdrawalsCount(validatorSlice)
 				if err != nil {
 					return fmt.Errorf("error getting validator withdrawals count from db: %w", err)
 				}
 				validatorPageData.WithdrawalCount = withdrawalsCount
-				lastWithdrawalsEpochs, err := db.GetLastWithdrawalEpoch(validatorSlice)
+				lastWithdrawalsEpochs, err := pg.GetLastWithdrawalEpoch(validatorSlice)
 				if err != nil {
 					return fmt.Errorf("error getting validator last withdrawal epoch from db: %w", err)
 				}
 				lastWithdrawalsEpoch := lastWithdrawalsEpochs[index]
 
-				blsChange, err := db.GetValidatorBLSChange(validatorPageData.Index)
+				blsChange, err := pg.GetValidatorBLSChange(validatorPageData.Index)
 				if err != nil {
 					return fmt.Errorf("error getting validator bls change from db: %w", err)
 				}
@@ -543,9 +533,13 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 			defer func() {
 				timings.Deposits = time.Since(start)
 			}()
-			deposits, err := db.GetValidatorDeposits(validatorPageData.PublicKey, bt)
+			deposits, err := pg.GetValidatorDeposits(validatorPageData.PublicKey)
 			if err != nil {
 				return fmt.Errorf("error getting validator-deposits from db: %w", err)
+			}
+			err = enrichEth1DepositsWithNames(bt, pg, r.Context(), deposits.Eth1Deposits)
+			if err != nil {
+				log.Warnf("failed to enrich address names: %v", err)
 			}
 			validatorPageData.Deposits = deposits
 			validatorPageData.DepositsCount = uint64(len(deposits.Eth1Deposits))
@@ -565,7 +559,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 		g.Go(func() error {
 			// we only need to get the queue information if we don't have an activation epoch but we have an eligibility epoch
 			if validatorPageData.ActivationEpoch > 100_000_000 && validatorPageData.ActivationEligibilityEpoch < 100_000_000 {
-				queueAhead, err := db.GetQueueAheadOfValidator(validatorPageData.Index)
+				queueAhead, err := pg.GetQueueAheadOfValidator(validatorPageData.Index)
 				if err != nil {
 					return fmt.Errorf("failed to retrieve queue ahead of validator %v: %w", validatorPageData.ValidatorIndex, err)
 				}
@@ -619,7 +613,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 					MissedAttestations uint64 `db:"missed_attestations"`
 				}{}
 				if lastStatsDay > 0 {
-					err := db.ReaderDb.Get(&attestationStats, "SELECT missed_attestations_total AS missed_attestations FROM validator_stats WHERE validatorindex = $1 AND day = $2", index, lastStatsDay)
+					err := pg.Db.Get(&attestationStats, "SELECT missed_attestations_total AS missed_attestations FROM validator_stats WHERE validatorindex = $1 AND day = $2", index, lastStatsDay)
 					if err == sql.ErrNoRows {
 						log.Warnf("no entry in validator_stats for validator index %v while lastStatsDay = %v", index, lastStatsDay)
 					} else if err != nil {
@@ -657,7 +651,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 					Slasher uint64
 					Reason  string
 				}
-				err = db.ReaderDb.Get(&slashingInfo,
+				err = pg.Db.Get(&slashingInfo,
 					`SELECT block_slot AS slot, proposer AS slasher, 'Attestation Violation' AS reason
 						FROM blocks_attesterslashings a1 LEFT JOIN blocks b1 ON b1.slot = a1.block_slot
 						WHERE b1.status = '1' AND $1 = ANY(a1.attestation1_indices) AND $1 = ANY(a1.attestation2_indices)
@@ -675,7 +669,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 				validatorPageData.SlashedFor = slashingInfo.Reason
 			}
 
-			err = db.ReaderDb.Get(&validatorPageData.SlashingsCount, `SELECT COALESCE(SUM(attesterslashingscount) + SUM(proposerslashingscount), 0) FROM blocks WHERE blocks.proposer = $1 AND blocks.status = '1'`, index)
+			err = pg.Db.Get(&validatorPageData.SlashingsCount, `SELECT COALESCE(SUM(attesterslashingscount) + SUM(proposerslashingscount), 0) FROM blocks WHERE blocks.proposer = $1 AND blocks.status = '1'`, index)
 			if err != nil {
 				return fmt.Errorf("error getting slashings-count: %w", err)
 			}
@@ -709,7 +703,7 @@ func Validator(bt *db.Bigtable) http.HandlerFunc {
 			}
 			allSyncPeriods := actualSyncPeriods
 
-			err := db.ReaderDb.Select(&allSyncPeriods, `
+			err := pg.Db.Select(&allSyncPeriods, `
 			SELECT period, GREATEST(period*$1, $2) AS firstepoch, ((period+1)*$1)-1 AS lastepoch
 			FROM sync_committees 
 			WHERE validatorindex = $3
@@ -899,7 +893,7 @@ func hasMultipleWithdrawalCredentials(deposits *types.ValidatorDeposits) bool {
 }
 
 // ValidatorDeposits returns a validator's deposits in json
-func ValidatorDeposits(bt *db.Bigtable) http.HandlerFunc {
+func ValidatorDeposits(bt *db.Bigtable, pg *db.Postgres) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		vars := mux.Vars(r)
@@ -915,11 +909,15 @@ func ValidatorDeposits(bt *db.Bigtable) http.HandlerFunc {
 			"route":  r.URL.String(),
 			"pubkey": pubkey}
 
-		deposits, err := db.GetValidatorDeposits(pubkey, bt)
+		deposits, err := pg.GetValidatorDeposits(pubkey)
 		if err != nil {
 			utils.LogError(err, "error getting validator-deposits from db", 0, errFields)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
+		}
+		err = enrichEth1DepositsWithNames(bt, pg, r.Context(), deposits.Eth1Deposits)
+		if err != nil {
+			log.Warnf("failed to enrich address names: %v", err)
 		}
 
 		err = json.NewEncoder(w).Encode(deposits)
@@ -1489,7 +1487,7 @@ func sanitizeMessage(msg string) ([]byte, error) {
 	}
 }
 
-func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
+func SaveValidatorName(bt *db.Bigtable, pg *db.Postgres) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 
@@ -1557,11 +1555,15 @@ func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
 			"recoveredAddress": recoveredAddress}
 
 		var depositedAddress string
-		deposits, err := db.GetValidatorDeposits(pubkeyDecoded, bt)
+		deposits, err := pg.GetValidatorDeposits(pubkeyDecoded)
 		if err != nil {
 			utils.LogError(err, "error getting validator-deposits from db for signature verification", 0, errFields)
 			utils.SetFlash(w, r, validatorEditFlash, "Error: the provided signature is invalid")
 			http.Redirect(w, r, "/validator/"+pubkey, http.StatusMovedPermanently)
+		}
+		err = enrichEth1DepositsWithNames(bt, pg, r.Context(), deposits.Eth1Deposits)
+		if err != nil {
+			log.Warnf("failed to enrich address names: %v", err)
 		}
 		for _, deposit := range deposits.Eth1Deposits {
 			if deposit.ValidSignature {
@@ -1572,7 +1574,7 @@ func SaveValidatorName(bt *db.Bigtable) http.HandlerFunc {
 
 		if strings.EqualFold(depositedAddress, recoveredAddress.Hex()) {
 			if applyNameToAll == "on" {
-				res, err := db.WriterDb.Exec(`
+				res, err := pg.Db.Exec(`
 					INSERT INTO validator_names (publickey, name)
 					SELECT publickey, $1 as name
 					FROM (SELECT DISTINCT publickey FROM eth1_deposits WHERE from_address = $2 AND valid_signature) a
@@ -2207,4 +2209,36 @@ func validatorNotFound(data *types.PageData, w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		return // an error has occurred and was processed
 	}
+}
+
+// enrichEth1DepositsWithNames add names for the FromName field for each deposit
+func enrichEth1DepositsWithNames(
+	bt *db.Bigtable,
+	pg *db.Postgres,
+	ctx context.Context,
+	deposits []types.Eth1Deposit,
+) error {
+	addresses := make(map[string]string, len(deposits))
+	for _, dep := range deposits {
+		addresses[string(dep.FromAddress)] = ""
+	}
+
+	addressNameSvc := services.AddressNamesService{
+		BT:  bt,
+		PG:  pg,
+		Ctx: ctx,
+	}
+
+	names, err := addressNameSvc.GetNamesForAddresses(addresses)
+	if err != nil {
+		return err
+	}
+
+	for i := range deposits {
+		if name, ok := names[string(deposits[i].FromAddress)]; ok {
+			deposits[i].FromName = name
+		}
+	}
+
+	return nil
 }

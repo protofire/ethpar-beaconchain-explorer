@@ -8,7 +8,7 @@ import (
 
 	"github.com/protofire/ethpar-beaconchain-explorer/cache"
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/exporter"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/eth2indexer"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/config"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
@@ -90,12 +90,16 @@ func main() {
 		defer cancel()
 		go metrics.MonitorDB(ctx, sqlDb.Db)
 	}
-
-	if cfg.Indexing.HistoricalPrice {
-		go services.StartHistoricPriceService()
-	}
 	
-	go exporter.Start(consClient, bt, sqlDb, cfg, chainParams)
+	go eth2indexer.Start(&eth2indexer.IndexingParams{
+		ConsClient:  consClient,
+		ExecClient:  rpcClient,
+		Bigtable:    bt,
+		Database:    sqlDb,
+		ChainParams: chainParams,
+		Config:      cfg,
+		Log:         log,
+	})
 
 	utils.WaitForCtrlC()
 

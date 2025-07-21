@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/db"
-	"github.com/protofire/ethpar-beaconchain-explorer/types"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 
 	"github.com/jung-kurt/gofpdf"
-	"github.com/lib/pq"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
@@ -24,18 +23,15 @@ type rewardHistory struct {
 	Validators    []uint64   `json:"validators"`
 }
 
-func GetValidatorHist(validatorArr []uint64, currency string, start uint64, end uint64, bt *db.Bigtable) rewardHistory {
-	var err error
-
-	var pricesDb []types.Price
+func GetValidatorHist(pg *db.Postgres, validatorArr []uint64, currency string, start uint64, end uint64, bt *db.Bigtable) rewardHistory {
 	// we get prices with a 1 day buffer to so we have no problems in different time zones
 	var oneDay = uint64(24 * 60 * 60)
 
 	if start == end { // no date range was provided, use the current day as ending boundary
 		end = uint64(time.Now().Unix())
 	}
-	err = db.WriterDb.Select(&pricesDb,
-		`select ts, eur, usd, gbp, cad, jpy, cny, rub, aud from price where ts >= TO_TIMESTAMP($1) and ts <= TO_TIMESTAMP($2) order by ts desc`, start-oneDay, end+oneDay)
+
+	pricesDb, err := pg.GetPricesBetween(start-oneDay, end+oneDay)
 	if err != nil {
 		log.Errorf("error getting prices: %v", err)
 	}
@@ -49,7 +45,7 @@ func GetValidatorHist(validatorArr []uint64, currency string, start uint64, end 
 		lowerBound++
 	}
 
-	income, err := db.GetValidatorIncomeHistory(validatorArr, lowerBound, upperBound, LatestFinalizedEpoch(), bt)
+	income, err := pg.GetValidatorIncomeHistory(validatorArr, lowerBound, upperBound, LatestFinalizedEpoch(), bt)
 	if err != nil {
 		log.Errorf("error getting income history for validator hist: %v", err)
 	}
@@ -125,7 +121,7 @@ func addCommas(balance float64, decimals string) string {
 	return string(rb)
 }
 
-func GeneratePdfReport(hist rewardHistory, currency string, bt *db.Bigtable) []byte {
+func GeneratePdfReport(hist rewardHistory, currency string, bt *db.Bigtable, pg *db.Postgres) []byte {
 
 	data := hist.History
 
@@ -254,7 +250,7 @@ func GeneratePdfReport(hist rewardHistory, currency string, bt *db.Bigtable) []b
 
 	y = pdf.GetY()
 
-	for i, row := range getValidatorDetails(validators, bt) {
+	for i, row := range getValidatorDetails(pg, bt, validators) {
 		pdf.SetTextColor(24, 24, 24)
 		pdf.SetFillColor(255, 255, 255)
 		x := marginH
@@ -295,40 +291,29 @@ func GeneratePdfReport(hist rewardHistory, currency string, bt *db.Bigtable) []b
 
 }
 
-func GetPdfReport(validatorArr []uint64, currency string, start uint64, end uint64, bt *db.Bigtable) []byte {
-	hist := GetValidatorHist(validatorArr, currency, start, end, bt)
-	return GeneratePdfReport(hist, currency, bt)
-}
-
-func getValidatorDetails(validators []uint64, bt *db.Bigtable) [][]string {
-	validatorFilter := pq.Array(validators)
-	var data []types.ValidatorPageData
-	err := db.WriterDb.Select(&data,
-		`SELECT validatorindex, balanceactivation
-		 FROM validators 
-		 WHERE validatorindex = ANY($1)
-		 ORDER BY validatorindex ASC`, validatorFilter)
+func getValidatorDetails(pg *db.Postgres, bt *db.Bigtable, validators []uint64) [][]string {
+	data, err := pg.GetValidatorPageData(validators)
 	if err != nil {
-		utils.LogError(err, "error getting validators data", 0, map[string]interface{}{"validators": validators})
+		log.WithField("validators", validators).Errorf("error getting validators data: %v", err)
 		return [][]string{}
 	}
 
 	latestEpoch := LatestEpoch()
 	balances, err := bt.GetValidatorBalanceHistory(validators, latestEpoch, latestEpoch)
 	if err != nil {
-		utils.LogError(err, "error getting validator balance history", 0, map[string]interface{}{
+		log.WithFields(logger.Fields{
 			"validators":  validators,
 			"latestEpoch": latestEpoch,
-		})
+		}).Errorf("error getting validator balance history: %v", err)
 		return [][]string{}
 	}
 
 	lastAttestationSlots, err := bt.GetLastAttestationSlots(validators)
 	if err != nil {
-		utils.LogError(err, "error getting validator balance history", 0, map[string]interface{}{
+		log.WithFields(logger.Fields{
 			"validators":  validators,
 			"latestEpoch": latestEpoch,
-		})
+		}).Errorf("error getting validator balance history: %v", err)
 		return [][]string{}
 	}
 
@@ -348,16 +333,16 @@ func getValidatorDetails(validators []uint64, bt *db.Bigtable) [][]string {
 
 	result := [][]string{}
 	for _, item := range data {
-		la_date := "N/a"
+		laDate := "N/a"
 		if item.LastAttestationSlot > 0 {
-			la_time := utils.SlotToTime(item.LastAttestationSlot)
-			la_date = la_time.Format(time.RFC822)
+			laTime := utils.SlotToTime(item.LastAttestationSlot)
+			laDate = laTime.Format(time.RFC822)
 		}
 		result = append(result, []string{
 			fmt.Sprintf("%d", item.ValidatorIndex),
 			addCommas(float64(item.BalanceActivation)/float64(1e9), "%.5f"),
 			addCommas(float64(item.CurrentBalance)/float64(1e9), "%.5f"),
-			la_date,
+			laDate,
 		})
 	}
 

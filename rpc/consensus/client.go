@@ -14,17 +14,14 @@ var log = logger.New(nil).WithField("module", "rpc")
 type ConsensusClient interface {
 	Close()
 	GetChainHead() (*types.ChainHead, error)
-	GetEpochData(epoch uint64, skipHistoricBalances bool) (*types.EpochData, error)
 	GetValidatorQueue() (*types.ValidatorQueue, error)
 	GetEpochAssignments(epoch uint64) (*types.EpochAssignments, error)
 	GetBlockBySlot(slot uint64) (*types.Block, error)
-	GetValidatorParticipation(epoch uint64) (*types.ValidatorParticipation, error)
-	GetNewBlockChan() chan *types.Block
+	GetValidatorInclusion(epoch uint64) (rpc_types.StandardValidatorParticipationResponse, error)
 	GetSyncCommittee(stateID string, epoch uint64) (*rpc_types.StandardSyncCommitteeData, error)
 	GetBalancesForEpoch(epoch int64) (map[uint64]uint64, error)
 	GetValidatorState(epoch uint64) (*rpc_types.StandardValidatorsResponse, error)
 	GetBlockHeader(slot uint64) (*rpc_types.StandardBeaconHeaderResponse, error)
-	GetPendingDeposits() (*rpc_types.StandardBeaconPendingDepositsResponse, error)
 }
 
 func MustInitNewClient(client, endpoint string, chainId uint64, chainParams *config.NetworkConfig) ConsensusClient {

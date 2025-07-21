@@ -31,6 +31,7 @@ type ExecutionClientConfig struct {
 type ConsensusClientConfig struct {
 	Client   string `mapstructure:"client" validate:"required,oneof=teku"`
 	Endpoint string `mapstructure:"endpoint" validate:"required,url"`
+	Mode     string `mapstructure:"mode" validate:"required,oneof=archive pruned"`
 }
 
 type MetricsConfig struct {

@@ -2,12 +2,12 @@ package db
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
-	"encoding/hex"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
@@ -71,20 +71,20 @@ func (bigtable *Bigtable) SaveBlock(block *types.Eth1Block) error {
 //
 // The cleanup spans three logical areas:
 //
-//   1. Account metadata – All versions of the `ACCOUNT_METADATA_FAMILY :
-//      ACCOUNT_IS_CONTRACT` column that were written in the target block
-//      are deleted.  The function scans every account row whose key starts
-//      with "<chainID>:S:" and issues a DeleteTimestampRange mutation bounded
-//      by the block’s timestamp window.
+//  1. Account metadata – All versions of the `ACCOUNT_METADATA_FAMILY :
+//     ACCOUNT_IS_CONTRACT` column that were written in the target block
+//     are deleted.  The function scans every account row whose key starts
+//     with "<chainID>:S:" and issues a DeleteTimestampRange mutation bounded
+//     by the block’s timestamp window.
 //
-//   2. Per-block data rows – Using the metadata_updates table it discovers
-//      the block hash, derives every data-row key that encodes
-//      (blockNumber, blockHash) via GetBlockKeys, and deletes those rows from
-//      the data table.
+//  2. Per-block data rows – Using the metadata_updates table it discovers
+//     the block hash, derives every data-row key that encodes
+//     (blockNumber, blockHash) via GetBlockKeys, and deletes those rows from
+//     the data table.
 //
-//   3. Block headers – For the canonical block (rank 00) and every possible
-//      parallel rank up to MAX_BLOCK_RANK it deletes the row
-//      "<chainID>:<reversedPaddedBlockNumber>:<rank>" from the blocks table.
+//  3. Block headers – For the canonical block (rank 00) and every possible
+//     parallel rank up to MAX_BLOCK_RANK it deletes the row
+//     "<chainID>:<reversedPaddedBlockNumber>:<rank>" from the blocks table.
 //
 // All deletions are issued in batches (DEFAULT_BATCH_INSERTS) to minimise
 // round-trips.  A 30-second context bounds the entire operation.
@@ -198,7 +198,8 @@ func (bigtable *Bigtable) DeleteBlock(blockNumber uint64) error {
 // uniquely identified by its block number and block hash.
 //
 // It reads the metadata_updates table using a key of the form:
-//   <chainId>:BLOCK:<reversedPaddedBlockNumber>:<blockHash>
+//
+//	<chainId>:BLOCK:<reversedPaddedBlockNumber>:<blockHash>
 //
 // The corresponding row is expected to store a comma-separated list of full row keys
 // (e.g., for transactions, receipts, logs, etc.) in the METADATA_UPDATES_FAMILY_BLOCKS column.
@@ -228,7 +229,8 @@ func (bigtable *Bigtable) GetBlockKeys(blockNumber uint64, blockHash []byte) ([]
 // a specific block into the metadata_updates table.
 //
 // The row key format is:
-//   <chainId>:BLOCK:<reversedPaddedBlockNumber>:<blockHash>
+//
+//	<chainId>:BLOCK:<reversedPaddedBlockNumber>:<blockHash>
 //
 // The stored keys typically point to data rows (transactions, receipts, logs, etc.) that
 // belong to this specific block.
@@ -255,7 +257,8 @@ func (bigtable *Bigtable) SaveBlockKeys(blockNumber uint64, blockHash []byte, ke
 // All balances are written with a timestamp of 0, effectively overwriting any existing values.
 //
 // The row key format used for balances is:
-//   <chainId>:<address>
+//
+//	<chainId>:<address>
 //
 // If deleteKeys is provided, each key is used to delete an entire row from the
 // metadata_updates table.
@@ -317,7 +320,8 @@ func (bigtable *Bigtable) SaveBalances(balances []*types.Eth1AddressBalance, del
 // into the Bigtable metadata table.
 //
 // For each token, the function creates a row with the key:
-//   <chainId>:<tokenAddress>
+//
+//	<chainId>:<tokenAddress>
 //
 // It writes two columns in the ERC20_METADATA_FAMILY column family:
 //   - ERC20_COLUMN_PRICE:      current token price
@@ -355,9 +359,10 @@ func (bigtable *Bigtable) SaveERC20TokenPrices(prices []*types.ERC20TokenPrice) 
 }
 
 // GetBlockFromBlocksTable retrieves a specific Eth1Block from Bigtable using its block number and rank.
-// 
+//
 // The function constructs the Bigtable row key as:
-//   <chainId>:<reversedPaddedBlockNumber>:<rank>
+//
+//	<chainId>:<reversedPaddedBlockNumber>:<rank>
 //
 // It then reads the "data" column from the DEFAULT_FAMILY_BLOCKS column family,
 // and deserializes the value into an *Eth1Block using protobuf.
@@ -393,9 +398,10 @@ func (bigtable *Bigtable) GetBlockFromBlocksTable(number uint64, rank uint32) (*
 // GetLastBlockInBlocksTable returns the number of the most recent block present in the Bigtable.
 //
 // It first attempts to retrieve the value from a Redis cache using the key:
-//     <chainID>:lastBlockInBlocksTable
 //
-// If the value is not cached, it falls back to querying Bigtable via 
+//	<chainID>:lastBlockInBlocksTable
+//
+// If the value is not cached, it falls back to querying Bigtable via
 // getLastBlockInBlocksTableFromBigtable(), and caches the result back in Redis.
 //
 // Returns:
@@ -469,11 +475,12 @@ func (bigtable *Bigtable) SetLastBlockInBlocksTable(lastBlock int64) error {
 	return bigtable.redisCache.Set(ctx, redisKey, fmt.Sprintf("%d", lastBlock), 0).Err()
 }
 
-// getLastBlockInBlocksTableFromBigtable scans the blocks table in Bigtable and returns 
+// getLastBlockInBlocksTableFromBigtable scans the blocks table in Bigtable and returns
 // the most recent block number that is considered canonical (i.e., rank == 0).
 //
 // The block keys are expected to follow the format:
-//     <chainID>:<reversedPaddedBlockNumber>:<rank>
+//
+//	<chainID>:<reversedPaddedBlockNumber>:<rank>
 //
 // The scan uses lexicographic order to quickly locate the most recent block (thanks to reversed numbering),
 // and skips any blocks with rank > 0 to avoid selecting non-primary versions.
@@ -516,7 +523,7 @@ func (bigtable *Bigtable) getLastBlockInBlocksTableFromBigtable() (int, error) {
 
 		blockNum := MAX_EL_BLOCK_NUMBER - int(reversedNum)
 		lastBlock = blockNum
-		
+
 		// If blockNum == 0, keep scanning to avoid falsely assuming it's the latest
 		return blockNum == 0
 	}, gcp_bigtable.LimitRows(2), gcp_bigtable.RowFilter(gcp_bigtable.StripValueFilter()))
@@ -531,9 +538,10 @@ func (bigtable *Bigtable) getLastBlockInBlocksTableFromBigtable() (int, error) {
 // GetLastBlockInDataTable returns the number of the most recent block found in the data table.
 //
 // It first attempts to retrieve the block number from Redis using the key:
-//     <chainID>:lastBlockInDataTable
 //
-// If the value is not found in Redis, the function scans Bigtable via 
+//	<chainID>:lastBlockInDataTable
+//
+// If the value is not found in Redis, the function scans Bigtable via
 // getLastBlockInDataTableFromBigtable(), then caches the result back in Redis.
 //
 // Returns:
@@ -601,7 +609,8 @@ func (bigtable *Bigtable) SetLastBlockInDataTable(lastBlock int64) error {
 // the highest (most recent) block number associated with a rank 0 block.
 //
 // Keys are expected to follow the format:
-//     <chainID>:B:<reversedPaddedBlockNumber>:<rank>
+//
+//	<chainID>:B:<reversedPaddedBlockNumber>:<rank>
 //
 // Only blocks with rank == 0 are considered for this lookup, since they are guaranteed
 // to exist for every slot and represent the minimal canonical entry.
@@ -657,19 +666,20 @@ func (bigtable *Bigtable) getLastBlockInDataTableFromBigtable() (int, error) {
 	return lastBlock, nil
 }
 
-// CheckForGapsInBlocksTable scans the blocks table in Bigtable and checks for gaps 
+// CheckForGapsInBlocksTable scans the blocks table in Bigtable and checks for gaps
 // in the block number sequence within a given lookback range.
 //
 // This function is designed to work with block keys formatted as:
-//     <chainID>:<reversedPaddedBlockNumber>:<rank>
 //
-// Only blocks with rank == 0 are considered part of the canonical sequence; 
+//	<chainID>:<reversedPaddedBlockNumber>:<rank>
+//
+// Only blocks with rank == 0 are considered part of the canonical sequence;
 // parallel blocks with rank > 0 are ignored.
 //
 // The scan proceeds in descending block number order using the reversed block number
 // to leverage Bigtable's lexicographic key ordering.
 //
-// A gap is detected if two consecutive blocks are not numerically adjacent 
+// A gap is detected if two consecutive blocks are not numerically adjacent
 // (i.e., if currentBlockNum != previousBlockNum - 1).
 //
 // Parameters:
@@ -689,7 +699,7 @@ func (bigtable *Bigtable) CheckForGapsInBlocksTable(lookback int) (gapFound bool
 	previous := 0
 	i := 0
 	err = bigtable.tableBlocks.ReadRows(ctx, gcp_bigtable.PrefixRange(prefix), func(r gcp_bigtable.Row) bool {
-		
+
 		key := strings.TrimPrefix(r.Key(), prefix)
 		parts := strings.Split(key, ":")
 		if len(parts) != 2 {
@@ -737,11 +747,12 @@ func (bigtable *Bigtable) CheckForGapsInBlocksTable(lookback int) (gapFound bool
 	return gapFound, start, end, err
 }
 
-// CheckForGapsInDataTable scans the data table in Bigtable and checks for gaps 
+// CheckForGapsInDataTable scans the data table in Bigtable and checks for gaps
 // in the block number sequence based on the most recent entries.
 //
 // This function operates on keys prefixed with:
-//     <chainID>:B:<reversedPaddedBlockNumber>:<rank>
+//
+//	<chainID>:B:<reversedPaddedBlockNumber>:<rank>
 //
 // Only blocks with rank == 0 are considered canonical and used for gap detection.
 // Reversed block numbers are converted back to their actual values to ensure descending order scan.
@@ -909,7 +920,7 @@ func (bigtable *Bigtable) IndexEventsWithTransformers(start, end int64, transfor
 	if err := g.Wait(); err == nil {
 		log.Info("data table indexing completed")
 	} else {
-		utils.LogError(err, "wait group error", 0)
+		bigtable.log.Errorf("wait group error: %v", err)
 		return err
 	}
 
@@ -967,4 +978,3 @@ func (bigtable *Bigtable) GetMetadataUpdates(prefix string, startToken string, l
 	}
 	return keys, pairs, err
 }
-

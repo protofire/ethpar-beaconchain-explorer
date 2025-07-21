@@ -190,8 +190,6 @@ type IndexPageData struct {
 	Genesis                   bool                   `json:"genesis"`
 	GenesisPeriod             bool                   `json:"genesis_period"`
 	Mainnet                   bool                   `json:"mainnet"`
-	DepositChart              *ChartsPageDataChart
-	DepositDistribution       *ChartsPageDataChart
 	Countdown                 interface{}
 	SlotVizData               *SlotVizPageData `json:"slotVizData"`
 	ClCurrency                string
@@ -1551,28 +1549,6 @@ type EventNameCheckbox struct {
 	Info    template.HTML
 }
 
-type PoolsResp struct {
-	PoolsDistribution       ChartsPageDataChart
-	HistoricPoolPerformance ChartsPageDataChart
-	PoolInfos               []*PoolInfo
-}
-
-type PoolsData struct {
-	*PoolsResp
-	Disclaimer string
-}
-
-type PoolInfo struct {
-	Name                  string  `db:"name"`
-	Count                 int64   `db:"count"`
-	AvgPerformance31d     float64 `db:"avg_performance_31d"`
-	AvgPerformance7d      float64 `db:"avg_performance_7d"`
-	AvgPerformance1d      float64 `db:"avg_performance_1d"`
-	EthstoreComparison1d  float64
-	EthstoreComparison7d  float64
-	EthstoreComparison31d float64
-}
-
 type AddValidatorWatchlistModal struct {
 	CsrfField       template.HTML
 	ValidatorIndex  uint64
@@ -2157,14 +2133,6 @@ type BroadcastPageData struct {
 	CaptchaId    string
 	CsrfField    template.HTML
 	RecaptchaKey string
-}
-
-type BroadcastStatusPageData struct {
-	Job          *NodeJob
-	JobTypeLabel string
-	JobTitle     string
-	JobJson      string
-	Validators   *[]NodeJobValidatorInfo
 }
 
 type ValidatorIncomePerformance struct {

@@ -1,19 +1,19 @@
 package db
 
 import (
-	"fmt"
 	"context"
-	"time"
-	"strings"
+	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
+	"time"
 
-
-	"github.com/protofire/ethpar-beaconchain-explorer/utils"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
-	
+	"github.com/protofire/ethpar-beaconchain-explorer/utils"
+
 	gcp_bigtable "cloud.google.com/go/bigtable"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/ethereum/go-ethereum/common"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func makeBlockKey(chainID string, number uint64, rank uint8) string {
@@ -22,6 +22,18 @@ func makeBlockKey(chainID string, number uint64, rank uint8) string {
 
 func reversedPaddedBlockNumber(blockNumber uint64) string {
 	return fmt.Sprintf("%09d", MAX_EL_BLOCK_NUMBER-blockNumber)
+}
+
+func reversePaddedUserID(userID uint64) string {
+	return fmt.Sprintf("%09d", ^uint64(0)-userID)
+}
+
+func reversedPaddedEpoch(epoch uint64) string {
+	return fmt.Sprintf("%09d", MAX_EPOCH-epoch)
+}
+
+func reversedPaddedSlot(slot uint64) string {
+	return fmt.Sprintf("%09d", MAX_CL_BLOCK_NUMBER-slot)
 }
 
 func reversePaddedBigtableTimestamp(timestamp *timestamppb.Timestamp) string {
@@ -88,7 +100,8 @@ func decodeIsContractUpdateTs(ts gcp_bigtable.Timestamp) (blockNumber, txIdx, tr
 // The returned cleanup function must be deferred by the caller to stop the watchdog and release the context.
 //
 // Logs a warning like:
-//   "fetchBlock (fetch latest block) call took longer than 30s"
+//
+//	"fetchBlock (fetch latest block) call took longer than 30s"
 func withTimeoutAndWarning(label string, timeout time.Duration) (context.Context, func()) {
 	tmr := time.AfterFunc(REPORT_TIMEOUT, func() {
 		log.Warnf("%s (%s) call took longer than %v", utils.GetCurrentFuncName(), label, timeout)
@@ -129,13 +142,6 @@ func prefixSuccessor(prefix string, pos int) string {
 	return string(ans)
 }
 
-// timestampToBigtableTimeDesc
-//
-// Deprecated: no longer used
-func timestampToBigtableTimeDesc(ts time.Time) string {
-	return fmt.Sprintf("%04d%02d%02d%02d%02d%02d", 9999-ts.Year(), 12-ts.Month(), 31-ts.Day(), 23-ts.Hour(), 59-ts.Minute(), 59-ts.Second())
-}
-
 // calculateMevFromBlock
 //
 // Deprecated: consider removing it from block transform
@@ -151,17 +157,6 @@ func calculateMevFromBlock(block *types.Eth1Block) *big.Int {
 
 	}
 	return mevReward
-}
-
-// calculateTxFeesFromBlock
-//
-// Deprecated: no longer used
-func calculateTxFeesFromBlock(block *types.Eth1Block) *big.Int {
-	txFees := new(big.Int)
-	for _, tx := range block.Transactions {
-		txFees.Add(txFees, CalculateTxFeeFromTransaction(tx, new(big.Int).SetBytes(block.BaseFee)))
-	}
-	return txFees
 }
 
 // calculateTxFeeFromTransaction
@@ -182,4 +177,46 @@ func CalculateTxFeeFromTransaction(tx *types.Eth1Transaction, blockBaseFee *big.
 		log.Errorf("unknown tx type %v", tx.Type)
 	}
 	return txFee
+}
+
+func validatorIndexToKey(index uint64) string {
+	return utils.ReverseString(fmt.Sprintf("%d", index))
+}
+
+func validatorKeyToIndex(key string) (uint64, error) {
+	key = utils.ReverseString(key)
+	indexKey, err := strconv.ParseUint(key, 10, 64)
+
+	if err != nil {
+		return 0, err
+	}
+	return indexKey, nil
+}
+
+func machineMetricRowParts(r string) (bool, uint64, string, string) {
+	keySplit := strings.Split(r, ":")
+
+	userID, err := strconv.ParseUint(keySplit[1], 10, 64)
+	if err != nil {
+		log.Errorf("error parsing slot from row key %v: %v", r, err)
+		return false, 0, "", ""
+	}
+	userID = ^uint64(0) - userID
+
+	machine := ""
+	if len(keySplit) >= 6 {
+		machine = keySplit[5]
+	}
+
+	process := keySplit[3]
+
+	return true, userID, machine, process
+}
+
+func verifyName(name string) error {
+	// limited by max capacity of db (caused by btrees of indexes); tests showed maximum of 2684 (added buffer)
+	if len(name) > 2048 {
+		return fmt.Errorf("name too long: %v", name)
+	}
+	return nil
 }

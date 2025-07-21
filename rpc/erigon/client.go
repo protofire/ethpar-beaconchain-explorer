@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/protofire/ethpar-beaconchain-explorer/contracts/oneinchoracle"
 	"github.com/protofire/ethpar-beaconchain-explorer/erc20"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/logger"
 	"github.com/protofire/ethpar-beaconchain-explorer/internal/metrics"
@@ -594,11 +593,6 @@ func (ec *ErigonClient) GetERC20TokenBalance(address string, token string) ([]by
 func (ec *ErigonClient) GetERC20TokenMetadata(token []byte) (*types.ERC20Metadata, error) {
 	ec.logger.Infof("retrieving metadata for token %x", token)
 
-	oracle, err := oneinchoracle.NewOneInchOracleByChainID(ec.GetChainID(), ec.client)
-	if err != nil {
-		return nil, err
-	}
-
 	contract, err := erc20.NewErc20(common.BytesToAddress(token), ec.client)
 	if err != nil {
 		return nil, err
@@ -641,26 +635,17 @@ func (ec *ErigonClient) GetERC20TokenMetadata(token []byte) (*types.ERC20Metadat
 		return nil
 	})
 
-	g.Go(func() error {
-		rate, err := oracle.GetRateToEth(nil, common.BytesToAddress(token), false)
-		if err != nil {
-			return fmt.Errorf("error calling oneinchoracle.GetRateToEth: %w", err)
-		}
-		ret.Price = rate.Bytes()
-		return nil
-	})
-
 	err = g.Wait()
 	if err != nil {
 		return ret, err
 	}
 
 	if err == nil && len(ret.Decimals) == 0 && ret.Symbol == "" && len(ret.TotalSupply) == 0 {
-		// it's possible that a token contract implements the ERC20 interfaces but does not return any values; we use a backup in this case
-		ret = &types.ERC20Metadata{
-			Decimals:    []byte{0x0},
-			Symbol:      "UNKNOWN",
-			TotalSupply: []byte{0x0}}
+	ret = &types.ERC20Metadata{
+		Decimals:    []byte{0x0},
+		Symbol:      "UNKNOWN",
+		TotalSupply: []byte{0x0},
+	}
 	}
 
 	return ret, err

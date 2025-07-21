@@ -32,9 +32,9 @@ var DefaultExplorerConfiguration types.ExplorerConfigurationMap = types.Explorer
 	},
 }
 
-func GetExplorerConfigurationsWithDefaults() (types.ExplorerConfigurationMap, error) {
+func GetExplorerConfigurationsWithDefaults(pg *db.Postgres) (types.ExplorerConfigurationMap, error) {
 
-	result, err := db.GetExplorerConfigurations()
+	result, err := pg.GetExplorerConfigurations()
 
 	if err != nil {
 		return nil, err

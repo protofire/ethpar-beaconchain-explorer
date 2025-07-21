@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	securerand "crypto/rand"
@@ -19,48 +18,37 @@ import (
 	"math"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 	"unicode/utf8"
 
 	"github.com/protofire/ethpar-beaconchain-explorer/codec"
-	"github.com/protofire/ethpar-beaconchain-explorer/config"
+	"github.com/protofire/ethpar-beaconchain-explorer/internal/config"
 	"github.com/protofire/ethpar-beaconchain-explorer/price"
 	"github.com/protofire/ethpar-beaconchain-explorer/types"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
-	"gopkg.in/yaml.v3"
 
-	"github.com/asaskevich/govalidator"
-	"github.com/carlmjohnson/requests"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/kataras/i18n"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/lib/pq"
 	"github.com/mvdan/xurls"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/signing"
 	prysm_params "github.com/prysmaticlabs/prysm/v5/config/params"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/skip2/go-qrcode"
 	confusables "github.com/skygeario/go-confusable-homoglyphs"
 )
-
-// Config is the globally accessible configuration
-var Config *types.Config
 
 var ErrRateLimit = errors.New("## RATE LIMIT ##")
 
@@ -151,7 +139,6 @@ func GetTemplateFuncs() template.FuncMap {
 		"formatBuilder":                           FormatBuilder,
 		"formatDifficulty":                        FormatDifficulty,
 		"getCurrencyLabel":                        price.GetCurrencyLabel,
-		"config":                                  func() *types.Config { return Config },
 		"epochOfSlot":                             EpochOfSlot,
 		"dayToTime":                               DayToTime,
 		"contains":                                strings.Contains,
@@ -279,22 +266,6 @@ func FormatGraffitiString(graffiti string) string {
 	return strings.Map(fixUtf, template.HTMLEscapeString(graffiti))
 }
 
-func HasProblematicUtfCharacters(s string) bool {
-	// Check for null character ('\x00')
-	if utf8.ValidString(s) && utf8.Valid([]byte(s)) {
-		// Check for control characters ('\x01' to '\x1F' and '\x7F')
-		for _, r := range s {
-			if r <= 0x1F || r == 0x7F {
-				return true
-			}
-		}
-	} else {
-		return true // Invalid UTF-8 sequence
-	}
-
-	return false
-}
-
 func fixUtf(r rune) rune {
 	if r == utf8.RuneError {
 		return -1
@@ -303,10 +274,10 @@ func fixUtf(r rune) rune {
 }
 
 func SyncPeriodOfEpoch(epoch uint64) uint64 {
-	if epoch < Config.Chain.ClConfig.AltairForkEpoch {
+	if epoch < config.AltairForkEpoch {
 		return 0
 	}
-	return epoch / Config.Chain.ClConfig.EpochsPerSyncCommitteePeriod
+	return epoch / config.EpochsPerSyncCommitteePeriod
 }
 
 // FirstEpochOfSyncPeriod returns the first epoch of a given sync period.
@@ -317,69 +288,48 @@ func SyncPeriodOfEpoch(epoch uint64) uint64 {
 //
 // For more information: https://eth2book.info/capella/annotated-spec/#sync-committee-updates
 func FirstEpochOfSyncPeriod(syncPeriod uint64) uint64 {
-	return syncPeriod * Config.Chain.ClConfig.EpochsPerSyncCommitteePeriod
-}
-
-func TimeToSyncPeriod(t time.Time) uint64 {
-	return SyncPeriodOfEpoch(uint64(TimeToEpoch(t)))
+	return syncPeriod * config.EpochsPerSyncCommitteePeriod
 }
 
 // EpochOfSlot returns the corresponding epoch of a slot
 func EpochOfSlot(slot uint64) uint64 {
-	return slot / Config.Chain.ClConfig.SlotsPerEpoch
-}
-
-// DayOfSlot returns the corresponding day of a slot
-func DayOfSlot(slot uint64) uint64 {
-	return Config.Chain.ClConfig.SecondsPerSlot * slot / (24 * 3600)
-}
-
-// WeekOfSlot returns the corresponding week of a slot
-func WeekOfSlot(slot uint64) uint64 {
-	return Config.Chain.ClConfig.SecondsPerSlot * slot / (7 * 24 * 3600)
+	return slot / config.SlotsPerEpoch
 }
 
 // SlotToTime returns a time.Time to slot
 func SlotToTime(slot uint64) time.Time {
-	return time.Unix(int64(Config.Chain.GenesisTimestamp+slot*Config.Chain.ClConfig.SecondsPerSlot), 0)
+	return time.Unix(int64(config.MinGenesisTime+slot*config.SecondsPerSlot), 0)
 }
 
 // TimeToSlot returns time to slot in seconds
 func TimeToSlot(timestamp uint64) uint64 {
-	if Config.Chain.GenesisTimestamp > timestamp {
+	if config.MinGenesisTime > timestamp {
 		return 0
 	}
-	return (timestamp - Config.Chain.GenesisTimestamp) / Config.Chain.ClConfig.SecondsPerSlot
-}
-
-func TimeToFirstSlotOfEpoch(timestamp uint64) uint64 {
-	slot := TimeToSlot(timestamp)
-	lastEpochOffset := slot % Config.Chain.ClConfig.SlotsPerEpoch
-	slot = slot - lastEpochOffset
-	return slot
+	return (timestamp - config.MinGenesisTime) / config.SecondsPerSlot
 }
 
 // EpochToTime will return a time.Time for an epoch
 func EpochToTime(epoch uint64) time.Time {
-	return time.Unix(int64(Config.Chain.GenesisTimestamp+epoch*Config.Chain.ClConfig.SecondsPerSlot*Config.Chain.ClConfig.SlotsPerEpoch), 0)
+	return time.Unix(int64(config.MinGenesisTime+epoch*config.SecondsPerSlot*config.SlotsPerEpoch), 0)
 }
 
 // TimeToDay will return a days since genesis for an timestamp
 func TimeToDay(timestamp uint64) uint64 {
 	const hoursInADay = float64(Day / time.Hour)
-	return uint64(time.Unix(int64(timestamp), 0).Sub(time.Unix(int64(Config.Chain.GenesisTimestamp), 0)).Hours() / hoursInADay)
+	return uint64(time.Unix(int64(timestamp), 0).Sub(time.Unix(int64(config.MinGenesisTime), 0)).Hours() / hoursInADay)
 }
 
 func DayToTime(day int64) time.Time {
-	return time.Unix(int64(Config.Chain.GenesisTimestamp), 0).Add(Day * time.Duration(day))
+	return time.Unix(int64(config.MinGenesisTime), 0).Add(Day * time.Duration(day))
 }
 
 // TimeToEpoch will return an epoch for a given time
 func TimeToEpoch(ts time.Time) int64 {
-	if int64(Config.Chain.GenesisTimestamp) > ts.Unix() {
+	if int64(config.MinGenesisTime) > ts.Unix() {
 		return 0
 	}
-	return (ts.Unix() - int64(Config.Chain.GenesisTimestamp)) / int64(Config.Chain.ClConfig.SecondsPerSlot) / int64(Config.Chain.ClConfig.SlotsPerEpoch)
+	return (ts.Unix() - int64(config.MinGenesisTime)) / int64(config.SecondsPerSlot) / int64(config.SlotsPerEpoch)
 }
 
 func WeiToEther(wei *big.Int) decimal.Decimal {
@@ -390,14 +340,6 @@ func WeiBytesToEther(wei []byte) decimal.Decimal {
 	return WeiToEther(new(big.Int).SetBytes(wei))
 }
 
-func GWeiToEther(gwei *big.Int) decimal.Decimal {
-	return decimal.NewFromBigInt(gwei, 0).Div(decimal.NewFromInt(params.GWei))
-}
-
-func GWeiBytesToEther(gwei []byte) decimal.Decimal {
-	return GWeiToEther(new(big.Int).SetBytes(gwei))
-}
-
 // WaitForCtrlC will block/wait until a control-c is pressed
 func WaitForCtrlC() {
 	c := make(chan os.Signal, 1)
@@ -405,492 +347,13 @@ func WaitForCtrlC() {
 	<-c
 }
 
-// ReadConfig will process a configuration
-func ReadConfig(cfg *types.Config, path string) error {
-
-	configPathFromEnv := os.Getenv("BEACONCHAIN_CONFIG")
-
-	if configPathFromEnv != "" { // allow the location of the config file to be passed via env args
-		path = configPathFromEnv
-	}
-	if strings.HasPrefix(path, "projects/") {
-		x, err := AccessSecretVersion(path)
-		if err != nil {
-			return fmt.Errorf("error getting config from secret store: %v", err)
-		}
-		err = yaml.Unmarshal([]byte(*x), cfg)
-		if err != nil {
-			return fmt.Errorf("error decoding config file %v: %v", path, err)
-		}
-
-		logger.Infof("seeded config file from secret store")
-	} else {
-
-		err := readConfigFile(cfg, path)
-		if err != nil {
-			return err
-		}
-	}
-
-	readConfigEnv(cfg)
-	err := readConfigSecrets(cfg)
-	if err != nil {
-		return err
-	}
-
-	if cfg.Frontend.SiteBrand == "" {
-		cfg.Frontend.SiteBrand = "beaconcha.in"
-	}
-
-	if cfg.Chain.ClConfigPath == "" {
-		// var prysmParamsConfig *prysmParams.BeaconChainConfig
-		switch cfg.Chain.Name {
-		case "mainnet":
-			err = yaml.Unmarshal([]byte(config.MainnetChainYml), &cfg.Chain.ClConfig)
-		case "prater":
-			err = yaml.Unmarshal([]byte(config.PraterChainYml), &cfg.Chain.ClConfig)
-		case "ropsten":
-			err = yaml.Unmarshal([]byte(config.RopstenChainYml), &cfg.Chain.ClConfig)
-		case "sepolia":
-			err = yaml.Unmarshal([]byte(config.SepoliaChainYml), &cfg.Chain.ClConfig)
-		case "gnosis":
-			err = yaml.Unmarshal([]byte(config.GnosisChainYml), &cfg.Chain.ClConfig)
-		case "holesky":
-			err = yaml.Unmarshal([]byte(config.HoleskyChainYml), &cfg.Chain.ClConfig)
-		case "hoodi":
-			err = yaml.Unmarshal([]byte(config.HoodiChainYml), &cfg.Chain.ClConfig)
-		case "mekong":
-			err = yaml.Unmarshal([]byte(config.MekongChainYml), &cfg.Chain.ClConfig)
-		case "pectra-devnet-5":
-			err = yaml.Unmarshal([]byte(config.PectraDevnet5ChainYml), &cfg.Chain.ClConfig)
-		case "pectra-devnet-6":
-			err = yaml.Unmarshal([]byte(config.PectraDevnet6ChainYml), &cfg.Chain.ClConfig)
-		default:
-			return fmt.Errorf("tried to set known chain-config, but unknown chain-name: %v (path: %v)", cfg.Chain.Name, cfg.Chain.ClConfigPath)
-		}
-		if err != nil {
-			return err
-		}
-		// err = prysmParams.SetActive(prysmParamsConfig)
-		// if err != nil {
-		// 	return fmt.Errorf("error setting chainConfig (%v) for prysmParams: %w", cfg.Chain.Name, err)
-		// }
-	} else if cfg.Chain.ClConfigPath == "node" {
-		nodeEndpoint := fmt.Sprintf("http://%s:%s", cfg.Indexer.Node.Host, cfg.Indexer.Node.Port)
-
-		jr := &types.ConfigJsonResponse{}
-
-		err := requests.
-			URL(nodeEndpoint + "/eth/v1/config/spec").
-			ToJSON(jr).
-			Fetch(context.Background())
-
-		if err != nil {
-			return err
-		}
-
-		chainCfg := types.ClChainConfig{
-			PresetBase:                              jr.Data.PresetBase,
-			ConfigName:                              jr.Data.ConfigName,
-			TerminalTotalDifficulty:                 jr.Data.TerminalTotalDifficulty,
-			TerminalBlockHash:                       jr.Data.TerminalBlockHash,
-			TerminalBlockHashActivationEpoch:        mustParseUint(jr.Data.TerminalBlockHashActivationEpoch),
-			MinGenesisActiveValidatorCount:          mustParseUint(jr.Data.MinGenesisActiveValidatorCount),
-			MinGenesisTime:                          int64(mustParseUint(jr.Data.MinGenesisTime)),
-			GenesisForkVersion:                      jr.Data.GenesisForkVersion,
-			GenesisDelay:                            mustParseUint(jr.Data.GenesisDelay),
-			AltairForkVersion:                       jr.Data.AltairForkVersion,
-			AltairForkEpoch:                         mustParseUint(jr.Data.AltairForkEpoch),
-			BellatrixForkVersion:                    jr.Data.BellatrixForkVersion,
-			BellatrixForkEpoch:                      mustParseUint(jr.Data.BellatrixForkEpoch),
-			CappellaForkVersion:                     jr.Data.CapellaForkVersion,
-			CappellaForkEpoch:                       mustParseUint(jr.Data.CapellaForkEpoch),
-			DenebForkVersion:                        jr.Data.DenebForkVersion,
-			DenebForkEpoch:                          mustParseUint(jr.Data.DenebForkEpoch),
-			ElectraForkVersion:                      jr.Data.ElectraForkVersion,
-			ElectraForkEpoch:                        mustParseUint(jr.Data.ElectraForkEpoch),
-			SecondsPerSlot:                          mustParseUint(jr.Data.SecondsPerSlot),
-			SecondsPerEth1Block:                     mustParseUint(jr.Data.SecondsPerEth1Block),
-			MinValidatorWithdrawabilityDelay:        mustParseUint(jr.Data.MinValidatorWithdrawabilityDelay),
-			ShardCommitteePeriod:                    mustParseUint(jr.Data.ShardCommitteePeriod),
-			Eth1FollowDistance:                      mustParseUint(jr.Data.Eth1FollowDistance),
-			InactivityScoreBias:                     mustParseUint(jr.Data.InactivityScoreBias),
-			InactivityScoreRecoveryRate:             mustParseUint(jr.Data.InactivityScoreRecoveryRate),
-			EjectionBalance:                         mustParseUint(jr.Data.EjectionBalance),
-			MinPerEpochChurnLimit:                   mustParseUint(jr.Data.MinPerEpochChurnLimit),
-			ChurnLimitQuotient:                      mustParseUint(jr.Data.ChurnLimitQuotient),
-			MaxPerEpochActivationChurnLimit:         mustParseUint(jr.Data.MaxPerEpochActivationChurnLimit),
-			ProposerScoreBoost:                      mustParseUint(jr.Data.ProposerScoreBoost),
-			DepositChainID:                          mustParseUint(jr.Data.DepositChainID),
-			DepositNetworkID:                        mustParseUint(jr.Data.DepositNetworkID),
-			DepositContractAddress:                  jr.Data.DepositContractAddress,
-			MaxCommitteesPerSlot:                    mustParseUint(jr.Data.MaxCommitteesPerSlot),
-			TargetCommitteeSize:                     mustParseUint(jr.Data.TargetCommitteeSize),
-			MaxValidatorsPerCommittee:               mustParseUint(jr.Data.TargetCommitteeSize),
-			ShuffleRoundCount:                       mustParseUint(jr.Data.ShuffleRoundCount),
-			HysteresisQuotient:                      mustParseUint(jr.Data.HysteresisQuotient),
-			HysteresisDownwardMultiplier:            mustParseUint(jr.Data.HysteresisDownwardMultiplier),
-			HysteresisUpwardMultiplier:              mustParseUint(jr.Data.HysteresisUpwardMultiplier),
-			SafeSlotsToUpdateJustified:              mustParseUint(jr.Data.SafeSlotsToUpdateJustified),
-			MinDepositAmount:                        mustParseUint(jr.Data.MinDepositAmount),
-			MaxEffectiveBalance:                     mustParseUint(jr.Data.MaxEffectiveBalance),
-			EffectiveBalanceIncrement:               mustParseUint(jr.Data.EffectiveBalanceIncrement),
-			MinAttestationInclusionDelay:            mustParseUint(jr.Data.MinAttestationInclusionDelay),
-			SlotsPerEpoch:                           mustParseUint(jr.Data.SlotsPerEpoch),
-			MinSeedLookahead:                        mustParseUint(jr.Data.MinSeedLookahead),
-			MaxSeedLookahead:                        mustParseUint(jr.Data.MaxSeedLookahead),
-			EpochsPerEth1VotingPeriod:               mustParseUint(jr.Data.EpochsPerEth1VotingPeriod),
-			SlotsPerHistoricalRoot:                  mustParseUint(jr.Data.SlotsPerHistoricalRoot),
-			MinEpochsToInactivityPenalty:            mustParseUint(jr.Data.MinEpochsToInactivityPenalty),
-			EpochsPerHistoricalVector:               mustParseUint(jr.Data.EpochsPerHistoricalVector),
-			EpochsPerSlashingsVector:                mustParseUint(jr.Data.EpochsPerSlashingsVector),
-			HistoricalRootsLimit:                    mustParseUint(jr.Data.HistoricalRootsLimit),
-			ValidatorRegistryLimit:                  mustParseUint(jr.Data.ValidatorRegistryLimit),
-			BaseRewardFactor:                        mustParseUint(jr.Data.BaseRewardFactor),
-			WhistleblowerRewardQuotient:             mustParseUint(jr.Data.WhistleblowerRewardQuotient),
-			ProposerRewardQuotient:                  mustParseUint(jr.Data.ProposerRewardQuotient),
-			InactivityPenaltyQuotient:               mustParseUint(jr.Data.InactivityPenaltyQuotient),
-			MinSlashingPenaltyQuotient:              mustParseUint(jr.Data.MinSlashingPenaltyQuotient),
-			ProportionalSlashingMultiplier:          mustParseUint(jr.Data.ProportionalSlashingMultiplier),
-			MaxProposerSlashings:                    mustParseUint(jr.Data.MaxProposerSlashings),
-			MaxAttesterSlashings:                    mustParseUint(jr.Data.MaxAttesterSlashings),
-			MaxAttestations:                         mustParseUint(jr.Data.MaxAttestations),
-			MaxDeposits:                             mustParseUint(jr.Data.MaxDeposits),
-			MaxVoluntaryExits:                       mustParseUint(jr.Data.MaxVoluntaryExits),
-			InvactivityPenaltyQuotientAltair:        mustParseUint(jr.Data.InactivityPenaltyQuotientAltair),
-			MinSlashingPenaltyQuotientAltair:        mustParseUint(jr.Data.MinSlashingPenaltyQuotientAltair),
-			ProportionalSlashingMultiplierAltair:    mustParseUint(jr.Data.ProportionalSlashingMultiplierAltair),
-			SyncCommitteeSize:                       mustParseUint(jr.Data.SyncCommitteeSize),
-			EpochsPerSyncCommitteePeriod:            mustParseUint(jr.Data.EpochsPerSyncCommitteePeriod),
-			MinSyncCommitteeParticipants:            mustParseUint(jr.Data.MinSyncCommitteeParticipants),
-			InvactivityPenaltyQuotientBellatrix:     mustParseUint(jr.Data.InactivityPenaltyQuotientBellatrix),
-			MinSlashingPenaltyQuotientBellatrix:     mustParseUint(jr.Data.MinSlashingPenaltyQuotientBellatrix),
-			ProportionalSlashingMultiplierBellatrix: mustParseUint(jr.Data.ProportionalSlashingMultiplierBellatrix),
-			MaxBytesPerTransaction:                  mustParseUint(jr.Data.MaxBytesPerTransaction),
-			MaxTransactionsPerPayload:               mustParseUint(jr.Data.MaxTransactionsPerPayload),
-			BytesPerLogsBloom:                       mustParseUint(jr.Data.BytesPerLogsBloom),
-			MaxExtraDataBytes:                       mustParseUint(jr.Data.MaxExtraDataBytes),
-			MaxWithdrawalsPerPayload:                mustParseUint(jr.Data.MaxWithdrawalsPerPayload),
-			MaxValidatorsPerWithdrawalSweep:         mustParseUint(jr.Data.MaxValidatorsPerWithdrawalsSweep),
-			MaxBlsToExecutionChange:                 mustParseUint(jr.Data.MaxBlsToExecutionChanges),
-			// Electra
-			MinPerEpochChurnLimitElectra:        mustParseUint(jr.Data.MinPerEpochChurnLimitElectra),
-			MaxPerEpochActivationExitChurnLimit: mustParseUint(jr.Data.MaxPerEpochActivationExitChurnLimit),
-			BlobSidecarSubnetCountElectra:       mustParseUint(jr.Data.BlobSidecarSubnetCountElectra),
-			MaxBlobsPerBlockElectra:             mustParseUint(jr.Data.MaxBlobsPerBlockElectra),
-			MaxRequestBlobSidecarsElectra:       mustParseUint(jr.Data.MaxRequestBlobSidecarsElectra),
-			MinActivationBalance:                mustParseUint(jr.Data.MinActivationBalance),
-			MaxPendingDepositsPerEpoch:          mustParseUint(jr.Data.MaxPendingDepositsPerEpoch),
-			MaxEffectiveBalanceElectra:          mustParseUint(jr.Data.MaxEffectiveBalanceElectra),
-		}
-
-		if jr.Data.AltairForkEpoch == "" {
-			chainCfg.AltairForkEpoch = 18446744073709551615
-		}
-		if jr.Data.BellatrixForkEpoch == "" {
-			chainCfg.BellatrixForkEpoch = 18446744073709551615
-		}
-		if jr.Data.CapellaForkEpoch == "" {
-			chainCfg.CappellaForkEpoch = 18446744073709551615
-		}
-		if jr.Data.DenebForkEpoch == "" {
-			chainCfg.DenebForkEpoch = 18446744073709551615
-		}
-		if jr.Data.ElectraForkEpoch == "" {
-			chainCfg.DenebForkEpoch = 18446744073709551615
-		}
-
-		cfg.Chain.ClConfig = chainCfg
-
-		type GenesisResponse struct {
-			Data struct {
-				GenesisTime           string `json:"genesis_time"`
-				GenesisValidatorsRoot string `json:"genesis_validators_root"`
-				GenesisForkVersion    string `json:"genesis_fork_version"`
-			} `json:"data"`
-		}
-
-		gtr := &GenesisResponse{}
-
-		err = requests.
-			URL(nodeEndpoint + "/eth/v1/beacon/genesis").
-			ToJSON(gtr).
-			Fetch(context.Background())
-
-		if err != nil {
-			return err
-		}
-
-		cfg.Chain.GenesisTimestamp = mustParseUint(gtr.Data.GenesisTime)
-		cfg.Chain.GenesisValidatorsRoot = gtr.Data.GenesisValidatorsRoot
-
-		logger.Infof("loaded chain config from node with genesis time %s", gtr.Data.GenesisTime)
-
-	} else {
-		f, err := os.Open(cfg.Chain.ClConfigPath)
-		if err != nil {
-			return fmt.Errorf("error opening Chain Config file %v: %w", cfg.Chain.ClConfigPath, err)
-		}
-		var chainConfig *types.ClChainConfig
-		decoder := yaml.NewDecoder(f)
-		err = decoder.Decode(&chainConfig)
-		if err != nil {
-			return fmt.Errorf("error decoding Chain Config file %v: %v", cfg.Chain.ClConfigPath, err)
-		}
-		cfg.Chain.ClConfig = *chainConfig
-	}
-
-	type MinimalELConfig struct {
-		ByzantiumBlock      *big.Int `yaml:"BYZANTIUM_FORK_BLOCK,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
-		ConstantinopleBlock *big.Int `yaml:"CONSTANTINOPLE_FORK_BLOCK,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
-	}
-	if cfg.Chain.ElConfigPath == "" {
-		minimalCfg := MinimalELConfig{}
-		switch cfg.Chain.Name {
-		case "mainnet":
-			err = yaml.Unmarshal([]byte(config.MainnetChainYml), &minimalCfg)
-		case "prater":
-			err = yaml.Unmarshal([]byte(config.PraterChainYml), &minimalCfg)
-		case "ropsten":
-			err = yaml.Unmarshal([]byte(config.RopstenChainYml), &minimalCfg)
-		case "sepolia":
-			err = yaml.Unmarshal([]byte(config.SepoliaChainYml), &minimalCfg)
-		case "gnosis":
-			err = yaml.Unmarshal([]byte(config.GnosisChainYml), &minimalCfg)
-		case "holesky":
-			err = yaml.Unmarshal([]byte(config.HoleskyChainYml), &minimalCfg)
-		case "hoodi":
-			err = yaml.Unmarshal([]byte(config.HoodiChainYml), &minimalCfg)
-		case "mekong":
-			err = yaml.Unmarshal([]byte(config.MekongChainYml), &minimalCfg)
-		case "pectra-devnet-5":
-			err = yaml.Unmarshal([]byte(config.PectraDevnet5ChainYml), &cfg.Chain.ClConfig)
-		case "pectra-devnet-6":
-			err = yaml.Unmarshal([]byte(config.PectraDevnet6ChainYml), &cfg.Chain.ClConfig)
-		default:
-			return fmt.Errorf("tried to set known chain-config, but unknown chain-name: %v (path: %v)", cfg.Chain.Name, cfg.Chain.ElConfigPath)
-		}
-		if err != nil {
-			return err
-		}
-		if minimalCfg.ByzantiumBlock == nil {
-			minimalCfg.ByzantiumBlock = big.NewInt(0)
-		}
-		if minimalCfg.ConstantinopleBlock == nil {
-			minimalCfg.ConstantinopleBlock = big.NewInt(0)
-		}
-		cfg.Chain.ElConfig = &params.ChainConfig{
-			ChainID:             big.NewInt(int64(cfg.Chain.Id)),
-			ByzantiumBlock:      minimalCfg.ByzantiumBlock,
-			ConstantinopleBlock: minimalCfg.ConstantinopleBlock,
-		}
-	} else {
-		f, err := os.Open(cfg.Chain.ElConfigPath)
-		if err != nil {
-			return fmt.Errorf("error opening EL Chain Config file %v: %w", cfg.Chain.ElConfigPath, err)
-		}
-		var chainConfig *params.ChainConfig
-		decoder := json.NewDecoder(f)
-		err = decoder.Decode(&chainConfig)
-		if err != nil {
-			return fmt.Errorf("error decoding EL Chain Config file %v: %v", cfg.Chain.ElConfigPath, err)
-		}
-		cfg.Chain.ElConfig = chainConfig
-	}
-
-	cfg.Chain.Name = cfg.Chain.ClConfig.ConfigName
-
-	if cfg.Chain.GenesisTimestamp == 0 {
-		switch cfg.Chain.Name {
-		case "mainnet":
-			cfg.Chain.GenesisTimestamp = 1606824023
-		case "prater":
-			cfg.Chain.GenesisTimestamp = 1616508000
-		case "sepolia":
-			cfg.Chain.GenesisTimestamp = 1655733600
-		case "zhejiang":
-			cfg.Chain.GenesisTimestamp = 1675263600
-		case "gnosis":
-			cfg.Chain.GenesisTimestamp = 1638993340
-		case "holesky":
-			cfg.Chain.GenesisTimestamp = 1695902400
-		case "hoodi":
-			cfg.Chain.GenesisTimestamp = 1742213400
-		default:
-			return fmt.Errorf("tried to set known genesis-timestamp, but unknown chain-name")
-		}
-	}
-
-	if cfg.Chain.GenesisValidatorsRoot == "" {
-		switch cfg.Chain.Name {
-		case "mainnet":
-			cfg.Chain.GenesisValidatorsRoot = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
-		case "prater":
-			cfg.Chain.GenesisValidatorsRoot = "0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb"
-		case "sepolia":
-			cfg.Chain.GenesisValidatorsRoot = "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"
-		case "zhejiang":
-			cfg.Chain.GenesisValidatorsRoot = "0x53a92d8f2bb1d85f62d16a156e6ebcd1bcaba652d0900b2c2f387826f3481f6f"
-		case "gnosis":
-			cfg.Chain.GenesisValidatorsRoot = "0xf5dcb5564e829aab27264b9becd5dfaa017085611224cb3036f573368dbb9d47"
-		case "holesky":
-			cfg.Chain.GenesisValidatorsRoot = "0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"
-		case "hoodi":
-			cfg.Chain.GenesisValidatorsRoot = "0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"
-		default:
-			return fmt.Errorf("tried to set known genesis-validators-root, but unknown chain-name")
-		}
-	}
-
-	if cfg.Chain.DomainBLSToExecutionChange == "" {
-		cfg.Chain.DomainBLSToExecutionChange = "0x0A000000"
-	}
-	if cfg.Chain.DomainVoluntaryExit == "" {
-		cfg.Chain.DomainVoluntaryExit = "0x04000000"
-	}
-
-	if cfg.Frontend.ClCurrency == "" {
-		switch cfg.Chain.Name {
-		case "gnosis":
-			cfg.Frontend.MainCurrency = "GNO"
-			cfg.Frontend.ClCurrency = "mGNO"
-			cfg.Frontend.ClCurrencyDecimals = 18
-			cfg.Frontend.ClCurrencyDivisor = 1e9
-		default:
-			cfg.Frontend.MainCurrency = "ETH"
-			cfg.Frontend.ClCurrency = "ETH"
-			cfg.Frontend.ClCurrencyDecimals = 18
-			cfg.Frontend.ClCurrencyDivisor = 1e9
-		}
-	}
-
-	if cfg.Frontend.ElCurrency == "" {
-		switch cfg.Chain.Name {
-		case "gnosis":
-			cfg.Frontend.ElCurrency = "xDAI"
-			cfg.Frontend.ElCurrencyDecimals = 18
-			cfg.Frontend.ElCurrencyDivisor = 1e18
-		default:
-			cfg.Frontend.ElCurrency = "ETH"
-			cfg.Frontend.ElCurrencyDecimals = 18
-			cfg.Frontend.ElCurrencyDivisor = 1e18
-		}
-	}
-
-	if cfg.Frontend.SiteTitle == "" {
-		cfg.Frontend.SiteTitle = "Open Source Ethereum Explorer"
-	}
-
-	if cfg.Frontend.Keywords == "" {
-		cfg.Frontend.Keywords = "open source ethereum block explorer, ethereum block explorer, beacon chain explorer, ethereum blockchain explorer"
-	}
-
-	if cfg.Chain.Id != 0 {
-		switch cfg.Chain.Name {
-		case "mainnet", "ethereum":
-			cfg.Chain.Id = 1
-		case "prater", "goerli":
-			cfg.Chain.Id = 5
-		case "holesky":
-			cfg.Chain.Id = 17000
-		case "hoodi":
-			cfg.Chain.Id = 560048
-		case "sepolia":
-			cfg.Chain.Id = 11155111
-		case "gnosis":
-			cfg.Chain.Id = 100
-		}
-	}
-
-	// we check for maching chain id just for safety
-	if cfg.Chain.Id != 0 && cfg.Chain.Id != cfg.Chain.ClConfig.DepositChainID {
-		logrus.Fatalf("cfg.Chain.Id != cfg.Chain.ClConfig.DepositChainID: %v != %v", cfg.Chain.Id, cfg.Chain.ClConfig.DepositChainID)
-	}
-
-	cfg.Chain.Id = cfg.Chain.ClConfig.DepositChainID
-
-	if cfg.RedisSessionStoreEndpoint == "" && cfg.RedisCacheEndpoint != "" {
-		logrus.Infof("using RedisCacheEndpoint %s as RedisSessionStoreEndpoint as no dedicated RedisSessionStoreEndpoint was provided", cfg.RedisCacheEndpoint)
-		cfg.RedisSessionStoreEndpoint = cfg.RedisCacheEndpoint
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"genesisTimestamp":       cfg.Chain.GenesisTimestamp,
-		"genesisValidatorsRoot":  cfg.Chain.GenesisValidatorsRoot,
-		"configName":             cfg.Chain.ClConfig.ConfigName,
-		"depositChainID":         cfg.Chain.ClConfig.DepositChainID,
-		"depositNetworkID":       cfg.Chain.ClConfig.DepositNetworkID,
-		"depositContractAddress": cfg.Chain.ClConfig.DepositContractAddress,
-		"clCurrency":             cfg.Frontend.ClCurrency,
-		"elCurrency":             cfg.Frontend.ElCurrency,
-		"mainCurrency":           cfg.Frontend.MainCurrency,
-	}).Infof("did init config")
-
-	return nil
-}
-
-func mustParseUint(str string) uint64 {
-
-	if str == "" {
-		return 0
-	}
-
-	nbr, err := strconv.ParseUint(str, 10, 64)
-	if err != nil {
-		logrus.Fatalf("fatal error parsing uint %s: %v", str, err)
-	}
-
-	return nbr
-}
-
-func GetMaxEffectiveBalance(currentEpoch uint64) uint64 {
-	if Config.Chain.ClConfig.ElectraForkEpoch >= currentEpoch {
-		return Config.Chain.ClConfig.MaxEffectiveBalanceElectra
-	}
-	return Config.Chain.ClConfig.MaxEffectiveBalance
-}
-
-func GetMaxEffectiveBalanceByWithdrawalCredentials(withCred []byte) uint64 {
-	if len(withCred) == 0 {
-		return 0
-	}
-	switch withCred[0] {
-	case 0x00, 0x01:
-		// phase0, capella
-		return Config.Chain.ClConfig.MaxEffectiveBalance
-	case 0x02:
-		// electra
-		return Config.Chain.ClConfig.MaxEffectiveBalanceElectra
-	default:
-		return 0
-	}
-}
-
-func readConfigFile(cfg *types.Config, path string) error {
-	if path == "" {
-		return yaml.Unmarshal([]byte(config.DefaultConfigYml), cfg)
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("error opening config file %v: %v", path, err)
-	}
-
-	decoder := yaml.NewDecoder(f)
-	err = decoder.Decode(cfg)
-	if err != nil {
-		return fmt.Errorf("error decoding config file %v: %v", path, err)
-	}
-
-	return nil
-}
-
-func readConfigEnv(cfg *types.Config) error {
-	return envconfig.Process("", cfg)
-}
-
-func readConfigSecrets(cfg *types.Config) error {
-	return ProcessSecrets(cfg)
+// WaitForCtrlCAndCancelGoRoutines blocks until Ctrl+C or SIGTERM is received and then calls cancel().
+func WaitForCtrlCAndCancelGoRoutines(cancel context.CancelFunc) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-c
+	fmt.Printf("received signal %s, shutting down...\n", sig)
+	cancel()
 }
 
 // MustParseHex will parse a string into hex
@@ -957,29 +420,6 @@ func IsHash(s string) bool {
 // IsValidWithdrawalCredentials verifies whether a string represents valid withdrawal credentials.
 func IsValidWithdrawalCredentials(s string) bool {
 	return withdrawalCredentialsRE.MatchString(s) || withdrawalCredentialsAddressRE.MatchString(s)
-}
-
-// https://github.com/badoux/checkmail/blob/f9f80cb795fa/checkmail.go#L37
-var emailRE = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
-
-// IsValidEmail verifies whether a string represents a valid email-address.
-func IsValidEmail(s string) bool {
-	return emailRE.MatchString(s)
-}
-
-// IsValidUrl verifies whether a string represents a valid Url.
-func IsValidUrl(s string) bool {
-	u, err := url.ParseRequestURI(s)
-	if err != nil {
-		return false
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-	if len(u.Host) == 0 {
-		return false
-	}
-	return govalidator.IsURL(s)
 }
 
 // RoundDecimals rounds (nearest) a number to the specified number of digits after comma
@@ -1133,25 +573,6 @@ func SqlRowsToJSON(rows *sql.Rows) ([]interface{}, error) {
 	return finalRows, nil
 }
 
-// GenerateAPIKey generates an API key for a user
-func GenerateRandomAPIKey() (string, error) {
-	const apiLength = 28
-	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-
-	max := big.NewInt(int64(len(letters)))
-	key := make([]byte, apiLength)
-	for i := 0; i < apiLength; i++ {
-		num, err := securerand.Int(securerand.Reader, max)
-		if err != nil {
-			return "", err
-		}
-		key[i] = letters[num.Int64()]
-	}
-
-	apiKeyBase64 := base64.RawURLEncoding.EncodeToString(key)
-	return apiKeyBase64, nil
-}
-
 // Glob walks through a directory and returns files with a given extension
 func Glob(dir string, ext string) ([]string, error) {
 	files := []string{}
@@ -1165,192 +586,13 @@ func Glob(dir string, ext string) ([]string, error) {
 	return files, err
 }
 
-// ValidateReCAPTCHA validates a ReCaptcha server side
-func ValidateReCAPTCHA(recaptchaResponse string) (bool, error) {
-	// Check this URL verification details from Google
-	// https://developers.google.com/recaptcha/docs/verify
-	req, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify", url.Values{
-		"secret":   {Config.Frontend.RecaptchaSecretKey},
-		"response": {recaptchaResponse},
-	})
-	if err != nil { // Handle error from HTTP POST to Google reCAPTCHA verify server
-		return false, err
-	}
-	defer req.Body.Close()
-	body, err := io.ReadAll(req.Body) // Read the response from Google
-	if err != nil {
-		return false, err
-	}
-
-	var googleResponse types.GoogleRecaptchaResponse
-	err = json.Unmarshal(body, &googleResponse) // Parse the JSON response from Google
-	if err != nil {
-		return false, err
-	}
-	if len(googleResponse.ErrorCodes) > 0 {
-		err = fmt.Errorf("error validating ReCaptcha %v", googleResponse.ErrorCodes)
-	} else {
-		err = nil
-	}
-
-	if googleResponse.Score > 0.5 {
-		return true, err
-	}
-
-	return false, fmt.Errorf("score too low threshold not reached, Score: %v - Required >0.5; %v", googleResponse.Score, err)
-}
-
 func BitAtVector(b []byte, i int) bool {
 	bb := b[i/8]
 	return (bb & (1 << uint(i%8))) > 0
 }
 
-func BitAtVectorReversed(b []byte, i int) bool {
-	bb := b[i/8]
-	return (bb & (1 << uint(7-(i%8)))) > 0
-}
-
 func GetNetwork() string {
-	return strings.ToLower(Config.Chain.ClConfig.ConfigName)
-}
-
-func ElementExists(arr []string, el string) bool {
-	for _, e := range arr {
-		if e == el {
-			return true
-		}
-	}
-	return false
-}
-
-func TryFetchContractMetadata(address []byte) (*types.ContractMetadata, error) {
-	return getABIFromEtherscan(address)
-}
-
-// func getABIFromSourcify(address []byte) (*types.ContractMetadata, error) {
-// 	httpClient := http.Client{
-// 		Timeout: time.Second * 5,
-// 	}
-
-// 	resp, err := httpClient.Get(fmt.Sprintf("https://sourcify.dev/server/repository/contracts/full_match/%d/0x%x/metadata.json", 1, address))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	if resp.StatusCode == 200 {
-// 		body, err := io.ReadAll(resp.Body)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		data := &types.SourcifyContractMetadata{}
-// 		err = json.Unmarshal(body, data)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		abiString, err := json.Marshal(data.Output.Abi)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		contractAbi, err := abi.JSON(bytes.NewReader(abiString))
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		meta := &types.ContractMetadata{}
-// 		meta.ABIJson = abiString
-// 		meta.ABI = &contractAbi
-// 		meta.Name = ""
-
-// 		return meta, nil
-// 	} else {
-// 		return nil, fmt.Errorf("sourcify contract code not found")
-// 	}
-// }
-
-func GetEtherscanAPIBaseUrl(provideDefault bool) string {
-	const mainnetBaseUrl = "api.etherscan.io"
-	const goerliBaseUrl = "api-goerli.etherscan.io"
-	const sepoliaBaseUrl = "api-sepolia.etherscan.io"
-
-	// check config first
-	if len(Config.EtherscanAPIBaseURL) > 0 {
-		return Config.EtherscanAPIBaseURL
-	}
-
-	// check chain id
-	switch Config.Chain.ClConfig.DepositChainID {
-	case 1: // mainnet
-		return mainnetBaseUrl
-	case 5: // goerli
-		return goerliBaseUrl
-	case 11155111: // sepolia
-		return sepoliaBaseUrl
-	}
-
-	// use default
-	if provideDefault {
-		return mainnetBaseUrl
-	}
-	return ""
-}
-
-func getABIFromEtherscan(address []byte) (*types.ContractMetadata, error) {
-	baseUrl := GetEtherscanAPIBaseUrl(false)
-	if len(baseUrl) < 1 {
-		return nil, nil
-	}
-
-	httpClient := http.Client{Timeout: time.Second * 5}
-	resp, err := httpClient.Get(fmt.Sprintf("https://%s/api?module=contract&action=getsourcecode&address=0x%x&apikey=%s", baseUrl, address, Config.EtherscanAPIKey))
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("StatusCode: '%d', Status: '%s'", resp.StatusCode, resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	headerData := &struct {
-		Status  string `json:"status"`
-		Message string `json:"message"`
-	}{}
-	err = json.Unmarshal(body, headerData)
-	if err != nil {
-		return nil, err
-	}
-	if headerData.Status == "0" {
-		if headerData.Message == "NOTOK" {
-			return nil, ErrRateLimit
-		}
-		return nil, fmt.Errorf("%s", headerData.Message)
-	}
-
-	data := &types.EtherscanContractMetadata{}
-	err = json.Unmarshal(body, data)
-	if err != nil {
-		return nil, err
-	}
-	if data.Result[0].Abi == "Contract source code not verified" {
-		return nil, nil
-	}
-
-	contractAbi, err := abi.JSON(strings.NewReader(data.Result[0].Abi))
-	if err != nil {
-		return nil, err
-	}
-	meta := &types.ContractMetadata{}
-	meta.ABIJson = []byte(data.Result[0].Abi)
-	meta.ABI = &contractAbi
-	meta.Name = data.Result[0].ContractName
-	return meta, nil
+	return strings.ToLower(config.NetworkName)
 }
 
 func FormatThousandsEnglish(number string) string {
@@ -1477,8 +719,8 @@ func AddBigInts(a, b []byte) []byte {
 
 // GetTimeToNextWithdrawal calculates the time it takes for the validators next withdrawal to be processed.
 func GetTimeToNextWithdrawal(distance uint64) time.Time {
-	minTimeToWithdrawal := time.Now().Add(time.Second * time.Duration((distance/Config.Chain.ClConfig.MaxValidatorsPerWithdrawalSweep)*Config.Chain.ClConfig.SecondsPerSlot))
-	timeToWithdrawal := time.Now().Add(time.Second * time.Duration((float64(distance)/float64(Config.Chain.ClConfig.MaxWithdrawalsPerPayload))*float64(Config.Chain.ClConfig.SecondsPerSlot)))
+	minTimeToWithdrawal := time.Now().Add(time.Second * time.Duration((distance/config.MaxValidatorsPerWithdrawalSweep)*config.SecondsPerSlot))
+	timeToWithdrawal := time.Now().Add(time.Second * time.Duration((float64(distance)/float64(config.MaxWithdrawalsPerPayload))*float64(config.SecondsPerSlot)))
 
 	if timeToWithdrawal.Before(minTimeToWithdrawal) {
 		return minTimeToWithdrawal
@@ -1488,7 +730,7 @@ func GetTimeToNextWithdrawal(distance uint64) time.Time {
 }
 
 func EpochsPerDay() uint64 {
-	return (uint64(Day.Seconds()) / Config.Chain.ClConfig.SlotsPerEpoch) / Config.Chain.ClConfig.SecondsPerSlot
+	return (uint64(Day.Seconds()) / ChainParams.Time.SlotsPerEpoch) / ChainParams.Time.SecondsPerSlot
 }
 
 func GetFirstAndLastEpochForDay(day uint64) (firstEpoch uint64, lastEpoch uint64) {
@@ -1498,7 +740,7 @@ func GetFirstAndLastEpochForDay(day uint64) (firstEpoch uint64, lastEpoch uint64
 }
 
 func GetLastBalanceInfoSlotForDay(day uint64) uint64 {
-	return ((day+1)*EpochsPerDay() - 1) * Config.Chain.ClConfig.SlotsPerEpoch
+	return ((day+1)*EpochsPerDay() - 1) * ChainParams.Time.SlotsPerEpoch
 }
 
 // ForkVersionAtEpoch returns the forkversion active a specific epoch
@@ -1531,80 +773,6 @@ func ForkVersionAtEpoch(epoch uint64) *types.ForkVersion {
 	}
 }
 
-// LogFatal logs a fatal error with callstack info that skips callerSkip many levels with arbitrarily many additional infos.
-// callerSkip equal to 0 gives you info directly where LogFatal is called.
-func LogFatal(err error, errorMsg interface{}, callerSkip int, additionalInfos ...map[string]interface{}) {
-	logErrorInfo(err, callerSkip, additionalInfos...).Fatal(errorMsg)
-}
-
-// LogError logs an error with callstack info that skips callerSkip many levels with arbitrarily many additional infos.
-// callerSkip equal to 0 gives you info directly where LogError is called.
-func LogError(err error, errorMsg interface{}, callerSkip int, additionalInfos ...map[string]interface{}) {
-	logErrorInfo(err, callerSkip, additionalInfos...).Error(errorMsg)
-}
-
-// LogError logs a warning with callstack info that skips callerSkip many levels with arbitrarily many additional infos.
-// callerSkip equal to 0 gives you info directly where LogError is called.
-func LogWarn(err error, errorMsg interface{}, callerSkip int, additionalInfos ...map[string]interface{}) {
-	logErrorInfo(err, callerSkip, additionalInfos...).Warn(errorMsg)
-}
-
-func logErrorInfo(err error, callerSkip int, additionalInfos ...map[string]interface{}) *logrus.Entry {
-	logFields := logrus.NewEntry(logrus.New())
-
-	pc, fullFilePath, line, ok := runtime.Caller(callerSkip + 2)
-	if ok {
-		logFields = logFields.WithFields(logrus.Fields{
-			"_file":     filepath.Base(fullFilePath),
-			"_function": runtime.FuncForPC(pc).Name(),
-			"_line":     line,
-		})
-	} else {
-		logFields = logFields.WithField("runtime", "Callstack cannot be read")
-	}
-
-	errColl := []string{}
-	for {
-		errColl = append(errColl, fmt.Sprint(err))
-		nextErr := errors.Unwrap(err)
-		if nextErr != nil {
-			err = nextErr
-		} else {
-			break
-		}
-	}
-
-	errMarkSign := "~"
-	for idx := 0; idx < (len(errColl) - 1); idx++ {
-		errInfoText := fmt.Sprintf("%serrInfo_%v%s", errMarkSign, idx, errMarkSign)
-		nextErrInfoText := fmt.Sprintf("%serrInfo_%v%s", errMarkSign, idx+1, errMarkSign)
-		if idx == (len(errColl) - 2) {
-			nextErrInfoText = fmt.Sprintf("%serror%s", errMarkSign, errMarkSign)
-		}
-
-		// Replace the last occurrence of the next error in the current error
-		lastIdx := strings.LastIndex(errColl[idx], errColl[idx+1])
-		if lastIdx != -1 {
-			errColl[idx] = errColl[idx][:lastIdx] + nextErrInfoText + errColl[idx][lastIdx+len(errColl[idx+1]):]
-		}
-
-		errInfoText = strings.ReplaceAll(errInfoText, errMarkSign, "")
-		logFields = logFields.WithField(errInfoText, errColl[idx])
-	}
-
-	if err != nil {
-		logFields = logFields.WithField("errType", fmt.Sprintf("%T", err)).WithError(err)
-	}
-
-	for _, infoMap := range additionalInfos {
-		for name, info := range infoMap {
-			logFields = logFields.WithField(name, info)
-		}
-	}
-
-	return logFields
-}
-
 func GetSigningDomain() ([]byte, error) {
 	beaconConfig := prysm_params.BeaconConfig()
 	genForkVersion, err := hex.DecodeString(strings.Replace(Config.Chain.ClConfig.GenesisForkVersion, "0x", "", -1))
@@ -1628,7 +796,7 @@ func GetSigningDomain() ([]byte, error) {
 // SlotsPerSyncCommittee returns the count of slots per sync committee period
 // (might be wrong for the first sync period at atlair which might be shorter, see https://eth2book.info/capella/annotated-spec/#sync-committee-updates)
 func SlotsPerSyncCommittee() uint64 {
-	return Config.Chain.ClConfig.EpochsPerSyncCommitteePeriod * Config.Chain.ClConfig.SlotsPerEpoch
+	return Config.Chain.ClConfig.EpochsPerSyncCommitteePeriod * ChainParams.Time.SlotsPerEpoch
 }
 
 // GetRemainingScheduledSyncDuties returns the remaining count of scheduled slots given the stats of the current period, while also accounting for exported slots.
@@ -1649,7 +817,7 @@ func GetRemainingScheduledSyncDuties(validatorCount int, stats types.SyncCommitt
 
 		// the first sync period at altair might be shorter, see https://eth2book.info/capella/annotated-spec/#sync-committee-updates
 		firstEpochOfNextSyncPeriod := FirstEpochOfSyncPeriod(SyncPeriodOfEpoch(Config.Chain.ClConfig.AltairForkEpoch) + 1)
-		slotsPerSyncCommittee = (firstEpochOfNextSyncPeriod - Config.Chain.ClConfig.AltairForkEpoch) * Config.Chain.ClConfig.SlotsPerEpoch
+		slotsPerSyncCommittee = (firstEpochOfNextSyncPeriod - Config.Chain.ClConfig.AltairForkEpoch) * ChainParams.Time.SlotsPerEpoch
 	}
 	dutiesPerSyncCommittee := slotsPerSyncCommittee * uint64(validatorCount)
 
@@ -1658,7 +826,7 @@ func GetRemainingScheduledSyncDuties(validatorCount int, stats types.SyncCommitt
 	if lastExportedEpoch >= firstEpochOfPeriod {
 		exportedEpochs = lastExportedEpoch - firstEpochOfPeriod + 1
 	}
-	exportedDuties := exportedEpochs * Config.Chain.ClConfig.SlotsPerEpoch * uint64(validatorCount)
+	exportedDuties := exportedEpochs * ChainParams.Time.SlotsPerEpoch * uint64(validatorCount)
 
 	// calculate how many duties are remaining i.e. are scheduled
 	totalStats := stats.MissedSlots + stats.ParticipatedSlots + stats.ScheduledSlots
@@ -1722,47 +890,6 @@ func RemoveRoundBracketsIncludingContent(input string) string {
 				result += input[:closeIndex]
 			}
 			input = input[closeIndex+1:]
-		}
-	}
-	return result
-}
-
-func Int64Min(x, y int64) int64 {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-func Int64Max(x, y int64) int64 {
-	if x > y {
-		return x
-	}
-	return y
-}
-
-// Prompt asks for a string value using the label. For comand line interactions.
-func CmdPrompt(label string) string {
-	var s string
-	r := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Fprint(os.Stderr, label+" ")
-		s, _ = r.ReadString('\n')
-		if s != "" {
-			break
-		}
-	}
-	return strings.TrimSpace(s)
-}
-
-// UniqueStrings returns an array of strings containing each value of s only once
-func UniqueStrings(s []string) []string {
-	seen := make(map[string]bool)
-	var result []string
-	for _, str := range s {
-		if _, ok := seen[str]; !ok {
-			seen[str] = true
-			result = append(result, str)
 		}
 	}
 	return result
@@ -1873,19 +1000,7 @@ func IsPoSBlock0(number uint64, ts int64) bool {
 		return false
 	}
 
-	return time.Unix(int64(Config.Chain.GenesisTimestamp-Config.Chain.ClConfig.GenesisDelay), 0).UTC().Equal(time.Unix(ts, 0))
-}
-
-func GetMaxAllowedDayRangeValidatorStats(validatorAmount int) int {
-	if validatorAmount > 100000 {
-		return 0 // exact day only
-	} else if validatorAmount > 10000 {
-		return 3
-	} else if validatorAmount > 1000 {
-		return 10
-	} else {
-		return math.MaxInt
-	}
+	return time.Unix(int64(ChainParams.Genesis.MinGenesisTime-Config.Chain.ClConfig.GenesisDelay), 0).UTC().Equal(time.Unix(ts, 0))
 }
 
 func FormatDepositStatus(queuedAtEpoch, processedAtEpoch int64) template.HTML {

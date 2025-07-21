@@ -1,58 +1,70 @@
 package eth2indexer
 
 import (
+	"context"
 	"time"
 )
 
-// genesisDepositsExporter exports the initial deposit records for genesis validators
-// into the blocks_deposits table. This is a one-time operation that executes
-// after the chain has started (epoch > 0) and no genesis deposits have yet been stored.
-//
-// It retrieves all validators active at slot 0 via the Beacon node RPC,
-// inserts them into the database, and attempts to associate each validator
-// with a corresponding ETH1 deposit signature if available.
-//
-// Genesis deposits are used to establish the initial validator set and provide
-// context for historical and auditing views in the explorer.
-func genesisDepositsExporter(p *IndexingParams) {
+// genesisDepositsExporter exports initial validator deposit records from epoch 0.
+// It waits until the beacon chain has started (latestEpoch > 0), then retrieves
+// validator state from the beacon node and stores it into the DB.
+// This function is safe to run multiple times and exits if data is already present.
+func genesisDepositsExporter(ctx context.Context, p *IndexingParams) {
+	p.Log.Info("genesisDepositsExporter started")
+
 	for {
-		// check if the beaconchain has started
-		latestEpoch, err := p.Database.GetLatestEpoch()
-		if err != nil {
-			p.Log.Errorf("error retrieving latest epoch from the database: %v", err)
-			time.Sleep(time.Second * 10)
-			continue
-		}
+		select {
+		case <-ctx.Done():
+			p.Log.Info("genesisDepositsExporter cancelled")
+			return
+		default:
+			// check if the beacon chain has started
+			latestEpoch, err := p.Database.GetLatestEpoch()
+			if err != nil {
+				p.Log.Errorf("error retrieving latest epoch from the database: %v", err)
+				wait(ctx, 10*time.Second)
+				continue
+			}
 
-		if latestEpoch == 0 {
-			time.Sleep(time.Minute)
-			continue
-		}
+			if latestEpoch == 0 {
+				wait(ctx, time.Minute)
+				continue
+			}
 
-		// check if genesis-deposits have already been exported
-		genesisDepositsCount, err := p.Database.GetGenesisDepositsCount()
-		if err != nil {
-			p.Log.Errorf("error retrieving genesis-deposits-count when exporting genesis-deposits: %v", err)
-			time.Sleep(time.Minute)
-			continue
-		}
+			// check if already done
+			count, err := p.Database.GetGenesisDepositsCount()
+			if err != nil {
+				p.Log.Errorf("error retrieving genesis-deposits-count: %v", err)
+				wait(ctx, time.Minute)
+				continue
+			}
+			if count > 0 {
+				p.Log.Info("genesis deposits already exported; skipping")
+				return
+			}
 
-		// if genesis-deposits have already been exported exit this go-routine
-		if genesisDepositsCount > 0 {
+			validators, err := p.ConsClient.GetValidatorState(0)
+			if err != nil {
+				p.Log.Errorf("error retrieving genesis validator state: %v", err)
+				wait(ctx, time.Minute)
+				continue
+			}
+
+			if err := p.Database.SaveGenesisDeposits(validators); err != nil {
+				p.Log.Errorf("error saving genesis deposits: %v", err)
+				wait(ctx, time.Minute)
+				continue
+			}
+
+			p.Log.Infof("exported %d genesis deposits", len(validators.Data))
 			return
 		}
+	}
+}
 
-		genesisValidators, err := p.ConsClient.GetValidatorState(0)
-		if err != nil {
-			p.Log.Errorf("error retrieving genesis validator data for genesis-epoch when exporting genesis-deposits: %v", err)
-			time.Sleep(time.Minute)
-			continue
-		}
-
-		if err := p.Database.SaveGenesisDeposits(genesisValidators); err != nil {
-			time.Sleep(time.Minute)
-			continue
-		}
-		return
+func wait(ctx context.Context, d time.Duration) {
+	select {
+	case <-time.After(d):
+	case <-ctx.Done():
 	}
 }
